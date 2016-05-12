@@ -12,40 +12,48 @@
 ;;
 ;; Copyright (c) 2013-2016, Kenneth Leung. All rights reserved.
 
-
 (ns ^{:doc ""
       :author "kenl" }
 
-  czlab.xlib.dbio.core
-
-  (:require
-    [czlab.xlib.util.format :refer [WriteEdnString]]
-    [czlab.xlib.util.str
-    :refer [lcase ucase strim
-    Embeds? AddDelim! HasNocase? hgl?]]
-    [czlab.xlib.util.core
-    :refer [tryc try! trylet! trap!
-    RootCause StripNSPath
-    GetTypeId Interject nnz nbf juid]]
-    [czlab.xlib.util.logging :as log]
-    [clojure.string :as cs]
-    [clojure.set :as cset]
-    [czlab.xlib.crypto.codec :as codec ]
-    [czlab.xlib.util.meta :refer [ForName]])
-
-  (:use [flatland.ordered.set])
+  czlab.dbio.core
 
   (:import
-    [java.util HashMap GregorianCalendar
-    TimeZone Properties]
-    [com.zotohlab.frwk.dbio MetaCache
-    Schema BoneCPHook DBIOError SQLr JDBCPool JDBCInfo]
+    [java.util GregorianCalendar
+     HashMap
+     TimeZone Properties]
+    [czlab.dbio MetaCache
+     Schema
+     BoneCPHook
+     DBIOError
+     SQLr
+     JDBCPool
+     JDBCInfo]
     [java.sql SQLException
-    DatabaseMetaData Connection Driver DriverManager]
+     DatabaseMetaData
+     Connection
+     Driver
+     DriverManager]
     [java.lang Math]
-    [com.zotohlab.frwk.crypto PasswordAPI]
+    [czlab.crypto PasswordAPI]
     [com.jolbox.bonecp BoneCP BoneCPConfig]
-    [org.apache.commons.lang3 StringUtils]))
+    [org.apache.commons.lang3 StringUtils])
+
+  (:require
+    [czlab.xlib.format :refer [writeEdnString]]
+    [czlab.xlib.str :refer
+     [lcase ucase strim
+      embeds? addDelim! hasNocase? hgl?]]
+    [czlab.xlib.core :refer
+     [tryc try! trylet! trap!
+      rootCause stripNSPath
+      getTypeId interject nnz nbf juid]]
+    [czlab.xlib.logging :as log]
+    [clojure.string :as cs]
+    [clojure.set :as cset]
+    [czlab.crypto.codec :as codec]
+    [czlab.xlib.meta :refer [forName]])
+
+  (:use [flatland.ordered.set]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;(set! *warn-on-reflection* true)
@@ -86,7 +94,7 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defn GTable
+(defn gtable
 
   "Get the table name (escaped) of this model"
 
@@ -98,7 +106,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; have to be function , not macro as this is passed into another higher
 ;; function - merge.
-(defn MergeMeta
+(defn mergeMeta
 
   "Merge 2 meta maps"
 
@@ -108,32 +116,32 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defn Tablename
+(defn dbTableName
 
-  "the table-name defined for this model"
+  "The table-name defined for this model"
 
   (^String
     [mdef]
     (:table mdef))
 
   (^String
-    [mid cache]
-    (:table (cache mid))))
+    [model-id cache]
+    (Tablename (cache model-id))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defn Colname
 
-  "the column-name defined for this field"
+  "The column-name defined for this field"
 
   (^String
     [fdef]
     (:column fdef))
 
   (^String
-    [fid mcz]
-    (-> (:fields (meta mcz))
-        (get fid)
+    [field-id model]
+    (-> (:fields (meta model))
+        (get field-id)
         (:column))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -145,7 +153,7 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defn Jdbc*
+(defn Jdbc
 
   "Make a JDBCInfo record"
 
@@ -230,8 +238,7 @@
 
   [obj]
 
-  {:rowid (:rowid (meta obj))
-   :verid (:verid (meta obj)) } )
+  (select-keys (meta obj) [:rowid :verid]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -249,7 +256,7 @@
 
   [^String dbtype]
 
-  (let [kw (keyword (lcase dbtype)) ]
+  (let [kw (keyword (lcase dbtype))]
     (when
       (some? (DBTYPES kw)) kw)))
 
@@ -295,7 +302,7 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defmacro DefModel2
+(defmacro DefModelWithNSP
 
   "Define a data model (with namespace)"
 
@@ -320,9 +327,9 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defmacro DefJoined2
+(defmacro DefJoinedWithNSP
 
-  "Define a joined data model"
+  "Define a joined data model with namespace"
 
   [nsp modelname lhs rhs]
 
@@ -549,7 +556,7 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Defining the base model here
-(DefModel2 _NSP DBIOBaseModel
+(DefModelWithNSP _NSP DBIOBaseModel
   (WithDbAbstract)
   (WithDbSystem)
   (WithDbFields
@@ -565,7 +572,7 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(DefModel2 _NSP DBIOJoinedModel
+(DefModelWithNSP _NSP DBIOJoinedModel
   (WithDbAbstract)
   (WithDbSystem)
   (WithDbFields

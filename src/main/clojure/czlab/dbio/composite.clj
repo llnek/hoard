@@ -18,11 +18,8 @@
   czlab.dbio.composite
 
   (:import
-    [com.zotohlab.dbio
-     Transactable
-     SQLr
-     MetaCache
-     DBAPI]
+    [czlab.dbio Transactable
+     SQLr MetaCache DBAPI]
     [java.sql Connection])
 
   (:use [czlab.dbio.core]
@@ -37,8 +34,34 @@
 ;;(set! *warn-on-reflection* true)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(defn- undo "" [conn]
+  (try! (-> ^Connection
+            conn
+            (.rollback))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(defn- commit "" [conn]
+  (-> ^Connection
+      conn
+      (.commit)))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(defn- begin
+
+  ""
+
+  ^Connection
+  [db]
+
+  (let [conn (.open ^DBAPI db)]
+    (.setAutoCommit conn false)
+    (->> Connection/TRANSACTION_SERIALIZABLE
+         (.setTransactionIsolation conn ))
+    conn))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defn CompositeSQLr
+(defn compositeSQLr
 
   "A composite supports transactions"
 
@@ -51,37 +74,20 @@
 
     (execWith [me func]
       (with-local-vars [rc nil]
-      (with-open [conn
-                  (.begin me) ]
+      (with-open
+        [conn (begin db)]
         (try
-          (->> (ReifySQLr
+          (->> (reifySQLr
                  db
                  (fn [_] conn) #(%2 %1))
                (func )
                (var-set rc ))
-          (.commit me conn)
+          (commit conn)
           @rc
           (catch Throwable e#
-            (.rollback me conn)
+            (undo conn)
             (log/warn e# "")
-            (throw e#))) )))
-
-    (rollback [_ conn]
-      (try! (-> ^Connection
-                conn
-                (.rollback))))
-
-    (commit [_ conn]
-      (-> ^Connection
-          conn
-          (.commit)))
-
-    (begin [_]
-      (let [conn (.open db) ]
-        (.setAutoCommit conn false)
-        (->> Connection/TRANSACTION_SERIALIZABLE
-             (.setTransactionIsolation conn ))
-        conn))))
+            (throw e#))) )))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;EOF

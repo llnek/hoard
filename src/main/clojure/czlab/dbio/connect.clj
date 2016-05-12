@@ -12,59 +12,61 @@
 ;;
 ;; Copyright (c) 2013-2016, Kenneth Leung. All rights reserved.
 
-
 (ns ^{:doc ""
       :author "kenl" }
 
-  czlab.xlib.dbio.connect
-
-  (:require
-    [czlab.xlib.util.core :refer [try!]]
-    [czlab.xlib.util.logging :as log])
-
-  (:use [czlab.xlib.dbio.core]
-        [czlab.xlib.dbio.composite]
-        [czlab.xlib.dbio.simple])
+  czlab.dbio.connect
 
   (:import
     [java.util Map]
-    [com.zotohlab.frwk.dbio DBAPI
-    JDBCPool JDBCInfo
-    DBIOLocal DBIOError OptLockError]))
+    [czlab.dbio DBAPI
+     JDBCPool
+     JDBCInfo
+     DBIOLocal
+     DBIOError
+     OptLockError])
+
+  (:require
+    [czlab.xlib.core :refer [try!]]
+    [czlab.xlib.logging :as log])
+
+  (:use [czlab.dbio.composite]
+        [czlab.dbio.core]
+        [czlab.dbio.simple]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;(set! *warn-on-reflection* true)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defn RegisterJdbcTL
+(defn registerJdbcTL
 
   "Add a thread-local db pool"
 
   [^JDBCInfo jdbc options]
 
-  (let [tloc (DBIOLocal/getCache)
-        hc (.getId jdbc)
-        ^Map c (.get tloc) ]
+  (let [^Map c (-> (DBIOLocal/getCache)
+                   (.get))
+        hc (.getId jdbc)]
     (when-not (.containsKey c hc)
-      (log/debug "No db pool found in DBIO-thread-local, creating one")
-      (->> {:partitions 1
-            :max-conns 1 :min-conns 1 }
+      (log/debug "No db-pool in DBIO-thread-local, creating one")
+      (->> {:max-conns 1 :min-conns 1
+            :partitions 1}
            (merge options )
-           (DbPool* jdbc )
+           (mkDbPool jdbc )
            (.put c hc )))
     (.get c hc)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defn DbioConnect
+(defn dbioConnect
 
   "Connect to a datasource"
 
   ^DBAPI
   [^JDBCInfo jdbc metaCache options]
 
-  (let [hc (.getId jdbc) ]
+  (let [hc (.getId jdbc)]
     ;;(log/debug "%s" (.getMetas metaCache))
     (reify
 
@@ -72,20 +74,20 @@
 
       (supportsLock [_] (not (false? (:opt-lock options))))
 
-      (vendor [_] (ResolveVendor jdbc))
+      (vendor [_] (resolveVendor jdbc))
 
       (getMetaCache [_] metaCache)
 
       (finz [_] nil)
 
-      (open [_] (DbConnection* jdbc))
+      (open [_] (mkDbConnection jdbc))
 
-      (newCompositeSQLr [this] (CompositeSQLr* this))
-      (newSimpleSQLr [this] (SimpleSQLr* this)) )))
+      (newCompositeSQLr [this] (compositeSQLr this))
+      (newSimpleSQLr [this] (simpleSQLr this)) )))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defn DbioConnectViaPool
+(defn dbioConnectViaPool
 
   "Connect to a datasource"
 
@@ -103,8 +105,8 @@
     (finz [_] nil)
     (open [_] (.nextFree pool))
 
-    (newCompositeSQLr [this] (CompositeSQLr* this))
-    (newSimpleSQLr [this] (SimpleSQLr* this)) ))
+    (newCompositeSQLr [this] (compositeSQLr this))
+    (newSimpleSQLr [this] (simpleSQLr this)) ))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;EOF
