@@ -16,13 +16,13 @@
 (ns ^{:doc ""
       :author "kenl" }
 
-  czlab.xlib.dbio.sqlserver
+  czlab.dbio.sqlserver
 
   (:require
-    [czlab.xlib.util.logging :as log])
+    [czlab.xlib.logging :as log])
 
-  (:use [czlab.xlib.dbio.drivers]
-        [czlab.xlib.dbio.core]))
+  (:use [czlab.dbio.drivers]
+        [czlab.dbio.core]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;(set! *warn-on-reflection* true)
@@ -31,42 +31,46 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 ;; SQLServer
-(defmethod GetBlobKeyword SQLServer [db] "IMAGE")
-(defmethod GetTSKeyword SQLServer [db] "DATETIME")
-(defmethod GetDoubleKeyword SQLServer [db] "FLOAT(53)")
-(defmethod GetFloatKeyword SQLServer [db] "FLOAT(53)")
+(defmethod getBlobKwd SQLServer [db] "IMAGE")
+(defmethod getTSKwd SQLServer [db] "DATETIME")
+(defmethod getDoubleKwd SQLServer [db] "FLOAT(53)")
+(defmethod getFloatKwd SQLServer [db] "FLOAT(53)")
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defmethod GenAutoInteger SQLServer
+(defmethod genAutoInteger SQLServer
 
   [db table fld]
 
-  (str (GetPad db) (GenCol fld)
-       " " (GetIntKeyword db)
-       (if (:pkey fld) " IDENTITY (1,1) " " AUTOINCREMENT ")))
+  (str (getPad db) (genCol fld)
+       " " (getIntKwd db)
+       (if (:pkey fld)
+         " IDENTITY (1,1) "
+         " AUTOINCREMENT ")))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defmethod GenAutoLong SQLServer
+(defmethod genAutoLong SQLServer
 
   [db table fld]
 
-  (str (GetPad db) (GenCol fld)
-       " " (GetLongKeyword db)
-       (if (:pkey fld) " IDENTITY (1,1) " " AUTOINCREMENT ")))
+  (str (getPad db) (genCol fld)
+       " " (getLongKwd db)
+       (if (:pkey fld)
+         " IDENTITY (1,1) "
+         " AUTOINCREMENT ")))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defmethod GenDrop SQLServer
+(defmethod genDrop SQLServer
 
   [db table]
 
   (str "IF EXISTS (SELECT * FROM dbo.sysobjects WHERE id=object_id('"
        table "')) DROP TABLE "
-       table (GenExec db) "\n\n"))
+       table (genExec db) "\n\n"))
 
-;;(println (GetDDL (MakeMetaCache testschema) (SQLServer.) ))
+;;(println (getDDL (reifyMetaCache testschema) (SQLServer.) ))
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;EOF
 

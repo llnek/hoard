@@ -16,12 +16,13 @@
 (ns ^{:doc ""
       :author "kenl" }
 
-  czlab.xlib.dbio.postgresql
+  czlab.dbio.postgresql
 
-  (:require [czlab.xlib.util.logging :as log])
+  (:require [czlab.xlib.logging :as log])
 
-  (:use [czlab.xlib.dbio.drivers]
-        [czlab.xlib.dbio.core :as dbcore]))
+  (:use [czlab.dbio.drivers]
+        [czlab.dbio.core :as dbcore]))
+
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;(set! *warn-on-reflection* true)
@@ -35,45 +36,46 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 ;; Postgresql
-(defmethod GetTSKeyword :postgresql [db] "TIMESTAMP WITH TIME ZONE")
-(defmethod GetBlobKeyword :postgresql [db] "BYTEA")
-(defmethod GetDoubleKeyword :postgresql [db] "DOUBLE PRECISION")
-(defmethod GetFloatKeyword :postgresql [db] "REAL")
+(defmethod getTSKwd :postgresql [db] "TIMESTAMP WITH TIME ZONE")
+(defmethod getBlobKwd :postgresql [db] "BYTEA")
+(defmethod getDoubleKwd :postgresql [db] "DOUBLE PRECISION")
+(defmethod getFloatKwd :postgresql [db] "REAL")
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defmethod GenCal :postgresql
+(defmethod genCal :postgresql
 
-  [db fld]
+  [db field]
 
-  (GenTimestamp db fld))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;
-(defmethod GenAutoInteger :postgresql
-
-  [db table fld]
-
-  (GenColDef db (GenCol fld) "SERIAL" false nil))
+  (genTimestamp db field))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defmethod GenAutoLong :postgresql
+(defmethod genAutoInteger :postgresql
 
-  [db table fld]
+  [db table field]
 
-  (GenColDef db (GenCol fld) "BIGSERIAL" false nil))
+  (genColDef db (genCol field) "SERIAL" false nil))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defmethod GenDrop :postgresql
+(defmethod genAutoLong :postgresql
+
+  [db table field]
+
+  (genColDef db (genCol field) "BIGSERIAL" false nil))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
+(defmethod genDrop :postgresql
 
   [db table]
 
-  (str "DROP TABLE IF EXISTS " table " CASCADE" (GenExec db) "\n\n"))
+  (str "DROP TABLE IF EXISTS "
+       table " CASCADE" (genExec db) "\n\n"))
 
-;;(def XXX (.getMetas (MakeMetaCache testschema)))
-;;(println (GetDDL (MakeMetaCache testschema) (Postgresql.) ))
+;;(def XXX (.getMetas (reifyMetaCache testschema)))
+;;(println (getDDL (reifyMetaCache testschema) (Postgresql.) ))
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;EOF
 

@@ -16,12 +16,12 @@
 (ns ^{:doc ""
       :author "kenl" }
 
-  czlab.xlib.dbio.mysql
+  czlab.dbio.mysql
 
-  (:require [czlab.xlib.util.logging :as log])
+  (:require [czlab.xlib.logging :as log])
 
-  (:use [czlab.xlib.dbio.drivers]
-        [czlab.xlib.dbio.core]))
+  (:use [czlab.dbio.drivers]
+        [czlab.dbio.core]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;(set! *warn-on-reflection* true)
@@ -30,46 +30,48 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; MySQL
-(defmethod GetBlobKeyword MySQL [db] "LONGBLOB")
-(defmethod GetTSKeyword MySQL [db] "TIMESTAMP")
-(defmethod GetDoubleKeyword MySQL [db] "DOUBLE")
-(defmethod GetFloatKeyword MySQL [db]  "DOUBLE")
+(defmethod getBlobKwd MySQL [db] "LONGBLOB")
+(defmethod getTSKwd MySQL [db] "TIMESTAMP")
+(defmethod getDoubleKwd MySQL [db] "DOUBLE")
+(defmethod getFloatKwd MySQL [db]  "DOUBLE")
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defmethod GenEnd MySQL
+(defmethod genEnd MySQL
 
   [db table]
 
-  (str "\n) Type=InnoDB" (GenExec db) "\n\n"))
+  (str "\n) Type=InnoDB" (genExec db) "\n\n"))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defmethod GenAutoInteger MySQL
+(defmethod genAutoInteger MySQL
 
-  [db table fld]
+  [db table field]
 
-  (str (GetPad db) (GenCol fld)
-       " " (GetIntKeyword db) " NOT NULL AUTO_INCREMENT"))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;
-(defmethod GenAutoLong MySQL
-
-  [db table fld]
-
-  (str (GetPad db) (GenCol fld)
-       " " (GetLongKeyword db) " NOT NULL AUTO_INCREMENT"))
+  (str (getPad db) (genCol field)
+       " "
+       (getIntKwd db) " NOT NULL AUTO_INCREMENT"))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defmethod GenDrop MySQL
+(defmethod genAutoLong MySQL
+
+  [db table field]
+
+  (str (getPad db) (genCol field)
+       " " (getLongKwd db) " NOT NULL AUTO_INCREMENT"))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
+(defmethod genDrop MySQL
 
   [db table]
 
-  (str "DROP TABLE IF EXISTS " table (GenExec db) "\n\n"))
+  (str "DROP TABLE IF EXISTS "
+       table (genExec db) "\n\n"))
 
-;;(println (GetDDL (MakeMetaCache testschema) (MySQL.) ))
+;;(println (getDDL (reifyMetaCache testschema) (MySQL.) ))
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;EOF
 

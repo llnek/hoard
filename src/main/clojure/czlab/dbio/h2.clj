@@ -12,26 +12,25 @@
 ;;
 ;; Copyright (c) 2013-2016, Kenneth Leung. All rights reserved.
 
-
 (ns ^{:doc ""
       :author "kenl" }
 
-  czlab.xlib.dbio.h2
+  czlab.dbio.h2
+
+  (:import
+    [czlab.crypto PasswordAPI]
+    [czlab.dbio DBIOError]
+    [java.io File]
+    [java.sql DriverManager Connection Statement])
 
   (:require
-    [czlab.xlib.util.core :refer [test-nonil test-nestr]]
-    [czlab.xlib.util.logging :as log]
+    [czlab.xlib.core :refer [test-nonil test-nestr]]
+    [czlab.xlib.logging :as log]
     [clojure.string :as cs]
     [clojure.java.io :as io])
 
-  (:use [czlab.xlib.dbio.drivers]
-        [czlab.xlib.dbio.core])
-
-  (:import
-    [com.zotohlab.frwk.dbio DBIOError]
-    [com.zotohlab.frwk.crypto PasswordAPI]
-    [java.io File]
-    [java.sql DriverManager Connection Statement]))
+  (:use [czlab.dbio.drivers]
+        [czlab.dbio.core]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;(set! *warn-on-reflection* true)
@@ -48,50 +47,56 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; H2
-(defmethod GetDateKeyword H2 [db] "TIMESTAMP")
-(defmethod GetDoubleKeyword H2 [db] "DOUBLE")
-(defmethod GetBlobKeyword H2 [db] "BLOB")
-(defmethod GetFloatKeyword H2 [db] "FLOAT")
+(defmethod getDateKwd H2 [db] "TIMESTAMP")
+(defmethod getDoubleKwd H2 [db] "DOUBLE")
+(defmethod getBlobKwd H2 [db] "BLOB")
+(defmethod getFloatKwd H2 [db] "FLOAT")
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defmethod GenAutoInteger H2
+(defmethod genAutoInteger H2
 
-  [db table fld]
+  [db table field]
 
-  (str (GetPad db) (GenCol fld)
-       " " (GetIntKeyword db)
-       (if (:pkey fld) " IDENTITY(1) " " AUTO_INCREMENT(1) ")))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;
-(defmethod GenAutoLong H2
-
-  [db table fld]
-
-  (str (GetPad db) (GenCol fld)
-       " " (GetLongKeyword db)
-       (if (:pkey fld) " IDENTITY(1) " " AUTO_INCREMENT(1) ")))
+  (str (getPad db) (genCol field)
+       " " (getIntKwd db)
+       (if (:pkey field)
+         " IDENTITY(1) "
+         " AUTO_INCREMENT(1) ")))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defmethod GenBegin H2
+(defmethod genAutoLong H2
+
+  [db table field]
+
+  (str (getPad db) (genCol field)
+       " " (getLongKwd db)
+       (if (:pkey field)
+         " IDENTITY(1) "
+         " AUTO_INCREMENT(1) ")))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
+(defmethod genBegin H2
 
   [db table]
 
-  (str "CREATE CACHED TABLE " table "\n(\n" ))
+  (str "CREATE CACHED TABLE " table " (\n" ))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defmethod GenDrop H2
+(defmethod genDrop H2
 
   [db table]
 
-  (str "DROP TABLE " table " IF EXISTS CASCADE" (GenExec db) "\n\n"))
+  (str "DROP TABLE "
+       table
+       " IF EXISTS CASCADE" (genExec db) "\n\n"))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defn H2Db*
+(defn H2Db
 
   "Create a H2 database"
 
@@ -110,18 +115,18 @@
         dbUrl (cs/replace H2-FILE-URL "{{path}}" u) ]
     (log/debug "Creating H2: %s" dbUrl)
     (.mkdir dbFileDir)
-    (with-open [c1 (DriverManager/getConnection dbUrl user pwd) ]
+    (with-open [c1 (DriverManager/getConnection dbUrl user pwd)]
       (.setAutoCommit c1 true)
-      (with-open [s (.createStatement c1) ]
+      (with-open [s (.createStatement c1)]
         ;;(.execute s (str "CREATE USER " user " PASSWORD \"" pwd "\" ADMIN"))
         (.execute s "SET DEFAULT_TABLE_TYPE CACHED"))
-      (with-open [s (.createStatement c1) ]
+      (with-open [s (.createStatement c1)]
         (.execute s "SHUTDOWN")))
     dbUrl))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defn CloseH2Db
+(defn closeH2Db
 
   "Close an existing H2 database"
 
@@ -139,12 +144,12 @@
         pwd (str pwdObj)
         dbUrl (cs/replace H2-FILE-URL "{{path}}" u) ]
     (log/debug "Closing H2: %s" dbUrl)
-    (with-open [c1 (DriverManager/getConnection dbUrl user pwd) ]
+    (with-open [c1 (DriverManager/getConnection dbUrl user pwd)]
       (.setAutoCommit c1 true)
-      (with-open [s (.createStatement c1) ]
+      (with-open [s (.createStatement c1)]
         (.execute s "SHUTDOWN")) )))
 
-;;(println (GetDDL (MetaCache* testschema) (H2.) ))
+;;(println (getDDL (reifyMetaCache testschema) (H2.) ))
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;EOF
 

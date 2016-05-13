@@ -12,17 +12,16 @@
  *
  * Copyright (c) 2013-2016, Kenneth Leung. All rights reserved. */
 
-
-package com.zotohlab.frwk.dbio;
+package czlab.dbio;
+//////////////////////////////////////////////////////////////////////////////
+//
 
 /**
  * @author kenl
  */
 @FunctionalInterface
 public interface Schema {
-
   public Iterable<?> getModels();
-
 }
 
 

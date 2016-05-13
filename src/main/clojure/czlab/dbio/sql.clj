@@ -16,32 +16,32 @@
 (ns ^{:doc ""
       :author "kenl" }
 
-  czlab.xlib.dbio.sql
+  czlab.dbio.sql
 
   (:require
-    [czlab.xlib.util.meta :refer [BytesClass CharsClass]]
-    [czlab.xlib.util.str
-    :refer [sname ucase lcase hgl? AddDelim! strim]]
-    [czlab.xlib.util.io :refer [ReadChars ReadBytes ]]
-    [czlab.xlib.util.logging :as log]
-    [czlab.xlib.util.core
-    :refer [FlattenNil trap! NowJTstamp nnz]]
-    [czlab.xlib.util.dates :refer [GmtCal]])
+    [czlab.xlib.meta :refer [BytesClass CharsClass]]
+    [czlab.xlib.str
+    :refer [sname ucase lcase hgl? addDelim! strim]]
+    [czlab.xlib.io :refer [readChars readBytes]]
+    [czlab.xlib.logging :as log]
+    [czlab.xlib.core
+    :refer [flattenNil trap! nowJTstamp nnz]]
+    [czlab.xlib.dates :refer [gmtCal]])
 
-  (:use [czlab.xlib.dbio.core])
+  (:use [czlab.dbio.core])
 
   (:import
     [java.util Calendar GregorianCalendar TimeZone]
-    [com.zotohlab.frwk.dbio MetaCache
-    SQLr DBIOError OptLockError]
+    [czlab.dbio MetaCache
+     SQLr DBIOError OptLockError]
     [java.math BigDecimal BigInteger]
     [java.io Reader InputStream]
-    [com.zotohlab.frwk.dbio DBAPI]
-    [com.zotohlab.frwk.io XData]
+    [czlab.dbio DBAPI]
+    [czlab.frwk.io XData]
     [java.sql ResultSet Types SQLException
-    DatabaseMetaData ResultSetMetaData
-    Date Timestamp Blob Clob
-    Statement PreparedStatement Connection]))
+     DatabaseMetaData ResultSetMetaData
+     Date Timestamp Blob Clob
+     Statement PreparedStatement Connection]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;(set! *warn-on-reflection* true)
@@ -51,13 +51,13 @@
 (defn- fmtUpdateWhere ""
 
   ^String
-  [lock mcz]
+  [lock model]
 
-  (str (ese (Colname :rowid mcz))
+  (str (ese (mkColname :rowid model))
        "=?"
        (if lock
            (str " AND "
-                (ese (Colname :verid mcz)) "=?")
+                (ese (mkColname :verid model)) "=?")
            "")))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -71,29 +71,29 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defn SqlFilterClause
+(defn sqlFilterClause
 
   "[sql-filter string, values]"
 
-  [mcz filters]
+  [model filters]
 
   (let
-    [flds (:fields (meta mcz))
+    [fields (:fields (meta model))
      wc (reduce
           #(let [k (first %2)
-                 fld (get flds k)
+                 fld (get fields k)
                  c (if (nil? fld)
                      (sname k)
-                     (:column fld)) ]
-             (AddDelim! %1
+                     (:column fld))]
+             (addDelim! %1
                         " AND "
                         (str (ese c)
                              (if (nil? (last %2))
                                " IS NULL "
                                " = ? "))))
           (StringBuilder.)
-          (seq filters)) ]
-    [ (str wc) (FlattenNil (vals filters)) ]))
+          (seq filters))]
+    [(str wc) (flattenNil (vals filters))]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -114,8 +114,8 @@
               Reader obj
               nil) ]
     (cond
-      (some? rdr) (with-open [r rdr] (ReadChars r))
-      (some? inp) (with-open [p inp] (ReadBytes p))
+      (some? rdr) (with-open [r rdr] (readChars r))
+      (some? inp) (with-open [p inp] (readBytes p))
       :else obj)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -125,8 +125,8 @@
   [sqlType pos ^ResultSet rset]
 
   (condp == (int sqlType)
-    Types/TIMESTAMP (.getTimestamp rset (int pos) (GmtCal))
-    Types/DATE (.getDate rset (int pos) (GmtCal))
+    Types/TIMESTAMP (.getTimestamp rset (int pos) (gmtCal))
+    Types/DATE (.getDate rset (int pos) (gmtCal))
     (readCol sqlType pos rset)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -135,10 +135,10 @@
 
   "Row is a transient object"
 
-  [mcz row cn ct cv]
+  [model row cn ct cv]
 
-  (let [fdef (-> (:columns (meta mcz))
-                 (get (ucase cn))) ]
+  (let [fdef (-> (:columns (meta model))
+                 (get (ucase cn)))]
     (if (nil? fdef)
       row
       (assoc! row (:id fdef) cv))))
@@ -162,11 +162,11 @@
 
   [finj ^ResultSet rs ^ResultSetMetaData rsmeta]
 
-  (with-local-vars [row (transient {}) ]
+  (with-local-vars [row (transient {})]
     (doseq [pos (range 1 (inc (.getColumnCount rsmeta)))
             :let [cn (.getColumnName rsmeta (int pos))
                   ct (.getColumnType rsmeta (int pos))
-                  cv (readOneCol ct (int pos) rs) ]]
+                  cv (readOneCol ct (int pos) rs)]]
       (var-set row (finj @row cn ct cv)))
     (persistent! @row)))
 
@@ -202,12 +202,12 @@
     Boolean (.setInt ps pos (if p 1 0))
     Double (.setDouble ps pos p)
     Float (.setFloat ps pos p)
-    Timestamp (.setTimestamp ps pos p (GmtCal))
-    Date (.setDate ps pos p (GmtCal))
+    Timestamp (.setTimestamp ps pos p (gmtCal))
+    Date (.setDate ps pos p (gmtCal))
     Calendar (.setTimestamp ps pos
                             (Timestamp. (.getTimeInMillis ^Calendar p))
-                            (GmtCal))
-    (DbioError (str "Unsupported param type: " (type p)))))
+                            (gmtCal))
+    (mkDbioError (str "Unsupported param type: " (type p)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -225,7 +225,7 @@
             rc (if (< pos 0)
                  []
                  [(.substring sql 0 pos)
-                  (.substring sql pos)]) ]
+                  (.substring sql pos)])]
         (if (empty? rc)
           (recur true sql)
           (recur false (str (first rc)
@@ -242,7 +242,7 @@
 
   (let [sql (strim sqlstr)
         lcs (lcase sql)
-        v (.vendor db)   ]
+        v (.vendor db)]
     (if (= :sqlserver (:id v))
       (cond
         (.startsWith lcs "select")
@@ -266,7 +266,7 @@
              (.prepareStatement conn
                                 sql
                                 Statement/RETURN_GENERATED_KEYS)
-             (.prepareStatement conn sql)) ]
+             (.prepareStatement conn sql))]
     (log/debug "Building SQLStmt: %s" sql)
     (doseq [n (range 0 (count params)) ]
       (setBindVar ps (inc n) (nth params n)))
@@ -324,7 +324,7 @@
 ;;
 (defn- sqlSelect ""
 
-  [db conn sql pms ]
+  [db conn sql pms]
 
   (sqlSelect+ db conn sql pms
               (partial row2Obj stdInjtor) identity))
@@ -349,12 +349,12 @@
   (with-local-vars
     [ps (transient []) ]
     (doseq [[k v] obj
-            :let [fdef (flds k) ]]
+            :let [fdef (flds k)]]
       (when (and (some? fdef)
                  (not (:auto fdef))
                  (not (:system fdef)))
-        (AddDelim! sb1 "," (ese (Colname fdef)))
-        (AddDelim! sb2 "," (if (nil? v) "NULL" "?"))
+        (addDelim! sb1 "," (ese (mkColname fdef)))
+        (addDelim! sb2 "," (if (nil? v) "NULL" "?"))
         (when (some? v)
           (var-set ps (conj! @ps v)))))
     (persistent! @ps)))
@@ -365,18 +365,18 @@
 
   "Format sql string for update"
 
-  [^StringBuilder sb1 obj flds]
+  [^StringBuilder sb1 obj fields]
 
   (with-local-vars
     [ps (transient []) ]
     (doseq [[k v]  obj
-            :let [fdef (flds k) ]]
+            :let [fdef (fields k)]]
       (when (and (some? fdef)
                  (:updatable fdef)
                  (not (:auto fdef))
-                 (not (:system fdef)) )
+                 (not (:system fdef)))
         (doto sb1
-          (AddDelim! "," (ese (Colname fdef)))
+          (addDelim! "," (ese (mkColname fdef)))
           (.append (if (nil? v) "=NULL" "=?")))
         (when (some? v)
           (var-set ps (conj! @ps v)))))
@@ -393,9 +393,9 @@
             :rowid (:rowid obj)
             :last-modify (:last-modify obj) }]
     (with-meta (-> obj
-                   (DbioClrFld :rowid)
-                   (DbioClrFld :verid)
-                   (DbioClrFld :last-modify)) mm)))
+                   (dbioClrFld :rowid)
+                   (dbioClrFld :verid)
+                   (dbioClrFld :last-modify)) mm)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -421,7 +421,7 @@
 
   (let [mcz (metas model) ]
     (when (nil? mcz)
-          (DbioError (str "Unknown model " model)))
+          (mkDbioError (str "Unknown model " model)))
     (sqlSelect+ db conn sql pms
                 (partial row2Obj
                          (partial modelInjtor mcz))
@@ -433,7 +433,7 @@
 
   [db metas conn sql pms]
 
-  (sqlSelect db conn sql pms ))
+  (sqlSelect db conn sql pms))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -446,7 +446,7 @@
                  metas
                  conn
                  (str "SELECT COUNT(*) FROM "
-                      (ese (Tablename model metas)))
+                      (ese (mkTablename model metas)))
                  [])]
     (if (empty? rc)
       0
@@ -459,7 +459,7 @@
   [db metas conn model]
 
   (let [sql (str "DELETE FROM "
-                 (ese (Tablename model metas))) ]
+                 (ese (mkTablename model metas))) ]
     (sqlExec db conn sql [])
     nil))
 
@@ -473,19 +473,19 @@
         model (:typeid info)
         mcz (metas model) ]
     (when (nil? mcz)
-      (DbioError (str "Unknown model " model)))
+      (mkDbioError (str "Unknown model " model)))
     (let [lock (.supportsLock db)
-          table (Tablename mcz)
+          table (mkTablename mcz)
           rowid (:rowid info)
           verid (:verid info)
-          p (if lock [rowid verid] [rowid] )
+          p (if lock [rowid verid] [rowid])
           w (fmtUpdateWhere lock mcz)
           cnt (doExec db
                       metas
                       conn
                       (str "DELETE FROM "
                            (ese table)
-                           " WHERE " w) p) ]
+                           " WHERE " w) p)]
       (when lock (lockError? "delete" cnt table rowid))
       cnt)))
 
@@ -499,15 +499,15 @@
         model (:typeid info)
         mcz (metas model) ]
     (when (nil? mcz)
-      (DbioError (str "Unknown model " model)))
-    (let [pkey {:pkey (Colname :rowid mcz)}
+      (mkDbioError (str "Unknown model " model)))
+    (let [pkey {:pkey (mkColname :rowid mcz)}
           lock (.supportsLock db)
           flds (:fields (meta mcz))
-          table (Tablename mcz)
+          table (mkTablename mcz)
           s2 (StringBuilder.)
           s1 (StringBuilder.)
-          now (NowJTstamp)
-          pms (insertFlds s1 s2 obj flds) ]
+          now (nowJTstamp)
+          pms (insertFlds s1 s2 obj flds)]
       (when (> (.length s1) 0)
         (let [out (doExecWithOutput db
                                     metas
@@ -520,12 +520,12 @@
                                     pms
                                     pkey)]
           (if (empty? out)
-            (DbioError (str "Insert requires row-id to be returned."))
+            (mkDbioError (str "Insert requires row-id to be returned."))
             (log/debug "Exec-with-out %s" out))
           (let [wm {:rowid (:1 out) :verid 0} ]
             (when-not (number? (:rowid wm))
-                    (DbioError (str "RowID data-type must be Long.")))
-            (vary-meta obj MergeMeta wm)))))))
+                    (mkDbioError (str "RowID data-type must be Long.")))
+            (vary-meta obj mergeMeta wm)))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -535,30 +535,30 @@
 
   (let [info (meta obj)
         model (:typeid info)
-        mcz (metas model) ]
+        mcz (metas model)]
     (when (nil? mcz)
-      (DbioError (str "Unknown model " model)))
+      (mkDbioError (str "Unknown model " model)))
     (let [lock (.supportsLock db)
           flds (:fields (meta mcz))
           cver (nnz (:verid info))
-          table (Tablename mcz)
+          table (mkTablename mcz)
           rowid (:rowid info)
           sb1 (StringBuilder.)
-          now (NowJTstamp)
+          now (nowJTstamp)
           nver (inc cver)
-          pms (updateFlds sb1 obj flds) ]
+          pms (updateFlds sb1 obj flds)]
       (when (> (.length sb1) 0)
         (with-local-vars
           [ ps (transient pms) ]
-          (-> (AddDelim! sb1
+          (-> (addDelim! sb1
                          ","
-                         (ese (Colname :last-modify mcz)))
+                         (ese (mkColname :last-modify mcz)))
               (.append "=?"))
           (var-set ps (conj! @ps now))
           (when lock ;; up the version
-            (-> (AddDelim! sb1
+            (-> (addDelim! sb1
                            ","
-                           (ese (Colname :verid mcz)))
+                           (ese (mkColname :verid mcz)))
                 (.append "=?"))
             (var-set ps (conj! @ps nver)))
           ;; for the where clause
@@ -575,7 +575,7 @@
                                  (fmtUpdateWhere lock mcz))
                             (persistent! @ps)) ]
             (when lock (lockError? "update" cnt table rowid))
-            (vary-meta obj MergeMeta
+            (vary-meta obj mergeMeta
                        { :verid nver :last-modify now })))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -589,7 +589,7 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defn ReifySQLr
+(defn reifySQLr
 
   "Create a SQLr"
 
@@ -624,9 +624,9 @@
           [func #(let
                    [mcz (metaz model)
                     s (str "SELECT * FROM "
-                           (GTable mcz))
+                           (gtable mcz))
                     [wc pms]
-                    (SqlFilterClause mcz filters) ]
+                    (sqlFilterClause mcz filters) ]
                    (if (hgl? wc)
                      (doQuery+ db metaz %1
                                (doExtraSQL (str s " WHERE " wc)

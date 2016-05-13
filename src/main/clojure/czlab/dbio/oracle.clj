@@ -16,12 +16,13 @@
 (ns ^{:doc ""
       :author "kenl" }
 
-  czlab.xlib.dbio.oracle
+  czlab.dbio.oracle
 
-  (:require [czlab.xlib.util.logging :as log])
+  (:require [czlab.xlib.logging :as log])
 
-  (:use [czlab.xlib.dbio.drivers]
-        [czlab.xlib.dbio.core]))
+  (:use [czlab.dbio.drivers]
+        [czlab.dbio.core]))
+
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;(set! *warn-on-reflection* true)
@@ -39,7 +40,7 @@
        "BEGIN\n"
        "SELECT SEQ_" table ".NEXTVAL INTO :NEW."
        col " FROM DUAL;\n"
-       "END" (GenExec db) "\n\n"))
+       "END" (genExec db) "\n\n"))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -47,43 +48,44 @@
 
   [db table]
 
-  (str "CREATE SEQUENCE SEQ_" table
+  (str "CREATE SEQUENCE SEQ_"
+       table
        " START WITH 1 INCREMENT BY 1"
-       (GenExec db) "\n\n"))
+       (genExec db) "\n\n"))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Oracle
-(defmethod GetStringKeyword Oracle [db] "VARCHAR2")
-(defmethod GetTSDefault Oracle [db] "DEFAULT SYSTIMESTAMP")
-(defmethod GetLongKeyword Oracle [db] "NUMBER(38)")
-(defmethod GetDoubleKeyword Oracle [db] "BINARY_DOUBLE")
-(defmethod GetFloatKeyword Oracle [db] "BINARY_FLOAT")
+(defmethod getStringKwd Oracle [db] "VARCHAR2")
+(defmethod getTSDefault Oracle [db] "DEFAULT SYSTIMESTAMP")
+(defmethod getLongKwd Oracle [db] "NUMBER(38)")
+(defmethod getDoubleKwd Oracle [db] "BINARY_DOUBLE")
+(defmethod getFloatKwd Oracle [db] "BINARY_FLOAT")
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defmethod GenAutoInteger Oracle
+(defmethod genAutoInteger Oracle
 
-  [db table fld]
+  [db table field]
 
-  (swap! *DDL_BVS* assoc table (:column fld))
-  (GenInteger db fld))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;
-(defmethod GenAutoLong Oracle
-
-  [db table fld]
-
-  (swap! *DDL_BVS* assoc table (:column fld))
-  (GenLong db fld))
+  (swap! *DDL_BVS* assoc table (:column field))
+  (genInteger db field))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defmethod GenEndSQL Oracle
+(defmethod genAutoLong Oracle
+
+  [db table field]
+
+  (swap! *DDL_BVS* assoc table (:column field))
+  (genLong db field))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
+(defmethod genEndSQL Oracle
 
   [db]
 
-  (let [bf (StringBuilder.) ]
+  (let [bf (StringBuilder.)]
     (doseq [en (deref *DDL_BVS*)]
       (doto bf
         (.append (createSequence db (first en)))
@@ -94,13 +96,16 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defmethod GenDrop Oracle
+(defmethod genDrop Oracle
 
   [db table]
 
-  (str "DROP TABLE " table " CASCADE CONSTRAINTS PURGE" (GenExec db) "\n\n"))
+  (str "DROP TABLE "
+       table
+       " CASCADE CONSTRAINTS PURGE"
+       (genExec db) "\n\n"))
 
-;;(println (GetDDL (MakeMetaCache testschema) (Oracle.) ))
+;;(println (getDDL (reifyMetaCache testschema) (Oracle.) ))
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;EOF
 

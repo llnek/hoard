@@ -12,21 +12,20 @@
 ;;
 ;; Copyright (c) 2013-2016, Kenneth Leung. All rights reserved.
 
-
 (ns ^{:doc ""
       :author "kenl" }
 
-  czlab.xlib.dbio.simple
+  czlab.dbio.simple
 
   (:require
-    [czlab.xlib.util.str :refer [hgl?]]
-    [czlab.xlib.util.logging :as log])
+    [czlab.xlib.str :refer [hgl?]]
+    [czlab.xlib.logging :as log])
 
-  (:use [czlab.xlib.dbio.core]
-        [czlab.xlib.dbio.sql])
+  (:use [czlab.dbio.core]
+        [czlab.dbio.sql])
 
   (:import
-    [com.zotohlab.frwk.dbio DBAPI MetaCache SQLr]
+    [czlab.dbio DBAPI MetaCache SQLr]
     [java.sql Connection]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -48,14 +47,14 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defn SimpleSQLr*
+(defn simpleSQLr
 
   "Non transactional SQL object"
 
   ^SQLr
   [^DBAPI db]
 
-  (ReifySQLr
+  (reifySQLr
     db
     #(openDB %)
     (fn [^Connection c f] (with-open [c c] (f c)))))

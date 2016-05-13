@@ -12,35 +12,49 @@
 ;;
 ;; Copyright (c) 2013-2016, Kenneth Leung. All rights reserved.
 
-
 (ns ^{:doc ""
       :author "kenl" }
 
-  czlab.xlib.dbio.drivers
-
-  (:require
-    [czlab.xlib.util.str
-    :refer [lcase ucase hgl? AddDelim! ]]
-    [czlab.xlib.util.logging :as log]
-    [clojure.string :as cs])
-
-  (:use [czlab.xlib.dbio.core])
+  czlab.dbio.drivers
 
   (:import
-    [com.zotohlab.frwk.dbio MetaCache DBAPI DBIOError]))
+    [czlab.dbio
+     MetaCache
+     DBAPI
+     DBIOError])
+
+  (:require
+    [czlab.xlib.logging :as log]
+    [clojure.string :as cs]
+    [czlab.xlib.str
+     :refer [lcase
+             ucase
+             hgl?
+             addDelim!]])
+
+  (:use [czlab.dbio.core]))
+
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;(set! *warn-on-reflection* true)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defn- gcn ""
+(defn genCol ""
 
   ^String
-  [flds fid]
+  [field]
 
-  (let [c (:column (get flds fid)) ]
-    (if (hgl? c) (ucase c) c)))
+  (ucase (:column field)))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
+(defn- gcn "Get column name"
+
+  ^String
+  [fields fid]
+
+  (genCol (get fields fid)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -52,12 +66,12 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defn GetPad  ""
+(defn getPad  ""
 
   ^String
   [db]
 
-  "    ")
+  "  ")
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -77,52 +91,43 @@
 
   `(if *USE_DDL_SEP* DDL_SEP ""))
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defn GenCol ""
+(defmulti genBegin (fn [a & more] a))
+(defmulti genExec (fn [a & more] a))
+(defmulti genDrop (fn [a & more] a))
 
-  ^String
-  [fld]
+(defmulti genEndSQL (fn [a & more] a))
+(defmulti genGrant (fn [a & more] a))
+(defmulti genEnd (fn [a & more] a))
 
-  (ucase (:column fld)))
+(defmulti genAutoInteger (fn [a & more] a))
+(defmulti genDouble (fn [a & more] a))
+(defmulti genLong (fn [a & more] a))
+(defmulti genFloat (fn [a & more] a))
+(defmulti genAutoLong (fn [a & more] a))
+(defmulti getTSDefault (fn [a & more] a))
+(defmulti genTimestamp (fn [a & more] a))
+(defmulti genDate (fn [a & more] a))
+(defmulti genCal (fn [a & more] a))
+(defmulti genBool (fn [a & more] a))
+(defmulti genInteger (fn [a & more] a))
+
+(defmulti getFloatKwd (fn [a & more] a))
+(defmulti getIntKwd (fn [a & more] a))
+(defmulti getTSKwd (fn [a & more] a))
+(defmulti getDateKwd (fn [a & more] a))
+(defmulti getBoolKwd (fn [a & more] a))
+(defmulti getLongKwd (fn [a & more] a))
+(defmulti getDoubleKwd (fn [a & more] a))
+(defmulti getStringKwd (fn [a & more] a))
+(defmulti getBlobKwd (fn [a & more] a))
+(defmulti genBytes (fn [a & more] a))
+(defmulti genString (fn [a & more] a))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defmulti GenBegin (fn [a & more] a))
-(defmulti GenExec (fn [a & more] a))
-(defmulti GenDrop (fn [a & more] a))
-
-(defmulti GenEndSQL (fn [a & more] a))
-(defmulti GenGrant (fn [a & more] a))
-(defmulti GenEnd (fn [a & more] a))
-
-(defmulti GenAutoInteger (fn [a & more] a))
-(defmulti GenDouble (fn [a & more] a))
-(defmulti GenLong (fn [a & more] a))
-(defmulti GenFloat (fn [a & more] a))
-(defmulti GenAutoLong (fn [a & more] a))
-(defmulti GetTSDefault (fn [a & more] a))
-(defmulti GenTimestamp (fn [a & more] a))
-(defmulti GenDate (fn [a & more] a))
-(defmulti GenCal (fn [a & more] a))
-(defmulti GenBool (fn [a & more] a))
-(defmulti GenInteger (fn [a & more] a))
-
-(defmulti GetFloatKeyword (fn [a & more] a))
-(defmulti GetIntKeyword (fn [a & more] a))
-(defmulti GetTSKeyword (fn [a & more] a))
-(defmulti GetDateKeyword (fn [a & more] a))
-(defmulti GetBoolKeyword (fn [a & more] a))
-(defmulti GetLongKeyword (fn [a & more] a))
-(defmulti GetDoubleKeyword (fn [a & more] a))
-(defmulti GetStringKeyword (fn [a & more] a))
-(defmulti GetBlobKeyword (fn [a & more] a))
-(defmulti GenBytes (fn [a & more] a))
-(defmulti GenString (fn [a & more] a))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;
-(defmethod GenExec :default
+(defmethod genExec :default
 
   ^String
   [db]
@@ -131,34 +136,34 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defmethod GenDrop :default
+(defmethod genDrop :default
 
   ^String
   [db table]
 
-  (str "DROP TABLE " table (GenExec db) "\n\n"))
+  (str "DROP TABLE " table (genExec db) "\n\n"))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defmethod GenBegin :default
+(defmethod genBegin :default
 
   ^String
   [db table]
 
-  (str "CREATE TABLE " table "\n(\n"))
+  (str "CREATE TABLE " table " (\n"))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defmethod GenEnd :default
+(defmethod genEnd :default
 
   ^String
   [db table]
 
-  (str "\n)" (GenExec db) "\n\n"))
+  (str "\n) " (genExec db) "\n\n"))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defmethod GenGrant :default
+(defmethod genGrant :default
 
   ^String
   [db table]
@@ -167,7 +172,7 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defmethod GenEndSQL :default
+(defmethod genEndSQL :default
 
   ^String
   [db]
@@ -176,118 +181,106 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defn GenColDef
+(defn genColDef ""
 
   ^String
-  [db ^String col ty opt? dft]
+  [db typedef field]
 
-  (str (GetPad db)
-       (ucase col)
-       " " ty " "
-       (nullClause db opt?)
-       (if (nil? dft) "" (str " DEFAULT " dft))))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;
-(defmethod GetFloatKeyword :default [db] "FLOAT")
-(defmethod GetIntKeyword :default [db] "INTEGER")
-(defmethod GetTSKeyword :default [db] "TIMESTAMP")
-(defmethod GetDateKeyword :default [db] "DATE")
-(defmethod GetBoolKeyword :default [db] "INTEGER")
-(defmethod GetLongKeyword :default [db] "BIGINT")
-(defmethod GetDoubleKeyword :default [db] "DOUBLE PRECISION")
-(defmethod GetStringKeyword :default [db] "VARCHAR")
-(defmethod GetBlobKeyword :default [db] "BLOB")
+  (let [dft (first (:dft field))]
+    (str (getPad db)
+         (genCol field)
+         " "
+         typedef
+         " "
+         (nullClause db (:null field))
+         (if (nil? dft) "" (str " DEFAULT " dft)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defmethod GenBytes :default
-
-  [db fld]
-
-  (GenColDef db (:column fld) (GetBlobKeyword db) (:null fld) nil))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;
-(defmethod GenString :default
-
-  [db fld]
-
-  (GenColDef db
-             (:column fld)
-             (str (GetStringKeyword db)
-                  "("
-                  (:size fld) ")")
-             (:null fld)
-             (if (:dft fld) (first (:dft fld)) nil)))
+(defmethod getFloatKwd :default [db] "FLOAT")
+(defmethod getIntKwd :default [db] "INTEGER")
+(defmethod getTSKwd :default [db] "TIMESTAMP")
+(defmethod getDateKwd :default [db] "DATE")
+(defmethod getBoolKwd :default [db] "INTEGER")
+(defmethod getLongKwd :default [db] "BIGINT")
+(defmethod getDoubleKwd :default [db] "DOUBLE PRECISION")
+(defmethod getStringKwd :default [db] "VARCHAR")
+(defmethod getBlobKwd :default [db] "BLOB")
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defmethod GenInteger :default
+(defmethod genBytes :default
 
-  [db fld]
+  [db field]
 
-  (GenColDef db
-             (:column fld)
-             (GetIntKeyword db)
-             (:null fld)
-             (if (:dft fld) (first (:dft fld)) nil)))
+  (genColDef db (getBlobKwd db) field))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defmethod GenAutoInteger :default
+(defmethod genString :default
 
-  [db table fld]
+  [db field]
+
+  (genColDef db
+             (str (getStringKwd db)
+                  "(" (:size field) ")")
+             field))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
+(defmethod genInteger :default
+
+  [db field]
+
+  (genColDef db
+             (getIntKwd db) field))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
+(defmethod genAutoInteger :default
+
+  [db table field]
 
   "")
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defmethod GenDouble :default
+(defmethod genDouble :default
 
-  [db fld]
+  [db field]
 
-  (GenColDef db
-             (:column fld)
-             (GetDoubleKeyword db)
-             (:null fld)
-             (if (:dft fld) (first (:dft fld)) nil)))
+  (genColDef db
+             (getDoubleKwd db) field))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defmethod GenFloat :default
+(defmethod genFloat :default
 
-  [db fld]
+  [db field]
 
-  (GenColDef db
-             (:column fld)
-             (GetFloatKeyword db)
-             (:null fld)
-             (if (:dft fld) (first (:dft fld)) nil)))
+  (genColDef db
+             (getFloatKwd db) field))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defmethod GenLong :default
+(defmethod genLong :default
 
-  [db fld]
+  [db field]
 
-  (GenColDef db
-             (:column fld)
-             (GetLongKeyword db)
-             (:null fld)
-             (if (:dft fld) (first (:dft fld)) nil)))
+  (genColDef db
+             (getLongKwd db) field))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defmethod GenAutoLong :default
+(defmethod genAutoLong :default
 
-  [db table fld]
+  [db table field]
 
   "")
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defmethod GetTSDefault :default
+(defmethod getTSDefault :default
 
   [db]
 
@@ -295,176 +288,169 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defmethod GenTimestamp :default
+(defmethod genTimestamp :default
 
-  [db fld]
+  [db field]
 
-  (GenColDef db
-             (:column fld)
-             (GetTSKeyword db)
-             (:null fld)
-             (if (:dft fld) (GetTSDefault db) nil)))
+  (genColDef db
+             (getTSKwd db) field))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defmethod GenDate :default
+(defmethod genDate :default
 
-  [db fld]
+  [db field]
 
-  (GenColDef db
-             (:column fld)
-             (GetDateKeyword db)
-             (:null fld)
-             (if (:dft fld) (GetTSDefault db) nil)))
+  (genColDef db
+             (getDateKwd db) field))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defmethod GenCal :default
+(defmethod genCal :default
 
-  [db fld]
+  [db field]
 
-  (GenTimestamp db fld))
+  (genTimestamp db field))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defmethod GenBool :default
+(defmethod genBool :default
 
-  [db fld]
+  [db field]
 
-  (GenColDef db
-             (:column fld)
-             (GetBoolKeyword db)
-             (:null fld)
-             (if (:dft fld) (first (:dft fld)) nil)))
+  (genColDef db
+             (getBoolKwd db) field))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defn- genExIndexes ""
 
   ^String
-  [db cache table flds mcz]
+  [db cache table fields model]
 
-  (let [m (CollectDbXXX :indexes cache mcz)
-        bf (StringBuilder.) ]
+  (let [m (collectDbXXX :indexes cache model)
+        bf (StringBuilder.)]
     (doseq [[nm nv] m
-            :let [cols (map #(gcn flds %) nv) ]]
+            :let [cols (map #(gcn flds %) nv)]]
       (when (empty? cols)
-        (DbioError (str "Cannot have empty index: " nm)))
-      (.append bf (str "CREATE INDEX "
-                       (lcase (str table "_" (name nm)))
-                       " ON " table
-                       " ( "
-                       (cs/join "," cols)
-                       " )"
-                       (GenExec db) "\n\n" )))
+        (mkDbioError (str "Cannot have empty index: " nm)))
+      (.append bf
+               (str "CREATE INDEX "
+                    (lcase (str table "_" (name nm)))
+                    " ON "
+                    table
+                    " ("
+                    (cs/join "," cols)
+                    ")"
+                    (genExec db) "\n\n")))
     (.toString bf)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defn- genUniques ""
 
-  [db cache flds mcz]
+  [db cache fields model]
 
-  (let [m (CollectDbXXX :uniques cache mcz)
-        bf (StringBuilder.) ]
+  (let [m (collectDbXXX :uniques cache model)
+        bf (StringBuilder.)]
     (doseq [[nm nv] m
-            :let [cols (map #(gcn flds %) nv) ]]
+            :let [cols (map #(gcn fields %) nv)]]
       (when (empty? cols)
-        (DbioError (str "Illegal empty unique: " (name nm))))
-      (AddDelim! bf ",\n"
-          (str (GetPad db) "UNIQUE(" (cs/join "," cols) ")")))
+        (mkDbioError (str "Illegal empty unique: " (name nm))))
+      (addDelim! bf ",\n"
+          (str (getPad db) "UNIQUE(" (cs/join "," cols) ")")))
     (.toString bf)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defn- genPrimaryKey ""
 
-  [db mcz pks]
+  [db model pks]
 
-  (str (GetPad db)
+  (str (getPad db)
        "PRIMARY KEY("
-       (ucase (cs/join "," pks) )
+       (ucase (cs/join "," pks))
        ")"))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defn- genBody ""
 
-  [db cache table mcz]
+  [db cache table model]
 
-  (let [flds (CollectDbXXX :fields cache mcz)
-        bf (StringBuilder.)
-        inx (StringBuilder.) ]
-    (with-local-vars [pkeys (transient #{}) ]
+  (let [fields (collectDbXXX :fields cache model)
+        inx (StringBuilder.)
+        bf (StringBuilder.)]
+    (with-local-vars [pkeys (transient #{})]
       ;; 1st do the columns
-      (doseq [[fid fld] flds]
-        (let [cn (ucase (:column fld))
-              dt (:domain fld)
+      (doseq [[fid fld] fields]
+        (let [dt (:domain fld)
+              cn (genCol fld)
               col (case dt
-                    :Boolean (GenBool db fld)
-                    :Timestamp (GenTimestamp db fld)
-                    :Date (GenDate db fld)
-                    :Calendar (GenCal db fld)
+                    :Boolean (genBool db fld)
+                    :Timestamp (genTimestamp db fld)
+                    :Date (genDate db fld)
+                    :Calendar (genCal db fld)
                     :Int (if (:auto fld)
-                           (GenAutoInteger db table fld)
-                           (GenInteger db fld))
+                           (genAutoInteger db table fld)
+                           (genInteger db fld))
                     :Long (if (:auto fld)
-                            (GenAutoLong db table fld)
-                            (GenLong db fld))
-                    :Double (GenDouble db fld)
-                    :Float (GenFloat db fld)
-                    (:Password :String) (GenString db fld)
-                    :Bytes (GenBytes db fld)
-                    (DbioError (str "Unsupported domain type " dt))) ]
+                            (genAutoLong db table fld)
+                            (genLong db fld))
+                    :Double (genDouble db fld)
+                    :Float (genFloat db fld)
+                    (:Password :String) (genString db fld)
+                    :Bytes (genBytes db fld)
+                    (mkDbioError (str "Unsupported domain type " dt))) ]
           (when (:pkey fld) (var-set pkeys (conj! @pkeys cn)))
-          (AddDelim! bf ",\n" col)))
+          (addDelim! bf ",\n" col)))
       ;; now do the assocs
       ;; now explicit indexes
-      (-> inx (.append (genExIndexes db cache table flds mcz)))
-      ;; now uniques, primary keys and done.
+      (-> inx (.append (genExIndexes db cache table fields model)))
+      ;; now uniques, primary keys and done
       (when (> (.length bf) 0)
         (when (> (count @pkeys) 0)
-          (.append bf (str ",\n" (genPrimaryKey db mcz (persistent! @pkeys)))))
-        (let [s (genUniques db cache flds mcz) ]
+          (.append bf (str ",\n" (genPrimaryKey db model (persistent! @pkeys)))))
+        (let [s (genUniques db cache fields model)]
           (when (hgl? s)
             (.append bf (str ",\n" s)))))
-    [ (.toString bf) (.toString inx) ] )))
+    [(.toString bf) (.toString inx)])))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defn- genOneTable ""
 
-  [db mcache mcz]
+  [db mcache model]
 
-  (let [table (ucase (:table mcz))
-        b (GenBegin db table)
-        d (genBody db mcache table mcz)
-        e (GenEnd db table)
+  (let [table (ucase (:table model))
+        b (genBegin db table)
+        d (genBody db mcache table model)
+        e (genEnd db table)
         s1 (str b (first d) e)
         inx (last d) ]
     (str s1
          (if (hgl? inx) inx "")
-         (GenGrant db table))))
+         (genGrant db table))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defn GetDDL  ""
+(defn getDDL  ""
 
   ^String
-  [^MetaCache metaCache db ]
+  [^MetaCache metaCache db]
 
   (binding [*DDL_BVS* (atom {})]
     (let [ms (.getMetas metaCache)
           drops (StringBuilder.)
-          body (StringBuilder.) ]
+          body (StringBuilder.)]
       (doseq [[id tdef] ms
-              :let [tbl (:table tdef) ]]
+              :let [tbl (:table tdef)]]
         (when (and (not (:abstract tdef))
                    (hgl? tbl))
           (log/debug "Model Id: %s table: %s" (name id) tbl)
-          (-> drops (.append (GenDrop db (ucase tbl) )))
+          (-> drops (.append (genDrop db (ucase tbl) )))
           (-> body (.append (genOneTable db ms tdef)))))
-      (str "" drops body (GenEndSQL db)))))
+      (str "" drops body (genEndSQL db)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;EOF
