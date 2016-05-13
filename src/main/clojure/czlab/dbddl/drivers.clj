@@ -15,22 +15,15 @@
 (ns ^{:doc ""
       :author "kenl" }
 
-  czlab.dbio.drivers
+  czlab.dbddl.drivers
 
   (:import
-    [czlab.dbio
-     MetaCache
-     DBAPI
-     DBIOError])
+    [czlab.dbio MetaCache DBAPI DBIOError])
 
   (:require
+    [czlab.xlib.str :refer [lcase ucase hgl? addDelim!]]
     [czlab.xlib.logging :as log]
-    [clojure.string :as cs]
-    [czlab.xlib.str
-     :refer [lcase
-             ucase
-             hgl?
-             addDelim!]])
+    [clojure.string :as cs])
 
   (:use [czlab.dbio.core]))
 
@@ -40,7 +33,7 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defn genCol ""
+(defn genCol "Get column name"
 
   ^String
   [field]
@@ -341,7 +334,7 @@
                     table
                     " ("
                     (cs/join "," cols)
-                    ")"
+                    ") "
                     (genExec db) "\n\n")))
     (.toString bf)))
 
