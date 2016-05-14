@@ -28,7 +28,7 @@ public interface DBAPI {
 
   public SQLr newSimpleSQLr();
 
-  public MetaCache getMetaCache();
+  public Object getMetas();
 
   public boolean supportsLock();
 

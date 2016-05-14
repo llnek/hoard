@@ -17,28 +17,18 @@
 
   czlab.dbddl.drivers
 
-  (:import
-    [czlab.dbio MetaCache DBAPI DBIOError])
-
   (:require
     [czlab.xlib.str :refer [lcase ucase hgl? addDelim!]]
     [czlab.xlib.logging :as log]
     [clojure.string :as cs])
 
-  (:use [czlab.dbio.core]))
+  (:use [czlab.dbio.core])
 
+  (:import
+    [czlab.dbio DBAPI DBIOError]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;(set! *warn-on-reflection* true)
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;
-(defn genCol "Get column name"
-
-  ^String
-  [field]
-
-  (ucase (:column field)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -89,10 +79,12 @@
 (defmulti genBegin (fn [a & more] a))
 (defmulti genExec (fn [a & more] a))
 (defmulti genDrop (fn [a & more] a))
-
 (defmulti genEndSQL (fn [a & more] a))
 (defmulti genGrant (fn [a & more] a))
 (defmulti genEnd (fn [a & more] a))
+(defmulti genTable (fn [a & more] a))
+(defmulti genCol (fn [a & more] a))
+(defmulti genIndex (fn [a & more] a))
 
 (defmulti genAutoInteger (fn [a & more] a))
 (defmulti genDouble (fn [a & more] a))
@@ -102,21 +94,21 @@
 (defmulti getTSDefault (fn [a & more] a))
 (defmulti genTimestamp (fn [a & more] a))
 (defmulti genDate (fn [a & more] a))
-(defmulti genCal (fn [a & more] a))
+(defmulti genCaldr (fn [a & more] a))
 (defmulti genBool (fn [a & more] a))
 (defmulti genInteger (fn [a & more] a))
-
-(defmulti getFloatKwd (fn [a & more] a))
-(defmulti getIntKwd (fn [a & more] a))
-(defmulti getTSKwd (fn [a & more] a))
-(defmulti getDateKwd (fn [a & more] a))
-(defmulti getBoolKwd (fn [a & more] a))
-(defmulti getLongKwd (fn [a & more] a))
-(defmulti getDoubleKwd (fn [a & more] a))
-(defmulti getStringKwd (fn [a & more] a))
-(defmulti getBlobKwd (fn [a & more] a))
 (defmulti genBytes (fn [a & more] a))
 (defmulti genString (fn [a & more] a))
+
+(defmulti getFloatKwd (fn [a] a))
+(defmulti getIntKwd (fn [a] a))
+(defmulti getTSKwd (fn [a] a))
+(defmulti getDateKwd (fn [a] a))
+(defmulti getBoolKwd (fn [a] a))
+(defmulti getLongKwd (fn [a] a))
+(defmulti getDoubleKwd (fn [a] a))
+(defmulti getStringKwd (fn [a] a))
+(defmulti getBlobKwd (fn [a] a))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -132,25 +124,25 @@
 (defmethod genDrop :default
 
   ^String
-  [db table]
+  [db model]
 
-  (str "DROP TABLE " table (genExec db) "\n\n"))
+  (str "DROP TABLE " (gtable model) (genExec db) "\n\n"))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defmethod genBegin :default
 
   ^String
-  [db table]
+  [db model]
 
-  (str "CREATE TABLE " table " (\n"))
+  (str "CREATE TABLE " (gtable model) " (\n"))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defmethod genEnd :default
 
   ^String
-  [db table]
+  [db model]
 
   (str "\n) " (genExec db) "\n\n"))
 
@@ -159,7 +151,7 @@
 (defmethod genGrant :default
 
   ^String
-  [db table]
+  [db model]
 
   "")
 
@@ -171,6 +163,33 @@
   [db]
 
   "")
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
+(defmethod genIndex :default
+
+  ^String
+  [model xn]
+
+  (ese (str (:table model) "_" xn)))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
+(defmethod genTable :default
+
+  ^String
+  [model]
+
+  (ese (:table model)))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
+(defmethod genCol :default
+
+  ^String
+  [field]
+
+  (ese (:column field)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -190,13 +209,13 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
+(defmethod getDoubleKwd :default [db] "DOUBLE PRECISION")
 (defmethod getFloatKwd :default [db] "FLOAT")
 (defmethod getIntKwd :default [db] "INTEGER")
 (defmethod getTSKwd :default [db] "TIMESTAMP")
 (defmethod getDateKwd :default [db] "DATE")
 (defmethod getBoolKwd :default [db] "INTEGER")
 (defmethod getLongKwd :default [db] "BIGINT")
-(defmethod getDoubleKwd :default [db] "DOUBLE PRECISION")
 (defmethod getStringKwd :default [db] "VARCHAR")
 (defmethod getBlobKwd :default [db] "BLOB")
 
@@ -299,7 +318,7 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defmethod genCal :default
+(defmethod genCaldr :default
 
   [db field]
 
@@ -316,22 +335,22 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defn- genExIndexes ""
+(defn- genExIndexes "Generate external index definitions"
 
   ^String
-  [db cache table fields model]
+  [db fields model]
 
-  (let [m (collectDbXXX :indexes cache model)
+  (let [m (collectDbXXX :indexes (.getMetas db) model)
         bf (StringBuilder.)]
     (doseq [[nm nv] m
-            :let [cols (map #(gcn flds %) nv)]]
+            :let [cols (map #(genCol (get fields %)) nv)]]
       (when (empty? cols)
         (mkDbioError (str "Cannot have empty index: " nm)))
       (.append bf
                (str "CREATE INDEX "
-                    (lcase (str table "_" (name nm)))
+                    (genIndex model (name nm))
                     " ON "
-                    table
+                    (genTable model)
                     " ("
                     (cs/join "," cols)
                     ") "
@@ -342,12 +361,12 @@
 ;;
 (defn- genUniques ""
 
-  [db cache fields model]
+  [db fields model]
 
-  (let [m (collectDbXXX :uniques cache model)
+  (let [m (collectDbXXX :uniques (.getMetas db) model)
         bf (StringBuilder.)]
     (doseq [[nm nv] m
-            :let [cols (map #(gcn fields %) nv)]]
+            :let [cols (map #(genCol (get fields %)) nv)]]
       (when (empty? cols)
         (mkDbioError (str "Illegal empty unique: " (name nm))))
       (addDelim! bf ",\n"
@@ -356,55 +375,55 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defn- genPrimaryKey ""
+(defn- genPKey ""
 
   [db model pks]
 
   (str (getPad db)
        "PRIMARY KEY("
-       (ucase (cs/join "," pks))
+       (cs/join "," (map #(genCol %) pks))
        ")"))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defn- genBody ""
 
-  [db cache table model]
+  [db model]
 
-  (let [fields (collectDbXXX :fields cache model)
+  (let [fields (collectDbXXX :fields (.getMetas db) model)
         inx (StringBuilder.)
         bf (StringBuilder.)]
     (with-local-vars [pkeys (transient #{})]
       ;; 1st do the columns
       (doseq [[fid fld] fields]
         (let [dt (:domain fld)
-              cn (genCol fld)
               col (case dt
                     :Boolean (genBool db fld)
                     :Timestamp (genTimestamp db fld)
                     :Date (genDate db fld)
-                    :Calendar (genCal db fld)
+                    :Calendar (genCaldr db fld)
                     :Int (if (:auto fld)
-                           (genAutoInteger db table fld)
+                           (genAutoInteger db model fld)
                            (genInteger db fld))
                     :Long (if (:auto fld)
-                            (genAutoLong db table fld)
+                            (genAutoLong db model fld)
                             (genLong db fld))
                     :Double (genDouble db fld)
                     :Float (genFloat db fld)
                     (:Password :String) (genString db fld)
                     :Bytes (genBytes db fld)
                     (mkDbioError (str "Unsupported domain type " dt))) ]
-          (when (:pkey fld) (var-set pkeys (conj! @pkeys cn)))
-          (addDelim! bf ",\n" col)))
+          (when (:pkey fld) (var-set pkeys (conj! @pkeys fld)))
+          (addDelim! bf ",\n" (genCol fld))))
       ;; now do the assocs
       ;; now explicit indexes
-      (-> inx (.append (genExIndexes db cache table fields model)))
+      (.append inx (genExIndexes db fields model))
       ;; now uniques, primary keys and done
       (when (> (.length bf) 0)
         (when (> (count @pkeys) 0)
-          (.append bf (str ",\n" (genPrimaryKey db model (persistent! @pkeys)))))
-        (let [s (genUniques db cache fields model)]
+          (.append bf (str ",\n"
+                           (genPKey db model (persistent! @pkeys)))))
+        (let [s (genUniques db fields model)]
           (when (hgl? s)
             (.append bf (str ",\n" s)))))
     [(.toString bf) (.toString inx)])))
@@ -413,36 +432,35 @@
 ;;
 (defn- genOneTable ""
 
-  [db mcache model]
+  [db model]
 
-  (let [table (ucase (:table model))
-        b (genBegin db table)
-        d (genBody db mcache table model)
-        e (genEnd db table)
+  (let [b (genBegin db model)
+        d (genBody db model)
+        e (genEnd db model)
         s1 (str b (first d) e)
         inx (last d) ]
     (str s1
          (if (hgl? inx) inx "")
-         (genGrant db table))))
+         (genGrant db model))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defn getDDL  ""
 
   ^String
-  [^MetaCache metaCache db]
+  [db]
 
   (binding [*DDL_BVS* (atom {})]
-    (let [ms (.getMetas metaCache)
-          drops (StringBuilder.)
-          body (StringBuilder.)]
-      (doseq [[id tdef] ms
-              :let [tbl (:table tdef)]]
-        (when (and (not (:abstract tdef))
+    (let [drops (StringBuilder.)
+          body (StringBuilder.)
+          ms (.getMetas db)]
+      (doseq [[id model] ms
+              :let [tbl (:table model)]]
+        (when (and (not (:abstract model))
                    (hgl? tbl))
           (log/debug "Model Id: %s table: %s" (name id) tbl)
-          (-> drops (.append (genDrop db (ucase tbl) )))
-          (-> body (.append (genOneTable db ms tdef)))))
+          (.append drops (genDrop db model))
+          (.append body (genOneTable db model))))
       (str "" drops body (genEndSQL db)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

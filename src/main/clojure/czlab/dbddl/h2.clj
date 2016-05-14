@@ -15,7 +15,7 @@
 (ns ^{:doc ""
       :author "kenl" }
 
-  czlab.dbio.h2
+  czlab.dbddl.h2
 
   (:import
     [czlab.crypto PasswordAPI]
