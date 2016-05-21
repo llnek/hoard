@@ -42,7 +42,7 @@
     [czlab.xlib.format :refer [writeEdnString]]
     [czlab.xlib.str :refer
      [lcase ucase strim
-      embeds? addDelim! hasNocase? hgl?]]
+      embeds? addDelim! hasNoCase? hgl?]]
     [czlab.xlib.core :refer
      [tryc try! trylet! trap!
       rootCause stripNSPath
@@ -51,7 +51,7 @@
     [clojure.string :as cs]
     [clojure.set :as cset]
     [czlab.crypto.codec :as codec]
-    [czlab.xlib.meta :refer [forName]])
+    [czlab.xlib.meta :refer [forname]])
 
   (:use [flatland.ordered.set]))
 
@@ -121,8 +121,8 @@
   "The table-name defined for this model"
 
   (^String
-    [mdef]
-    (:table mdef))
+    [model]
+    (:table model))
 
   (^String
     [model-id cache]
@@ -139,9 +139,9 @@
     (:column fdef))
 
   (^String
-    [field-id model]
+    [fld-id model]
     (-> (:fields (meta model))
-        (get field-id)
+        (get fld-id)
         (:column))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -334,8 +334,8 @@
 
   `(def ~modelname
       (-> (dbioModel ~nsp ~(name modelname))
-          (withDbParentModel JOINED-MODEL-MONIKER)
-          (withDbJoinedModel ~lhs ~rhs))))
+          (withParentModel JOINED-MODEL-MONIKER)
+          (withJoinedModel ~lhs ~rhs))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -347,12 +347,12 @@
 
   `(def ~modelname
       (-> (dbioModel ~(name modelname))
-          (withDbParentModel JOINED-MODEL-MONIKER)
-          (withDbJoinedModel ~lhs ~rhs))))
+          (withParentModel JOINED-MODEL-MONIKER)
+          (withJoinedModel ~lhs ~rhs))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defn withDbParentModel
+(defn withParentModel
 
   "Give a parent to the model"
 
@@ -364,14 +364,15 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defn withDbJoinedModel
+(defn withJoinedModel
 
   "A special model with 2 assocs,
    left hand side and right hand side"
 
   [pojo lhs rhs]
 
-  {:pre [(map? pojo) (keyword? lhs) (keyword? rhs)]}
+  {:pre [(map? pojo)
+         (keyword? lhs) (keyword? rhs)]}
 
   (let [a1 {:kind :MXM :other lhs :fkey :lhs_rowid}
         a2 {:kind :MXM :other rhs :fkey :rhs_rowid}
@@ -384,7 +385,7 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defn withDbTablename
+(defn withTablename
 
   "Set the table name"
 
@@ -396,7 +397,7 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defn withDbIndexes
+(defn withIndexes
 
   "Set indexes to the model"
 
@@ -415,7 +416,7 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defn withDbUniques
+(defn withUniques
 
   "Set uniques to the model"
 
@@ -454,7 +455,7 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defn withDbField
+(defn withField
 
   "Create a new field"
 
@@ -468,7 +469,7 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defn withDbFields
+(defn withFields
 
   "Create a batch of fields"
 
@@ -478,12 +479,12 @@
 
   (with-local-vars [rcmap pojo]
     (doseq [[k v] (seq flddefs)]
-      (var-set rcmap (withDbField @rcmap k v)))
+      (var-set rcmap (withField @rcmap k v)))
     @rcmap))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defn withDbAssoc
+(defn withAssoc
 
   "Set an association"
 
@@ -505,7 +506,7 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defn withDbAssocs
+(defn withAssocs
 
   "Set a batch of associations"
 
@@ -515,12 +516,12 @@
 
   (with-local-vars [rcmap pojo ]
     (doseq [[k v] (seq assocs)]
-      (var-set rcmap (withDbAssoc @rcmap k v)))
+      (var-set rcmap (withAssoc @rcmap k v)))
     @rcmap))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defn withDbAbstract
+(defn withAbstract
 
   "Set the model as abstract"
 
@@ -557,8 +558,8 @@
 ;; Defining the base model here
 (defModelWithNSP _NSP DBIOBaseModel
   (with-db-system)
-  (withDbAbstract)
-  (withDbFields
+  (withAbstract)
+  (withFields
     {:rowid {:column COL_ROWID :pkey true :domain :Long
              :auto true :system true :updatable false}
      :verid {:column COL_VERID :domain :Long :system true
@@ -573,8 +574,8 @@
 ;;
 (defModelWithNSP _NSP DBIOJoinedModel
   (with-db-system)
-  (withDbAbstract)
-  (withDbFields
+  (withAbstract)
+  (withFields
     {:lhs-typeid {:column COL_LHS_TYPEID }
      :lhs-oid {:column COL_LHS_ROWID :domain :Long :null false}
      :rhs-typeid {:column COL_RHS_TYPEID }
@@ -609,7 +610,7 @@
   (with-local-vars
     [fdef {:domain :Long :assoc-key true }
      rc (transient {})
-     xs (transient {}) ]
+     xs (transient {})]
     ;; create placeholder maps for each model,
     ;; to hold new fields from assocs
     (doseq [[k m] ms]
@@ -621,15 +622,15 @@
           (:O2O :O2M)
           (let [fid (keyword (:fkey s))
                 rhs (@rc (:other s))
-                ft (merge (getDftFldObj fid) @fdef) ]
+                ft (merge (getDftFldObj fid) @fdef)]
             (var-set rc (assoc! @rc (:other s) (assoc rhs fid ft))))
           nil)))
     ;; now walk through all the placeholder maps and merge those new
     ;; fields to the actual models
-    (let [tm (persistent! @rc) ]
+    (let [tm (persistent! @rc)]
       (doseq [[k v] tm]
         (let [mcz (ms k)
-              fs (:fields mcz) ]
+              fs (:fields mcz)]
           (var-set xs (assoc! @xs
                               k
                               (assoc mcz :fields (merge fs v))))))
@@ -646,7 +647,7 @@
   ;; model defn
   [mcz model]
 
-  (let [par (:parent model) ]
+  (let [par (:parent model)]
     (cond
       (keyword? par)
       (if (nil? (mcz par))
@@ -669,7 +670,7 @@
 
   (persistent!
     (reduce
-      #(let [rc (resolve-parent ms (last %2)) ]
+      #(let [rc (resolve-parent ms (last %2))]
          (assoc! %1 (:id rc) rc))
       (transient {})
       (seq ms))))
@@ -707,7 +708,7 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defmulti CollectDbXXX collect-db-xxx-filter)
+(defmulti collectDbXXX collect-db-xxx-filter)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -715,7 +716,7 @@
 
   [kw cache model-id]
 
-  (if-some [mcz (cache model-id) ]
+  (if-some [mcz (cache model-id)]
     (collectDbXXX kw cache mcz)
     (log/warn "Unknown database model id: %s" model-id)))
 
@@ -753,10 +754,10 @@
 
   [cache]
 
-  (with-local-vars [sum (transient {}) ]
+  (with-local-vars [sum (transient {})]
     (doseq [[k m] cache]
       (let [flds (collectDbXXX :fields cache m)
-            cols (colmap-fields flds) ]
+            cols (colmap-fields flds)]
         (var-set sum
                  (assoc! @sum k
                          (with-meta m
@@ -782,7 +783,7 @@
                  (resolve-parents)
                  (resolve-assocs)
                  (assoc BASEMODEL-MONIKER DBIOBaseModel)
-                 (meta-models))) ]
+                 (meta-models)))]
     (reify
 
       MetaCache
@@ -987,7 +988,7 @@
             (.next rs)))))
     (with-open [rs (.getColumns mt
                                 catalog
-                                schema table "%") ]
+                                schema table "%")]
       (loop [sum (transient {})
              more (.next rs)]
         (if (not more)
@@ -995,7 +996,7 @@
           (let [opt (not= (.getInt rs (int 11))
                           DatabaseMetaData/columnNoNulls)
                 cn (ucase (.getString rs (int 4)))
-                ctype (.getInt rs (int 5)) ]
+                ctype (.getInt rs (int 5))]
             (recur
               (assoc! sum (keyword cn)
                       {:column cn :sql-type ctype :null opt
@@ -1079,7 +1080,7 @@
     ;;(log/debug "Driver: %s" dv)
     ;;(log/debug "Options: %s" options)
 
-    (when (hgl? dv) (ForName dv))
+    (when (hgl? dv) (forname dv))
     (doto bcf
           (.setPartitionCount (Math/max 1 (nnz (:partitions options))))
           (.setLogStatementsEnabled (nbf (:debug options)))
@@ -1107,10 +1108,10 @@
   (with-local-vars
     [w (.length DDL_SEP)
      rc []
-     s2 lines ]
+     s2 lines]
     (loop [sum (transient [])
            ddl lines
-           pos (.indexOf ddl DDL_SEP) ]
+           pos (.indexOf ddl DDL_SEP)]
       (if (< pos 0)
         (do (var-set rc (persistent! sum))
             (var-set s2 (strim ddl)))
@@ -1392,7 +1393,7 @@
 
   (let [^SQLr sqlr (:with ctx)
         mcache (.metas sqlr)
-        mcz (mcache (GetTypeId lhsObj))
+        mcz (mcache (getTypeId lhsObj))
         ac (dbioGetAssoc mcache mcz (:as ctx))
         fv (:rowid (meta lhsObj))
         rt (:cast ctx)
@@ -1527,4 +1528,5 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;EOF
+
 

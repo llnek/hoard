@@ -16,12 +16,12 @@
 (ns ^{:doc ""
       :author "kenl" }
 
-  czlab.dbio.sqlserver
+  czlab.dbddl.sqlserver
 
   (:require
     [czlab.xlib.logging :as log])
 
-  (:use [czlab.dbio.drivers]
+  (:use [czlab.dbddl.drivers]
         [czlab.dbio.core]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -31,10 +31,10 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 ;; SQLServer
-(defmethod getBlobKwd SQLServer [db] "IMAGE")
-(defmethod getTSKwd SQLServer [db] "DATETIME")
 (defmethod getDoubleKwd SQLServer [db] "FLOAT(53)")
 (defmethod getFloatKwd SQLServer [db] "FLOAT(53)")
+(defmethod getBlobKwd SQLServer [db] "IMAGE")
+(defmethod getTSKwd SQLServer [db] "DATETIME")
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -42,8 +42,10 @@
 
   [db table fld]
 
-  (str (getPad db) (genCol fld)
-       " " (getIntKwd db)
+  (str (getPad db)
+       (genCol fld)
+       " "
+       (getIntKwd db)
        (if (:pkey fld)
          " IDENTITY (1,1) "
          " AUTOINCREMENT ")))
@@ -54,8 +56,10 @@
 
   [db table fld]
 
-  (str (getPad db) (genCol fld)
-       " " (getLongKwd db)
+  (str (getPad db)
+       (genCol fld)
+       " "
+       (getLongKwd db)
        (if (:pkey fld)
          " IDENTITY (1,1) "
          " AUTOINCREMENT ")))
@@ -67,10 +71,13 @@
   [db table]
 
   (str "IF EXISTS (SELECT * FROM dbo.sysobjects WHERE id=object_id('"
-       table "')) DROP TABLE "
-       table (genExec db) "\n\n"))
+       table
+       "')) DROP TABLE "
+       table
+       (genExec db) "\n\n"))
 
 ;;(println (getDDL (reifyMetaCache testschema) (SQLServer.) ))
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;EOF
+
 

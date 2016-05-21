@@ -18,13 +18,14 @@
   czlab.dbio.connect
 
   (:import
-    [java.util Map]
     [czlab.dbio DBAPI
+     MetaCache
      JDBCPool
      JDBCInfo
      DBIOLocal
      DBIOError
-     OptLockError])
+     OptLockError]
+    [java.util Map])
 
   (:require
     [czlab.xlib.core :refer [try!]]
@@ -74,9 +75,10 @@
 
       (supportsLock [_] (not (false? (:opt-lock options))))
 
-      (vendor [_] (resolveVendor jdbc))
+      (getMetas [_] (-> ^MetaCache
+                        metaCache (.getMetas)))
 
-      (getMetaCache [_] metaCache)
+      (vendor [_] (resolveVendor jdbc))
 
       (finz [_] nil)
 
@@ -99,7 +101,8 @@
     DBAPI
 
     (supportsLock [_] (not (false? (:opt-lock options))))
-    (getMetaCache [_] metaCache)
+    (getMetas [_] (-> ^MetaCache
+                      metaCache (.getMetas)))
 
     (vendor [_] (.vendor pool))
     (finz [_] nil)
@@ -110,4 +113,5 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;EOF
+
 

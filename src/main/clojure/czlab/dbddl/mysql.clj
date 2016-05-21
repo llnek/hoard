@@ -16,11 +16,11 @@
 (ns ^{:doc ""
       :author "kenl" }
 
-  czlab.dbio.mysql
+  czlab.dbddl.mysql
 
   (:require [czlab.xlib.logging :as log])
 
-  (:use [czlab.dbio.drivers]
+  (:use [czlab.dbddl.drivers]
         [czlab.dbio.core]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -49,9 +49,11 @@
 
   [db table field]
 
-  (str (getPad db) (genCol field)
+  (str (getPad db)
+       (genCol field)
        " "
-       (getIntKwd db) " NOT NULL AUTO_INCREMENT"))
+       (getIntKwd db)
+       " NOT NULL AUTO_INCREMENT"))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -59,8 +61,11 @@
 
   [db table field]
 
-  (str (getPad db) (genCol field)
-       " " (getLongKwd db) " NOT NULL AUTO_INCREMENT"))
+  (str (getPad db)
+       (genCol field)
+       " "
+       (getLongKwd db)
+       " NOT NULL AUTO_INCREMENT"))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -69,9 +74,11 @@
   [db table]
 
   (str "DROP TABLE IF EXISTS "
-       table (genExec db) "\n\n"))
+       table
+       (genExec db) "\n\n"))
 
 ;;(println (getDDL (reifyMetaCache testschema) (MySQL.) ))
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;EOF
+
 

@@ -19,13 +19,13 @@
   czlab.dbio.sql
 
   (:require
-    [czlab.xlib.meta :refer [BytesClass CharsClass]]
+    [czlab.xlib.meta :refer [bytesClass charsClass]]
     [czlab.xlib.str
-    :refer [sname ucase lcase hgl? addDelim! strim]]
+     :refer [sname ucase lcase hgl? addDelim! strim]]
     [czlab.xlib.io :refer [readChars readBytes]]
     [czlab.xlib.logging :as log]
     [czlab.xlib.core
-    :refer [flattenNil trap! nowJTstamp nnz]]
+     :refer [flattenNil trap! nowJTstamp nnz]]
     [czlab.xlib.dates :refer [gmtCal]])
 
   (:use [czlab.dbio.core])
@@ -37,7 +37,7 @@
     [java.math BigDecimal BigInteger]
     [java.io Reader InputStream]
     [czlab.dbio DBAPI]
-    [czlab.frwk.io XData]
+    [czlab.xlib XData]
     [java.sql ResultSet Types SQLException
      DatabaseMetaData ResultSetMetaData
      Date Timestamp Blob Clob
@@ -53,11 +53,11 @@
   ^String
   [lock model]
 
-  (str (ese (mkColname :rowid model))
+  (str (ese (dbColname :rowid model))
        "=?"
        (if lock
            (str " AND "
-                (ese (mkColname :verid model)) "=?")
+                (ese (dbColname :verid model)) "=?")
            "")))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -78,10 +78,10 @@
   [model filters]
 
   (let
-    [fields (:fields (meta model))
+    [flds (:fields (meta model))
      wc (reduce
           #(let [k (first %2)
-                 fld (get fields k)
+                 fld (get flds k)
                  c (if (nil? fld)
                      (sname k)
                      (:column fld))]
@@ -196,8 +196,8 @@
     Reader (.setCharacterStream ps pos p)
     Blob (.setBlob ps ^long pos ^Blob p)
     Clob (.setClob ps ^long pos ^Clob p)
-    (CharsClass) (.setString ps pos (String. ^chars p))
-    (BytesClass) (.setBytes ps pos ^bytes p)
+    (charsClass) (.setString ps pos (String. ^chars p))
+    (bytesClass) (.setBytes ps pos ^bytes p)
     XData (.setBinaryStream ps pos (.stream ^XData p))
     Boolean (.setInt ps pos (if p 1 0))
     Double (.setDouble ps pos p)
@@ -353,7 +353,7 @@
       (when (and (some? fdef)
                  (not (:auto fdef))
                  (not (:system fdef)))
-        (addDelim! sb1 "," (ese (mkColname fdef)))
+        (addDelim! sb1 "," (ese (dbColname fdef)))
         (addDelim! sb2 "," (if (nil? v) "NULL" "?"))
         (when (some? v)
           (var-set ps (conj! @ps v)))))
@@ -365,18 +365,18 @@
 
   "Format sql string for update"
 
-  [^StringBuilder sb1 obj fields]
+  [^StringBuilder sb1 obj flds]
 
   (with-local-vars
     [ps (transient []) ]
     (doseq [[k v]  obj
-            :let [fdef (fields k)]]
+            :let [fdef (flds k)]]
       (when (and (some? fdef)
                  (:updatable fdef)
                  (not (:auto fdef))
                  (not (:system fdef)))
         (doto sb1
-          (addDelim! "," (ese (mkColname fdef)))
+          (addDelim! "," (ese (dbColname fdef)))
           (.append (if (nil? v) "=NULL" "=?")))
         (when (some? v)
           (var-set ps (conj! @ps v)))))
@@ -446,7 +446,7 @@
                  metas
                  conn
                  (str "SELECT COUNT(*) FROM "
-                      (ese (mkTablename model metas)))
+                      (ese (dbTablename model metas)))
                  [])]
     (if (empty? rc)
       0
@@ -459,7 +459,7 @@
   [db metas conn model]
 
   (let [sql (str "DELETE FROM "
-                 (ese (mkTablename model metas))) ]
+                 (ese (dbTablename model metas))) ]
     (sqlExec db conn sql [])
     nil))
 
@@ -475,7 +475,7 @@
     (when (nil? mcz)
       (mkDbioError (str "Unknown model " model)))
     (let [lock (.supportsLock db)
-          table (mkTablename mcz)
+          table (dbTablename mcz)
           rowid (:rowid info)
           verid (:verid info)
           p (if lock [rowid verid] [rowid])
@@ -500,10 +500,10 @@
         mcz (metas model) ]
     (when (nil? mcz)
       (mkDbioError (str "Unknown model " model)))
-    (let [pkey {:pkey (mkColname :rowid mcz)}
+    (let [pkey {:pkey (dbColname :rowid mcz)}
           lock (.supportsLock db)
           flds (:fields (meta mcz))
-          table (mkTablename mcz)
+          table (dbTablename mcz)
           s2 (StringBuilder.)
           s1 (StringBuilder.)
           now (nowJTstamp)
@@ -541,7 +541,7 @@
     (let [lock (.supportsLock db)
           flds (:fields (meta mcz))
           cver (nnz (:verid info))
-          table (mkTablename mcz)
+          table (dbTablename mcz)
           rowid (:rowid info)
           sb1 (StringBuilder.)
           now (nowJTstamp)
@@ -552,13 +552,13 @@
           [ ps (transient pms) ]
           (-> (addDelim! sb1
                          ","
-                         (ese (mkColname :last-modify mcz)))
+                         (ese (dbColname :last-modify mcz)))
               (.append "=?"))
           (var-set ps (conj! @ps now))
           (when lock ;; up the version
             (-> (addDelim! sb1
                            ","
-                           (ese (mkColname :verid mcz)))
+                           (ese (dbColname :verid mcz)))
                 (.append "=?"))
             (var-set ps (conj! @ps nver)))
           ;; for the where clause
@@ -599,9 +599,7 @@
   {:pre [(fn? getc) (fn? runc)]}
 
   (let
-    [metaz (-> db
-               (.getMetaCache)
-               (.getMetas))]
+    [metaz (.getMetas db)]
     (reify
 
       SQLr
@@ -677,4 +675,5 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;EOF
+
 

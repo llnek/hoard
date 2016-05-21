@@ -16,11 +16,11 @@
 (ns ^{:doc ""
       :author "kenl" }
 
-  czlab.dbio.postgresql
+  czlab.dbddl.postgresql
 
   (:require [czlab.xlib.logging :as log])
 
-  (:use [czlab.dbio.drivers]
+  (:use [czlab.dbddl.drivers]
         [czlab.dbio.core :as dbcore]))
 
 
@@ -43,7 +43,7 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defmethod genCal :postgresql
+(defmethod genCaldr :postgresql
 
   [db field]
 
@@ -72,10 +72,13 @@
   [db table]
 
   (str "DROP TABLE IF EXISTS "
-       table " CASCADE" (genExec db) "\n\n"))
+       table
+       " CASCADE "
+       (genExec db) "\n\n"))
 
 ;;(def XXX (.getMetas (reifyMetaCache testschema)))
 ;;(println (getDDL (reifyMetaCache testschema) (Postgresql.) ))
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;EOF
+
 

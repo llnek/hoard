@@ -29,7 +29,7 @@
     [clojure.string :as cs]
     [clojure.java.io :as io])
 
-  (:use [czlab.dbio.drivers]
+  (:use [czlab.dbddl.drivers]
         [czlab.dbio.core]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -58,8 +58,10 @@
 
   [db table field]
 
-  (str (getPad db) (genCol field)
-       " " (getIntKwd db)
+  (str (getPad db)
+       (genCol field)
+       " "
+       (getIntKwd db)
        (if (:pkey field)
          " IDENTITY(1) "
          " AUTO_INCREMENT(1) ")))
@@ -70,8 +72,10 @@
 
   [db table field]
 
-  (str (getPad db) (genCol field)
-       " " (getLongKwd db)
+  (str (getPad db)
+       (genCol field)
+       " "
+       (getLongKwd db)
        (if (:pkey field)
          " IDENTITY(1) "
          " AUTO_INCREMENT(1) ")))
@@ -152,4 +156,5 @@
 ;;(println (getDDL (reifyMetaCache testschema) (H2.) ))
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;EOF
+
 

@@ -16,11 +16,11 @@
 (ns ^{:doc ""
       :author "kenl" }
 
-  czlab.dbio.oracle
+  czlab.dbddl.oracle
 
   (:require [czlab.xlib.logging :as log])
 
-  (:use [czlab.dbio.drivers]
+  (:use [czlab.dbddl.drivers]
         [czlab.dbio.core]))
 
 
@@ -55,8 +55,8 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Oracle
-(defmethod getStringKwd Oracle [db] "VARCHAR2")
 (defmethod getTSDefault Oracle [db] "DEFAULT SYSTIMESTAMP")
+(defmethod getStringKwd Oracle [db] "VARCHAR2")
 (defmethod getLongKwd Oracle [db] "NUMBER(38)")
 (defmethod getDoubleKwd Oracle [db] "BINARY_DOUBLE")
 (defmethod getFloatKwd Oracle [db] "BINARY_FLOAT")
@@ -108,4 +108,5 @@
 ;;(println (getDDL (reifyMetaCache testschema) (Oracle.) ))
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;EOF
+
 

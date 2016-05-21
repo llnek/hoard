@@ -19,7 +19,9 @@
 
   (:import
     [czlab.dbio Transactable
-     SQLr MetaCache DBAPI]
+     SQLr
+     DBAPI
+     MetaCache ]
     [java.sql Connection])
 
   (:use [czlab.dbio.core]
@@ -34,13 +36,21 @@
 ;;(set! *warn-on-reflection* true)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(defn- undo "" [conn]
+(defn- undo
+
+  ""
+  [conn]
+
   (try! (-> ^Connection
             conn
             (.rollback))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(defn- commit "" [conn]
+(defn- commit
+
+  ""
+  [conn]
+
   (-> ^Connection
       conn
       (.commit)))
@@ -51,12 +61,11 @@
   ""
 
   ^Connection
-  [db]
+  [db how]
 
   (let [conn (.open ^DBAPI db)]
+    (.setTransactionIsolation conn how)
     (.setAutoCommit conn false)
-    (->> Connection/TRANSACTION_SERIALIZABLE
-         (.setTransactionIsolation conn ))
     conn))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -66,29 +75,33 @@
   "A composite supports transactions"
 
   ^Transactable
-  [^DBAPI db]
+  [^DBAPI db & [affinity]]
 
-  (reify
+  (let [how (or affinity
+                Connection/TRANSACTION_SERIALIZABLE)]
+    (reify
 
-    Transactable
+      Transactable
 
-    (execWith [me func]
-      (with-local-vars [rc nil]
-      (with-open
-        [conn (begin db)]
-        (try
-          (->> (reifySQLr
-                 db
-                 (fn [_] conn) #(%2 %1))
-               (func )
-               (var-set rc ))
-          (commit conn)
-          @rc
-          (catch Throwable e#
-            (undo conn)
-            (log/warn e# "")
-            (throw e#))) )))))
+      (execWith [me func]
+        (with-local-vars [rc nil]
+        (with-open
+          [conn (begin db how)]
+          (try
+            (->> (reifySQLr
+                   db
+                   (fn [_] conn) #(%2 %1))
+                 (func )
+                 (var-set rc ))
+            (commit conn)
+            @rc
+            (catch Throwable e#
+              (undo conn)
+              (log/warn e# "")
+              (throw e#))) ))))))
+
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;EOF
+
 

@@ -3,29 +3,25 @@
   :license {:name "Apache License 2.0"
             :url "http://www.apache.org/licenses/LICENSE-2.0"}
   :description ""
-  :url "https://github.com/llnek/crypto"
+  :url "https://github.com/llnek/dbio"
 
   :dependencies '[
 
-    [org.clojure/math.numeric-tower "0.0.4" ]
-    [org.bouncycastle/bcprov-jdk15on "1.54"]
-    [org.bouncycastle/bcmail-jdk15on "1.54"]
-    [org.bouncycastle/bcpkix-jdk15on "1.54"]
-    [org.jasypt/jasypt "1.9.2" ]
-    ;;[org.mindrot/jbcrypt "0.3m" ]
+    [commons-dbutils/commons-dbutils "1.6" ]
+    [com.jolbox/bonecp "0.8.0.RELEASE" ]
+    [com.google.guava/guava "19.0" ]
 
-    [org.apache.commons/commons-email "1.4" ]
-    [com.sun.mail/javax.mail "1.5.5" ]
     [org.clojure/clojure "1.8.0" ]
 
+    [czlab/czlab-crypto "0.9.0-SNAPSHOT" ]
     [czlab/czlab-xlib "0.9.0-SNAPSHOT" ]
   ]
 
   :source-paths #{"src/main/clojure" "src/main/java"}
-  :test-runner "czlabtest.crypto.ClojureJUnit"
+  :test-runner "czlabtest.dbio.ClojureJUnit"
   :version "0.9.0-SNAPSHOT"
   :debug true
-  :project 'czlab/czlab-crypto)
+  :project 'czlab/czlab-dbio)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -53,23 +49,25 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defn- cljCrypto ""
+(defn- cljDbio ""
 
   [& args]
 
-  (a/cleanDir (fp! (ge :czzDir) "czlab/crypto"))
+  (a/cleanDir (fp! (ge :czzDir) "czlab/dbddl"))
+  (a/cleanDir (fp! (ge :czzDir) "czlab/dbio"))
   (let [t1 (a/antJava
               (ge :CLJC_OPTS)
               (concat [[:argvalues (b/listCljNsps
                                      (fp! (ge :srcDir) "clojure")
-                                     "czlab/crypto")]]
+                                     "czlab/dbio"
+                                     "czlab/dbddl")]]
                       (ge :CJNESTED)))
         t2 (a/antCopy
-             {:todir (fp! (ge :czzDir) "czlab/crypto")}
-             [[:fileset {:dir (fp! (ge :srcDir) "clojure/czlab/crypto")
+             {:todir (fp! (ge :czzDir) "czlab")}
+             [[:fileset {:dir (fp! (ge :srcDir) "clojure/czlab")
                          :excludes "**/*.clj"}]])]
     (->> [t1 t2]
-         (a/runTarget "clj/crypto"))))
+         (a/runTarget "clj/dbio"))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -234,7 +232,7 @@
   []
 
   (bc/with-pre-wrap fileset
-    (cljCrypto)
+    (cljDbio)
     fileset))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -258,7 +256,7 @@
                 :encoding "utf-8"))))
     (b/replaceFile
       (fp! (ge :jzzDir)
-           "czlab/crypto/version.properties")
+           "czlab/dbio/version.properties")
       #(cs/replace % "@@pom.version@@" (ge :version)))
     (b/jarFiles)
     fileset))

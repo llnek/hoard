@@ -18,7 +18,8 @@
   czlab.dbddl.drivers
 
   (:require
-    [czlab.xlib.str :refer [lcase ucase hgl? addDelim!]]
+    [czlab.xlib.str
+     :refer [lcase ucase hgl? addDelim!]]
     [czlab.xlib.logging :as log]
     [clojure.string :as cs])
 
@@ -29,6 +30,44 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;(set! *warn-on-reflection* true)
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
+(defmulti genBegin (fn [a & more] a))
+(defmulti genExec (fn [a & more] a))
+(defmulti genDrop (fn [a & more] a))
+(defmulti genEndSQL (fn [a & more] a))
+(defmulti genGrant (fn [a & more] a))
+(defmulti genEnd (fn [a & more] a))
+(defmulti genTable (fn [a & more] a))
+(defmulti genCol (fn [a & more] a))
+(defmulti genIndex (fn [a & more] a))
+
+(defmulti genAutoInteger (fn [a & more] a))
+(defmulti genDouble (fn [a & more] a))
+(defmulti genLong (fn [a & more] a))
+(defmulti genFloat (fn [a & more] a))
+(defmulti genAutoLong (fn [a & more] a))
+(defmulti getTSDefault (fn [a & more] a))
+(defmulti genTimestamp (fn [a & more] a))
+(defmulti genDate (fn [a & more] a))
+(defmulti genCaldr (fn [a & more] a))
+(defmulti genBool (fn [a & more] a))
+(defmulti genInteger (fn [a & more] a))
+(defmulti genBytes (fn [a & more] a))
+(defmulti genString (fn [a & more] a))
+
+(defmulti getFloatKwd (fn [a] a))
+(defmulti getIntKwd (fn [a] a))
+(defmulti getTSKwd (fn [a] a))
+(defmulti getDateKwd (fn [a] a))
+(defmulti getBoolKwd (fn [a] a))
+(defmulti getLongKwd (fn [a] a))
+(defmulti getDoubleKwd (fn [a] a))
+(defmulti getStringKwd (fn [a] a))
+(defmulti getBlobKwd (fn [a] a))
+
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -76,42 +115,6 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defmulti genBegin (fn [a & more] a))
-(defmulti genExec (fn [a & more] a))
-(defmulti genDrop (fn [a & more] a))
-(defmulti genEndSQL (fn [a & more] a))
-(defmulti genGrant (fn [a & more] a))
-(defmulti genEnd (fn [a & more] a))
-(defmulti genTable (fn [a & more] a))
-(defmulti genCol (fn [a & more] a))
-(defmulti genIndex (fn [a & more] a))
-
-(defmulti genAutoInteger (fn [a & more] a))
-(defmulti genDouble (fn [a & more] a))
-(defmulti genLong (fn [a & more] a))
-(defmulti genFloat (fn [a & more] a))
-(defmulti genAutoLong (fn [a & more] a))
-(defmulti getTSDefault (fn [a & more] a))
-(defmulti genTimestamp (fn [a & more] a))
-(defmulti genDate (fn [a & more] a))
-(defmulti genCaldr (fn [a & more] a))
-(defmulti genBool (fn [a & more] a))
-(defmulti genInteger (fn [a & more] a))
-(defmulti genBytes (fn [a & more] a))
-(defmulti genString (fn [a & more] a))
-
-(defmulti getFloatKwd (fn [a] a))
-(defmulti getIntKwd (fn [a] a))
-(defmulti getTSKwd (fn [a] a))
-(defmulti getDateKwd (fn [a] a))
-(defmulti getBoolKwd (fn [a] a))
-(defmulti getLongKwd (fn [a] a))
-(defmulti getDoubleKwd (fn [a] a))
-(defmulti getStringKwd (fn [a] a))
-(defmulti getBlobKwd (fn [a] a))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;
 (defmethod genExec :default
 
   ^String
@@ -126,7 +129,8 @@
   ^String
   [db model]
 
-  (str "DROP TABLE " (gtable model) (genExec db) "\n\n"))
+  (str "DROP TABLE "
+       (gtable model) (genExec db) "\n\n"))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -338,9 +342,10 @@
 (defn- genExIndexes "Generate external index definitions"
 
   ^String
-  [db fields model]
+  [^DBAPI db fields model]
 
-  (let [m (collectDbXXX :indexes (.getMetas db) model)
+  (let [m (collectDbXXX :indexes
+                        (.getMetas db) model)
         bf (StringBuilder.)]
     (doseq [[nm nv] m
             :let [cols (map #(genCol (get fields %)) nv)]]
@@ -361,9 +366,10 @@
 ;;
 (defn- genUniques ""
 
-  [db fields model]
+  [^DBAPI db fields model]
 
-  (let [m (collectDbXXX :uniques (.getMetas db) model)
+  (let [m (collectDbXXX :uniques
+                        (.getMetas db) model)
         bf (StringBuilder.)]
     (doseq [[nm nv] m
             :let [cols (map #(genCol (get fields %)) nv)]]
@@ -388,9 +394,10 @@
 ;;
 (defn- genBody ""
 
-  [db model]
+  [^DBAPI db model]
 
-  (let [fields (collectDbXXX :fields (.getMetas db) model)
+  (let [fields (collectDbXXX :fields
+                             (.getMetas db) model)
         inx (StringBuilder.)
         bf (StringBuilder.)]
     (with-local-vars [pkeys (transient #{})]
@@ -448,7 +455,7 @@
 (defn getDDL  ""
 
   ^String
-  [db]
+  [^DBAPI db]
 
   (binding [*DDL_BVS* (atom {})]
     (let [drops (StringBuilder.)
@@ -465,4 +472,5 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;EOF
+
 
