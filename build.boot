@@ -7,6 +7,9 @@
 
   :dependencies '[
 
+    [org.postgresql/postgresql "9.4.1208.jre7" ]
+    [com.h2database/h2 "1.4.191" ]
+
     [commons-dbutils/commons-dbutils "1.6" ]
     [com.jolbox/bonecp "0.8.0.RELEASE" ]
     [com.google.guava/guava "19.0" ]
@@ -15,6 +18,7 @@
 
     [czlab/czlab-crypto "0.9.0-SNAPSHOT" ]
     [czlab/czlab-xlib "0.9.0-SNAPSHOT" ]
+
   ]
 
   :source-paths #{"src/main/clojure" "src/main/java"}

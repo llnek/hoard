@@ -19,10 +19,10 @@
   (:use [czlab.xlib.files :only [writeOneFile]]
         [czlab.crypto.codec]
         [czlab.xlib.core]
-        [czlab.dbio.drivers]
+        [czlab.dbddl.drivers]
         [czlab.dbio.connect]
         [czlab.dbio.core]
-        [czlab.dbio.h2]
+        [czlab.dbddl.h2]
         [clojure.test])
 
   (:import
@@ -130,7 +130,7 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(defn- mkt [t] (keyword (str "testcljc.dbio.dbstuff/" t)))
+(defn- mkt [t] (keyword (str "czlabtest.dbio.dbstuff/" t)))
 
 
 (defn- mkEmp [fname lname login]
@@ -148,13 +148,13 @@
       (dbioSetFld :login login ))))
 
 (defn- create-company [cname]
-  (-> (dbioCreateObj :testcljc.dbio.dbstuff/Company)
+  (-> (dbioCreateObj (mkt "Company"))
     (dbioSetFld :cname cname)
     (dbioSetFld :revenue 100.00)
     (dbioSetFld :logo (.getBytes "hi"))))
 
 (defn- create-dept [dname]
-  (-> (dbioCreateObj :testcljc.dbio.dbstuff/Department)
+  (-> (dbioCreateObj (mkt "Department"))
     (dbioSetFld :dname dname)))
 
 (defn- create-emp[fname lname login]

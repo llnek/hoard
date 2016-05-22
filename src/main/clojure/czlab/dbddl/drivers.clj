@@ -26,7 +26,7 @@
   (:use [czlab.dbio.core])
 
   (:import
-    [czlab.dbio DBAPI DBIOError]))
+    [czlab.dbio MetaCache DBAPI DBIOError]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;(set! *warn-on-reflection* true)
@@ -184,7 +184,7 @@
   ^String
   [model]
 
-  (ese (:table model)))
+  (gtable model))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -193,7 +193,7 @@
   ^String
   [field]
 
-  (ese (:column field)))
+  (gcolumn field))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -202,6 +202,7 @@
   ^String
   [db typedef field]
 
+  ;;(println "field = " field)
   (let [dft (first (:dft field))]
     (str (getPad db)
          (genCol field)
@@ -209,7 +210,7 @@
          typedef
          " "
          (nullClause db (:null field))
-         (if (nil? dft) "" (str " DEFAULT " dft)))))
+         (if (hgl? dft) (str " DEFAULT " dft) ""))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -255,7 +256,7 @@
 ;;
 (defmethod genAutoInteger :default
 
-  [db table field]
+  [db model field]
 
   "")
 
@@ -290,7 +291,7 @@
 ;;
 (defmethod genAutoLong :default
 
-  [db table field]
+  [db model field]
 
   "")
 
@@ -342,10 +343,9 @@
 (defn- genExIndexes "Generate external index definitions"
 
   ^String
-  [^DBAPI db fields model]
+  [metas db fields model]
 
-  (let [m (collectDbXXX :indexes
-                        (.getMetas db) model)
+  (let [m (collectDbXXX :indexes metas model)
         bf (StringBuilder.)]
     (doseq [[nm nv] m
             :let [cols (map #(genCol (get fields %)) nv)]]
@@ -366,10 +366,9 @@
 ;;
 (defn- genUniques ""
 
-  [^DBAPI db fields model]
+  [metas db fields model]
 
-  (let [m (collectDbXXX :uniques
-                        (.getMetas db) model)
+  (let [m (collectDbXXX :uniques metas model)
         bf (StringBuilder.)]
     (doseq [[nm nv] m
             :let [cols (map #(genCol (get fields %)) nv)]]
@@ -394,10 +393,9 @@
 ;;
 (defn- genBody ""
 
-  [^DBAPI db model]
+  [metas db model]
 
-  (let [fields (collectDbXXX :fields
-                             (.getMetas db) model)
+  (let [fields (collectDbXXX :fields metas model)
         inx (StringBuilder.)
         bf (StringBuilder.)]
     (with-local-vars [pkeys (transient #{})]
@@ -421,16 +419,16 @@
                     :Bytes (genBytes db fld)
                     (mkDbioError (str "Unsupported domain type " dt))) ]
           (when (:pkey fld) (var-set pkeys (conj! @pkeys fld)))
-          (addDelim! bf ",\n" (genCol fld))))
+          (addDelim! bf ",\n" col)))
       ;; now do the assocs
       ;; now explicit indexes
-      (.append inx (genExIndexes db fields model))
+      (.append inx (genExIndexes metas db fields model))
       ;; now uniques, primary keys and done
       (when (> (.length bf) 0)
         (when (> (count @pkeys) 0)
           (.append bf (str ",\n"
                            (genPKey db model (persistent! @pkeys)))))
-        (let [s (genUniques db fields model)]
+        (let [s (genUniques metas db fields model)]
           (when (hgl? s)
             (.append bf (str ",\n" s)))))
     [(.toString bf) (.toString inx)])))
@@ -439,10 +437,10 @@
 ;;
 (defn- genOneTable ""
 
-  [db model]
+  [metas db model]
 
   (let [b (genBegin db model)
-        d (genBody db model)
+        d (genBody metas db model)
         e (genEnd db model)
         s1 (str b (first d) e)
         inx (last d) ]
@@ -455,20 +453,20 @@
 (defn getDDL  ""
 
   ^String
-  [^DBAPI db]
+  [^MetaCache cache dbID]
 
   (binding [*DDL_BVS* (atom {})]
     (let [drops (StringBuilder.)
           body (StringBuilder.)
-          ms (.getMetas db)]
+          ms (.getMetas cache)]
       (doseq [[id model] ms
               :let [tbl (:table model)]]
         (when (and (not (:abstract model))
                    (hgl? tbl))
           (log/debug "Model Id: %s table: %s" (name id) tbl)
-          (.append drops (genDrop db model))
-          (.append body (genOneTable db model))))
-      (str "" drops body (genEndSQL db)))))
+          (.append drops (genDrop dbID model))
+          (.append body (genOneTable ms dbID model))))
+      (str "" drops body (genEndSQL dbID)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;EOF

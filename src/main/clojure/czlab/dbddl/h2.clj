@@ -56,7 +56,7 @@
 ;;
 (defmethod genAutoInteger H2
 
-  [db table field]
+  [db model field]
 
   (str (getPad db)
        (genCol field)
@@ -70,7 +70,7 @@
 ;;
 (defmethod genAutoLong H2
 
-  [db table field]
+  [db model field]
 
   (str (getPad db)
        (genCol field)
@@ -84,18 +84,18 @@
 ;;
 (defmethod genBegin H2
 
-  [db table]
+  [db model]
 
-  (str "CREATE CACHED TABLE " table " (\n" ))
+  (str "CREATE CACHED TABLE " (gtable model) " (\n" ))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defmethod genDrop H2
 
-  [db table]
+  [db model]
 
   (str "DROP TABLE "
-       table
+       (gtable model)
        " IF EXISTS CASCADE" (genExec db) "\n\n"))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

@@ -39,7 +39,7 @@
 ;;
 (defmethod genEnd MySQL
 
-  [db table]
+  [db model]
 
   (str "\n) Type=InnoDB" (genExec db) "\n\n"))
 
@@ -47,7 +47,7 @@
 ;;
 (defmethod genAutoInteger MySQL
 
-  [db table field]
+  [db model field]
 
   (str (getPad db)
        (genCol field)
@@ -59,7 +59,7 @@
 ;;
 (defmethod genAutoLong MySQL
 
-  [db table field]
+  [db model field]
 
   (str (getPad db)
        (genCol field)
@@ -71,10 +71,10 @@
 ;;
 (defmethod genDrop MySQL
 
-  [db table]
+  [db model]
 
   (str "DROP TABLE IF EXISTS "
-       table
+       (gtable model)
        (genExec db) "\n\n"))
 
 ;;(println (getDDL (reifyMetaCache testschema) (MySQL.) ))

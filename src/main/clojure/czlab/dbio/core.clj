@@ -104,6 +104,17 @@
   (ese (:table model)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
+(defn gcolumn
+
+  "Get the column name (escaped) of this field"
+
+  ^String
+  [field]
+
+  (ese (:column field)))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; have to be function , not macro as this is passed into another higher
 ;; function - merge.
 (defn mergeMeta
@@ -563,7 +574,7 @@
     {:rowid {:column COL_ROWID :pkey true :domain :Long
              :auto true :system true :updatable false}
      :verid {:column COL_VERID :domain :Long :system true
-             :dft [ 0 ] }
+             :dft ["0"] }
      :last-modify {:column COL_LASTCHANGED :domain :Timestamp
                    :system true :dft [""] }
      :created-on {:column COL_CREATED_ON :domain :Timestamp

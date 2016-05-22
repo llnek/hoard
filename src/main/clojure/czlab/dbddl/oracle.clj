@@ -31,25 +31,26 @@
 ;;
 (defn- createSequenceTrigger
 
-  [db table col]
+  [db model field]
 
-  (str "CREATE OR REPLACE TRIGGER TRIG_" table "\n"
-       "BEFORE INSERT ON " table "\n"
-       "REFERENCING NEW AS NEW\n"
-       "FOR EACH ROW\n"
-       "BEGIN\n"
-       "SELECT SEQ_" table ".NEXTVAL INTO :NEW."
-       col " FROM DUAL;\n"
-       "END" (genExec db) "\n\n"))
+  (let [table (gtable model)]
+    (str "CREATE OR REPLACE TRIGGER TRIG_" table "\n"
+         "BEFORE INSERT ON " table "\n"
+         "REFERENCING NEW AS NEW\n"
+         "FOR EACH ROW\n"
+         "BEGIN\n"
+         "SELECT SEQ_" table ".NEXTVAL INTO :NEW."
+         (gcolumn field) " FROM DUAL;\n"
+         "END" (genExec db) "\n\n")))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defn- createSequence
 
-  [db table]
+  [db model]
 
   (str "CREATE SEQUENCE SEQ_"
-       table
+       (gtable model)
        " START WITH 1 INCREMENT BY 1"
        (genExec db) "\n\n"))
 
@@ -65,18 +66,18 @@
 ;;
 (defmethod genAutoInteger Oracle
 
-  [db table field]
+  [db model field]
 
-  (swap! *DDL_BVS* assoc table (:column field))
+  (swap! *DDL_BVS* assoc model field)
   (genInteger db field))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defmethod genAutoLong Oracle
 
-  [db table field]
+  [db model field]
 
-  (swap! *DDL_BVS* assoc table (:column field))
+  (swap! *DDL_BVS* assoc model field)
   (genLong db field))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -98,10 +99,10 @@
 ;;
 (defmethod genDrop Oracle
 
-  [db table]
+  [db model]
 
   (str "DROP TABLE "
-       table
+       (gtable model)
        " CASCADE CONSTRAINTS PURGE"
        (genExec db) "\n\n"))
 

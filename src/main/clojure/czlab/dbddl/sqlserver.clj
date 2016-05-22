@@ -40,7 +40,7 @@
 ;;
 (defmethod genAutoInteger SQLServer
 
-  [db table fld]
+  [db model fld]
 
   (str (getPad db)
        (genCol fld)
@@ -54,7 +54,7 @@
 ;;
 (defmethod genAutoLong SQLServer
 
-  [db table fld]
+  [db model fld]
 
   (str (getPad db)
        (genCol fld)
@@ -68,13 +68,14 @@
 ;;
 (defmethod genDrop SQLServer
 
-  [db table]
+  [db model]
 
-  (str "IF EXISTS (SELECT * FROM dbo.sysobjects WHERE id=object_id('"
-       table
-       "')) DROP TABLE "
-       table
-       (genExec db) "\n\n"))
+  (let [table (gtable model)]
+    (str "IF EXISTS (SELECT * FROM dbo.sysobjects WHERE id=object_id('"
+         table
+         "')) DROP TABLE "
+         table
+         (genExec db) "\n\n")))
 
 ;;(println (getDDL (reifyMetaCache testschema) (SQLServer.) ))
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

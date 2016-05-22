@@ -53,7 +53,7 @@
 ;;
 (defmethod genAutoInteger :postgresql
 
-  [db table field]
+  [db model field]
 
   (genColDef db (genCol field) "SERIAL" false nil))
 
@@ -61,7 +61,7 @@
 ;;
 (defmethod genAutoLong :postgresql
 
-  [db table field]
+  [db model field]
 
   (genColDef db (genCol field) "BIGSERIAL" false nil))
 
@@ -69,10 +69,10 @@
 ;;
 (defmethod genDrop :postgresql
 
-  [db table]
+  [db model]
 
   (str "DROP TABLE IF EXISTS "
-       table
+       (gtable model)
        " CASCADE "
        (genExec db) "\n\n"))
 
