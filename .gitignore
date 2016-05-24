@@ -2,6 +2,7 @@ node_modules/
 targets/
 target/
 build/
+cout/
 #lib/
 classes/
 checkouts/
