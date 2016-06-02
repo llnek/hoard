@@ -20,7 +20,7 @@ import java.sql.Connection;
 /**
  * @author kenl
  */
-public interface  Transactable {
+@FunctionalInterface public interface  Transactable {
 
   /**
    * The fn is executed within the context of a transaction.

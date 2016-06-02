@@ -12,7 +12,6 @@
 ;;
 ;; Copyright (c) 2013-2016, Kenneth Leung. All rights reserved.
 
-
 (ns ^{:doc ""
       :author "kenl" }
 
@@ -20,49 +19,67 @@
 
   (:require
     [czlab.xlib.meta :refer [bytesClass charsClass]]
-    [czlab.xlib.str
-     :refer [sname ucase lcase hgl? addDelim! strim]]
     [czlab.xlib.io :refer [readChars readBytes]]
+    [czlab.xlib.str
+     :refer [sname
+             ucase
+             lcase
+             hgl?
+             addDelim!
+             strim]]
     [czlab.xlib.logging :as log]
     [czlab.xlib.core
-     :refer [flattenNil trap! nowJTstamp nnz]]
+     :refer [flattenNil
+             trap!
+             nowJTstamp
+             nnz]]
     [czlab.xlib.dates :refer [gmtCal]])
 
   (:use [czlab.dbio.core])
 
   (:import
     [java.util Calendar GregorianCalendar TimeZone]
-    [czlab.dbio MetaCache
-     SQLr DBIOError OptLockError]
+    [czlab.dbio
+     MetaCache
+     SQLr
+     DBIOError]
     [java.math BigDecimal BigInteger]
     [java.io Reader InputStream]
     [czlab.dbio DBAPI]
     [czlab.xlib XData]
-    [java.sql ResultSet Types SQLException
-     DatabaseMetaData ResultSetMetaData
-     Date Timestamp Blob Clob
-     Statement PreparedStatement Connection]))
+    [java.sql
+     ResultSet
+     Types
+     SQLException
+     Date
+     Timestamp
+     Blob
+     Clob
+     Statement
+     Connection
+     PreparedStatement
+     DatabaseMetaData
+     ResultSetMetaData]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;(set! *warn-on-reflection* true)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defn- fmtUpdateWhere ""
+(defn- fmtUpdateWhere
+
+  ""
 
   ^String
-  [lock model]
+  [model]
 
-  (str (ese (dbColname :rowid model))
-       "=?"
-       (if lock
-           (str " AND "
-                (ese (dbColname :verid model)) "=?")
-           "")))
+  (str (ese (dbColname :rowid model)) "=?"))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defn- lockError? ""
+(defn- lockError?
+
+  ""
 
   [^String opcode cnt ^String table rowID]
 
@@ -73,7 +90,7 @@
 ;;
 (defn sqlFilterClause
 
-  "[sql-filter string, values]"
+  "[sql-filter-string, values]"
 
   [model filters]
 
@@ -81,7 +98,7 @@
     [flds (:fields (meta model))
      wc (reduce
           #(let [k (first %2)
-                 fld (get flds k)
+                 fld (flds k)
                  c (if (nil? fld)
                      (sname k)
                      (:column fld))]
@@ -90,14 +107,16 @@
                         (str (ese c)
                              (if (nil? (last %2))
                                " IS NULL "
-                               " = ? "))))
+                               " =? "))))
           (StringBuilder.)
           (seq filters))]
     [(str wc) (flattenNil (vals filters))]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defn- readCol ""
+(defn- readCol
+
+  "Read column value, handling blobs"
 
   ^Object
   [sqlType pos ^ResultSet rset]
@@ -120,7 +139,9 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defn- readOneCol ""
+(defn- readOneCol
+
+  ""
 
   [sqlType pos ^ResultSet rset]
 
@@ -172,7 +193,9 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defn- insert? ""
+(defn- insert?
+
+  ""
 
   [^String sql]
 
@@ -180,7 +203,9 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defn- setBindVar ""
+(defn- setBindVar
+
+  ""
 
   [^PreparedStatement ps pos p]
 
@@ -211,13 +236,14 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defn- mssqlTweakSqlstr ""
+(defn- mssqlTweakSqlstr
+
+  ""
 
   [^String sqlstr token cmd]
 
-  (loop
-    [stop false
-     sql sqlstr]
+  (loop [stop false
+         sql sqlstr]
     (if stop
       sql
       (let [pos (.indexOf (lcase sql)
@@ -235,7 +261,9 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defn- jiggleSQL ""
+(defn- jiggleSQL
+
+  ""
 
   ^String
   [^DBAPI db ^String sqlstr]
@@ -256,7 +284,9 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defn- buildStmt ""
+(defn- buildStmt
+
+  ""
 
   ^PreparedStatement
   [db ^Connection conn sqlstr params]
@@ -274,7 +304,9 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defn- handleGKeys ""
+(defn- handleGKeys
+
+  ""
 
   [^ResultSet rs cnt options]
 
@@ -285,7 +317,9 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defn- sqlExecWithOutput ""
+(defn- sqlExecWithOutput
+
+  ""
 
   [db conn sql pms options]
 
@@ -304,7 +338,9 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defn- sqlSelect+ ""
+(defn- sqlSelect+
+
+  ""
 
   [db conn sql pms func post]
 
@@ -322,7 +358,9 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defn- sqlSelect ""
+(defn- sqlSelect
+
+  ""
 
   [db conn sql pms]
 
@@ -331,7 +369,9 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defn- sqlExec ""
+(defn- sqlExec
+
+  ""
 
   [db conn sql pms]
 
@@ -346,8 +386,7 @@
 
   [sb1 sb2 obj flds]
 
-  (with-local-vars
-    [ps (transient []) ]
+  (with-local-vars [ps (transient []) ]
     (doseq [[k v] obj
             :let [fdef (flds k)]]
       (when (and (some? fdef)
@@ -367,8 +406,7 @@
 
   [^StringBuilder sb1 obj flds]
 
-  (with-local-vars
-    [ps (transient []) ]
+  (with-local-vars [ps (transient []) ]
     (doseq [[k v]  obj
             :let [fdef (flds k)]]
       (when (and (some? fdef)
@@ -384,22 +422,23 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defn- postFmtModelRow ""
+(defn- postFmtModelRow
+
+  ""
 
   [model obj]
 
-  (let [mm {:typeid model
-            :verid (:verid obj)
-            :rowid (:rowid obj)
-            :last-modify (:last-modify obj) }]
+  (let [mm (merge {:typeid model}
+                  (select-keys obj [:rowid :last-modify])) ]
     (with-meta (-> obj
                    (dbioClrFld :rowid)
-                   (dbioClrFld :verid)
                    (dbioClrFld :last-modify)) mm)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defn- doExecWithOutput ""
+(defn- doExecWithOutput
+
+  ""
 
   [db metas conn sql pms options]
 
@@ -407,7 +446,9 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defn- doExec ""
+(defn- doExec
+
+  ""
 
   [db metas conn sql pms]
 
@@ -415,21 +456,24 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defn- doQuery+ ""
+(defn- doQuery+
+
+  ""
 
   [db metas conn sql pms model]
 
-  (let [mcz (metas model) ]
-    (when (nil? mcz)
-          (mkDbioError (str "Unknown model " model)))
+  (if-let [mcz (metas model)]
     (sqlSelect+ db conn sql pms
                 (partial row2Obj
                          (partial modelInjtor mcz))
-                #(postFmtModelRow model %))))
+                #(postFmtModelRow model %))
+    (mkDbioError (str "Unknown model " model))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defn- doQuery ""
+(defn- doQuery
+
+  ""
 
   [db metas conn sql pms]
 
@@ -437,7 +481,9 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defn- doCount ""
+(defn- doCount
+
+  ""
 
   [db metas conn model]
 
@@ -454,7 +500,9 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defn- doPurge ""
+(defn- doPurge
+
+  ""
 
   [db metas conn model]
 
@@ -465,29 +513,23 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defn- doDelete ""
+(defn- doDelete
+
+  ""
 
   [^DBAPI db metas conn obj]
 
   (let [info (meta obj)
-        model (:typeid info)
-        mcz (metas model) ]
-    (when (nil? mcz)
-      (mkDbioError (str "Unknown model " model)))
-    (let [lock (.supportsLock db)
-          table (dbTablename mcz)
-          rowid (:rowid info)
-          verid (:verid info)
-          p (if lock [rowid verid] [rowid])
-          w (fmtUpdateWhere lock mcz)
-          cnt (doExec db
-                      metas
-                      conn
-                      (str "DELETE FROM "
-                           (ese table)
-                           " WHERE " w) p)]
-      (when lock (lockError? "delete" cnt table rowid))
-      cnt)))
+        m (:typeid info)]
+    (if-let [mcz (metas m) ]
+      (doExec db
+              metas
+              conn
+              (str "DELETE FROM "
+                   (ese (dbTablename mcz))
+                   " WHERE "
+                   (fmtUpdateWhere mcz)) [(:rowid info)])
+      (mkDbioError (str "Unknown model " m)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -538,7 +580,7 @@
         mcz (metas model)]
     (when (nil? mcz)
       (mkDbioError (str "Unknown model " model)))
-    (let [lock (.supportsLock db)
+    (let [lock false
           flds (:fields (meta mcz))
           cver (nnz (:verid info))
           table (dbTablename mcz)
@@ -572,7 +614,7 @@
                                  " SET "
                                  sb1
                                  " WHERE "
-                                 (fmtUpdateWhere lock mcz))
+                                 (fmtUpdateWhere mcz lock ))
                             (persistent! @ps)) ]
             (when lock (lockError? "update" cnt table rowid))
             (vary-meta obj mergeMeta

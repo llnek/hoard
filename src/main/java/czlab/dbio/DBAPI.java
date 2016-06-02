@@ -18,24 +18,37 @@ package czlab.dbio;
 import java.sql.Connection;
 
 /**
- * Abstraction of a database interface.
+ * A sql database interface.
  *
  * @author kenl
  */
 public interface DBAPI {
 
+  /**
+   * All operations are done within a transaction.
+   */
   public Transactable newCompositeSQLr();
 
+  /**
+   * Auto commits on each operation.
+   */
   public SQLr newSimpleSQLr();
 
+  /**
+   * Metadata related to the database.
+   */
   public Object getMetas();
 
-  public boolean supportsLock();
-
+  /**
+   * Product information.
+   */
   public Object vendor();
 
   public void finz();
 
+  /**
+   * Make a connection to the database.
+   */
   public Connection open();
 
 }

@@ -19,8 +19,7 @@ package czlab.dbio;
 /**
  * @author kenl
  */
-@FunctionalInterface
-public interface MetaCache {
+@FunctionalInterface public interface MetaCache {
   /**
    * Returns a map of { type - model-def , type - model-def, ... }
    */
