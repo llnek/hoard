@@ -42,7 +42,8 @@
     [czlab.dbio
      MetaCache
      SQLr
-     DBIOError]
+     DBIOError
+     OptLockError]
     [java.math BigDecimal BigInteger]
     [java.io Reader InputStream]
     [czlab.dbio DBAPI]
@@ -384,19 +385,21 @@
 
   "Format sql string for insert"
 
-  [sb1 sb2 obj flds]
+  [obj flds]
 
   (with-local-vars [ps (transient []) ]
-    (doseq [[k v] obj
-            :let [fdef (flds k)]]
-      (when (and (some? fdef)
-                 (not (:auto fdef))
-                 (not (:system fdef)))
-        (addDelim! sb1 "," (ese (dbColname fdef)))
-        (addDelim! sb2 "," (if (nil? v) "NULL" "?"))
-        (when (some? v)
-          (var-set ps (conj! @ps v)))))
-    (persistent! @ps)))
+    (let [sb2 (StringBuilder.)
+          sb1 (StringBuilder.)]
+      (doseq [[k v] obj
+              :let [fdef (flds k)]]
+        (when (and (some? fdef)
+                   (not (:auto fdef))
+                   (not (:system fdef)))
+          (addDelim! sb1 "," (ese (dbColname fdef)))
+          (addDelim! sb2 "," (if (nil? v) "NULL" "?"))
+          (when (some? v)
+            (var-set ps (conj! @ps v)))))
+      [(str sb1) (str sb2) (persistent! @ps)] )))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -404,21 +407,22 @@
 
   "Format sql string for update"
 
-  [^StringBuilder sb1 obj flds]
+  [obj flds]
 
   (with-local-vars [ps (transient []) ]
-    (doseq [[k v]  obj
-            :let [fdef (flds k)]]
-      (when (and (some? fdef)
-                 (:updatable fdef)
-                 (not (:auto fdef))
-                 (not (:system fdef)))
-        (doto sb1
-          (addDelim! "," (ese (dbColname fdef)))
-          (.append (if (nil? v) "=NULL" "=?")))
-        (when (some? v)
-          (var-set ps (conj! @ps v)))))
-    (persistent! @ps)))
+    (let [sb1 (StringBuilder.)]
+      (doseq [[k v]  obj
+              :let [fdef (flds k)]]
+        (when (and (some? fdef)
+                   (:updatable fdef)
+                   (not (:auto fdef))
+                   (not (:system fdef)))
+          (doto sb1
+            (addDelim! "," (ese (dbColname fdef)))
+            (.append (if (nil? v) "=NULL" "=?")))
+          (when (some? v)
+            (var-set ps (conj! @ps v)))))
+      [(str sb1) (persistent! @ps)])))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -517,7 +521,7 @@
 
   ""
 
-  [^DBAPI db metas conn obj]
+  [db metas conn obj]
 
   (let [info (meta obj)
         m (:typeid info)]
@@ -533,96 +537,68 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defn- doInsert ""
+(defn- doInsert
 
-  [^DBAPI db metas conn obj]
+  ""
+
+  [db metas conn obj]
 
   (let [info (meta obj)
-        model (:typeid info)
-        mcz (metas model) ]
-    (when (nil? mcz)
-      (mkDbioError (str "Unknown model " model)))
-    (let [pkey {:pkey (dbColname :rowid mcz)}
-          lock (.supportsLock db)
-          flds (:fields (meta mcz))
-          table (dbTablename mcz)
-          s2 (StringBuilder.)
-          s1 (StringBuilder.)
-          now (nowJTstamp)
-          pms (insertFlds s1 s2 obj flds)]
-      (when (> (.length s1) 0)
-        (let [out (doExecWithOutput db
-                                    metas
-                                    conn
-                                    (str "INSERT INTO "
-                                         (ese table)
-                                         "(" s1
-                                         ") VALUES (" s2
-                                         ")" )
-                                    pms
-                                    pkey)]
-          (if (empty? out)
-            (mkDbioError (str "Insert requires row-id to be returned."))
-            (log/debug "Exec-with-out %s" out))
-          (let [wm {:rowid (:1 out) :verid 0} ]
-            (when-not (number? (:rowid wm))
-                    (mkDbioError (str "RowID data-type must be Long.")))
-            (vary-meta obj mergeMeta wm)))))))
+        m (:typeid info)
+        mcz (metas m) ]
+    (if-let [mcz (metas m)]
+      (let [[s1 s2 pms]
+            (insertFlds obj (:fields (meta mcz)))]
+        (when (hgl? s1)
+          (let [out (doExecWithOutput
+                      db
+                      metas
+                      conn
+                      (str "INSERT INTO "
+                           (ese (dbTablename mcz))
+                           "(" s1 ") VALUES (" s2 ")")
+                      pms
+                      {:pkey (dbColname :rowid mcz)})]
+            (if (empty? out)
+              (mkDbioError (str "Insert requires row-id to be returned."))
+              (log/debug "Exec-with-out %s" out))
+            (let [wm {:rowid (:1 out) } ]
+              (when-not (number? (:rowid wm))
+                (mkDbioError (str "RowID data-type must be a Long.")))
+              (vary-meta obj mergeMeta wm)))))
+      (mkDbioError (str "Unknown model " m)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defn- doUpdate ""
+(defn- doUpdate
 
-  [^DBAPI db metas conn obj]
+  ""
+
+  [db metas conn obj]
 
   (let [info (meta obj)
-        model (:typeid info)
-        mcz (metas model)]
-    (when (nil? mcz)
-      (mkDbioError (str "Unknown model " model)))
-    (let [lock false
-          flds (:fields (meta mcz))
-          cver (nnz (:verid info))
-          table (dbTablename mcz)
-          rowid (:rowid info)
-          sb1 (StringBuilder.)
-          now (nowJTstamp)
-          nver (inc cver)
-          pms (updateFlds sb1 obj flds)]
-      (when (> (.length sb1) 0)
-        (with-local-vars
-          [ ps (transient pms) ]
-          (-> (addDelim! sb1
-                         ","
-                         (ese (dbColname :last-modify mcz)))
-              (.append "=?"))
-          (var-set ps (conj! @ps now))
-          (when lock ;; up the version
-            (-> (addDelim! sb1
-                           ","
-                           (ese (dbColname :verid mcz)))
-                (.append "=?"))
-            (var-set ps (conj! @ps nver)))
-          ;; for the where clause
-          (var-set ps (conj! @ps rowid))
-          (when lock (var-set  ps (conj! @ps cver)))
-          (let [cnt (doExec db
-                            metas
-                            conn
-                            (str "UPDATE "
-                                 (ese table)
-                                 " SET "
-                                 sb1
-                                 " WHERE "
-                                 (fmtUpdateWhere mcz lock ))
-                            (persistent! @ps)) ]
-            (when lock (lockError? "update" cnt table rowid))
-            (vary-meta obj mergeMeta
-                       { :verid nver :last-modify now })))))))
+        m (:typeid info)]
+    (if-let [mcz (metas m)]
+      (let [[sb1 pms]
+            (updateFlds obj
+                        (:fields (meta mcz)))]
+        (if (hgl? sb1)
+          (doExec db
+                  metas
+                  conn
+                  (str "UPDATE "
+                       (ese (dbTablename mcz))
+                       " SET "
+                       sb1 " WHERE " (fmtUpdateWhere mcz))
+                  (conj pms (:rowid info)))
+          0))
+      (mkDbioError (str "Unknown model " m)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defn- doExtraSQL ""
+(defn- doExtraSQL
+
+  ""
 
   ^String
   [^String sql extra]
@@ -640,8 +616,7 @@
 
   {:pre [(fn? getc) (fn? runc)]}
 
-  (let
-    [metaz (.getMetas db)]
+  (let [metaz (.getMetas db)]
     (reify
 
       SQLr

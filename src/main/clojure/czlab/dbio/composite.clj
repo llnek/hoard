@@ -18,10 +18,11 @@
   czlab.dbio.composite
 
   (:import
-    [czlab.dbio Transactable
+    [czlab.dbio
      SQLr
      DBAPI
-     MetaCache ]
+     MetaCache
+     Transactable]
     [java.sql Connection])
 
   (:use [czlab.dbio.core]
@@ -39,21 +40,17 @@
 (defn- undo
 
   ""
-  [conn]
+  [^Connection conn]
 
-  (try! (-> ^Connection
-            conn
-            (.rollback))))
+  (try! (.rollback conn)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defn- commit
 
   ""
-  [conn]
+  [^Connection conn]
 
-  (-> ^Connection
-      conn
-      (.commit)))
+  (.commit conn))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defn- begin
@@ -61,12 +58,11 @@
   ""
 
   ^Connection
-  [db how]
+  [^DBAPI db how]
 
-  (let [conn (.open ^DBAPI db)]
-    (.setTransactionIsolation conn how)
-    (.setAutoCommit conn false)
-    conn))
+  (doto (.open db)
+    (.setTransactionIsolation how)
+    (.setAutoCommit false)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -99,7 +95,6 @@
               (undo conn)
               (log/warn e# "")
               (throw e#))) ))))))
-
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;EOF

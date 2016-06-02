@@ -44,8 +44,6 @@ public interface DBAPI {
    */
   public Object vendor();
 
-  public void finz();
-
   /**
    * Make a connection to the database.
    */

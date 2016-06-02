@@ -42,7 +42,6 @@
 
   (doto (.open db)
     (.setAutoCommit true)
-    ;;(.setTransactionIsolation Connection/TRANSACTION_READ_COMMITTED)
     (.setTransactionIsolation Connection/TRANSACTION_SERIALIZABLE)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -52,7 +51,7 @@
   "Non transactional SQL object"
 
   ^SQLr
-  [^DBAPI db]
+  [db]
 
   (reifySQLr
     db

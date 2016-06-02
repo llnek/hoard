@@ -18,21 +18,25 @@
   czlab.dbio.core
 
   (:import
-    [java.util GregorianCalendar
+    [java.util
      HashMap
-     TimeZone Properties]
-    [czlab.dbio MetaCache
+     TimeZone
+     Properties
+     GregorianCalendar]
+    [czlab.dbio
+     MetaCache
      Schema
      BoneCPHook
      DBIOError
      SQLr
      JDBCPool
      JDBCInfo]
-    [java.sql SQLException
-     DatabaseMetaData
+    [java.sql
+     SQLException
      Connection
      Driver
-     DriverManager]
+     DriverManager
+     DatabaseMetaData]
     [java.lang Math]
     [czlab.crypto PasswordAPI]
     [com.jolbox.bonecp BoneCP BoneCPConfig]
@@ -40,13 +44,26 @@
 
   (:require
     [czlab.xlib.format :refer [writeEdnString]]
-    [czlab.xlib.str :refer
-     [lcase ucase strim
-      embeds? addDelim! hasNoCase? hgl?]]
-    [czlab.xlib.core :refer
-     [tryc try! trylet! trap!
-      rootCause stripNSPath
-      getTypeId interject nnz nbf juid]]
+    [czlab.xlib.str
+     :refer [lcase
+             ucase
+             hgl?
+             strim
+             embeds?
+             addDelim!
+             hasNoCase?]]
+    [czlab.xlib.core
+     :refer [tryc
+             try!
+             trylet!
+             trap!
+             getTypeId
+             interject
+             nnz
+             nbf
+             juid
+             rootCause
+             stripNSPath]]
     [czlab.xlib.logging :as log]
     [clojure.string :as cs]
     [clojure.set :as cset]
@@ -55,14 +72,9 @@
 
   (:use [flatland.ordered.set]))
 
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;(set! *warn-on-reflection* true)
-
-(def ^:dynamic ^MetaCache *META-CACHE* nil)
-(def ^:dynamic *USE_DDL_SEP* true)
-(def ^:dynamic *DDL_BVS* nil)
-(def ^:dynamic *JDBC-INFO* nil)
-(def ^:dynamic *JDBC-POOL* nil)
 
 (defonce ^String COL_LASTCHANGED "DBIO_LASTCHANGED")
 (defonce ^String COL_CREATED_ON "DBIO_CREATED_ON")
@@ -74,6 +86,12 @@
 (defonce ^String COL_ROWID "DBIO_ROWID")
 (defonce ^String COL_VERID "DBIO_VERID")
 (defonce ^String DDL_SEP "-- :")
+
+(def ^:dynamic ^MetaCache *META-CACHE* nil)
+(def ^:dynamic *USE_DDL_SEP* true)
+(def ^:dynamic *DDL_BVS* nil)
+(def ^:dynamic *JDBC-INFO* nil)
+(def ^:dynamic *JDBC-POOL* nil)
 
 (def ^:private ^String _NSP "czc.dbio.core" )
 
@@ -123,6 +141,8 @@
 
   [m1 m2]
 
+  {:pre [(map? m1) (map? m2)]}
+
   (merge m1 m2))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -153,7 +173,7 @@
     [fld-id model]
     (-> (:fields (meta model))
         (get fld-id)
-        (:column))))
+        (dbColname ))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -172,18 +192,15 @@
   [^String id cfg ^PasswordAPI pwdObj]
 
   ;;(log/debug "JDBC id= %s, cfg = %s" id cfg)
-  (let [server (:server cfg)]
-    (reify
+  (reify
 
-      JDBCInfo
+    JDBCInfo
 
-      (getDriver [_] (:driver cfg))
-      (getUser [_] (:user cfg))
-      (getId [_] id)
-      (getUrl [_] (if-not (empty? server)
-                    server
-                    (:url cfg)))
-      (getPwd [_] (str pwdObj)))))
+    (getUrl [_] (or (:server cfg) (:url cfg)))
+    (getDriver [_] (:driver cfg))
+    (getUser [_] (:user cfg))
+    (getId [_] id)
+    (getPwd [_] (str pwdObj))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;

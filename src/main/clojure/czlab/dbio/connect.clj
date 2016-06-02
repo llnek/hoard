@@ -18,7 +18,8 @@
   czlab.dbio.connect
 
   (:import
-    [czlab.dbio DBAPI
+    [czlab.dbio
+     DBAPI
      MetaCache
      JDBCPool
      JDBCInfo
@@ -51,7 +52,8 @@
         hc (.getId jdbc)]
     (when-not (.containsKey c hc)
       (log/debug "No db-pool in DBIO-thread-local, creating one")
-      (->> {:max-conns 1 :min-conns 1
+      (->> {:max-conns 1
+            :min-conns 1
             :partitions 1}
            (merge options )
            (mkDbPool jdbc )
@@ -67,25 +69,19 @@
   ^DBAPI
   [^JDBCInfo jdbc metaCache options]
 
-  (let [hc (.getId jdbc)]
-    ;;(log/debug "%s" (.getMetas metaCache))
-    (reify
+  ;;(log/debug "%s" (.getMetas metaCache))
+  (reify
 
-      DBAPI
+    DBAPI
 
-      (supportsLock [_] (not (false? (:opt-lock options))))
+    (getMetas [_] (.getMetas ^MetaCache metaCache))
 
-      (getMetas [_] (-> ^MetaCache
-                        metaCache (.getMetas)))
+    (vendor [_] (resolveVendor jdbc))
 
-      (vendor [_] (resolveVendor jdbc))
+    (open [_] (mkDbConnection jdbc))
 
-      (finz [_] nil)
-
-      (open [_] (mkDbConnection jdbc))
-
-      (newCompositeSQLr [this] (compositeSQLr this))
-      (newSimpleSQLr [this] (simpleSQLr this)) )))
+    (newCompositeSQLr [this] (compositeSQLr this))
+    (newSimpleSQLr [this] (simpleSQLr this)) ))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -100,12 +96,9 @@
 
     DBAPI
 
-    (supportsLock [_] (not (false? (:opt-lock options))))
-    (getMetas [_] (-> ^MetaCache
-                      metaCache (.getMetas)))
+    (getMetas [_] (.getMetas ^MetaCache metaCache))
 
     (vendor [_] (.vendor pool))
-    (finz [_] nil)
     (open [_] (.nextFree pool))
 
     (newCompositeSQLr [this] (compositeSQLr this))
