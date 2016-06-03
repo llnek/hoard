@@ -350,7 +350,7 @@
     (doseq [[nm nv] m
             :let [cols (map #(genCol (get fields %)) nv)]]
       (when (empty? cols)
-        (mkDbioError (str "Cannot have empty index: " nm)))
+        (throwDBError (str "Cannot have empty index: " nm)))
       (.append bf
                (str "CREATE INDEX "
                     (genIndex model (name nm))
@@ -373,7 +373,7 @@
     (doseq [[nm nv] m
             :let [cols (map #(genCol (get fields %)) nv)]]
       (when (empty? cols)
-        (mkDbioError (str "Illegal empty unique: " (name nm))))
+        (throwDBError (str "Illegal empty unique: " (name nm))))
       (addDelim! bf ",\n"
           (str (getPad db) "UNIQUE(" (cs/join "," cols) ")")))
     (.toString bf)))
@@ -417,7 +417,7 @@
                     :Float (genFloat db fld)
                     (:Password :String) (genString db fld)
                     :Bytes (genBytes db fld)
-                    (mkDbioError (str "Unsupported domain type " dt))) ]
+                    (throwDBError (str "Unsupported domain type " dt))) ]
           (when (:pkey fld) (var-set pkeys (conj! @pkeys fld)))
           (addDelim! bf ",\n" col)))
       ;; now do the assocs

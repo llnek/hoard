@@ -48,6 +48,9 @@
      :refer [lcase
              ucase
              hgl?
+             sname
+             lcase
+             ucase
              strim
              embeds?
              addDelim!
@@ -71,7 +74,6 @@
     [czlab.xlib.meta :refer [forname]])
 
   (:use [flatland.ordered.set]))
-
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;(set! *warn-on-reflection* true)
@@ -97,8 +99,8 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defmacro uc-ent ^String [ent] `(cs/upper-case (name ~ent)))
-(defmacro lc-ent ^String [ent] `(cs/lower-case (name ~ent)))
+(defmacro uc-ent "Uppercase entity" ^String [ent] `(cs/upper-case (name ~ent)))
+(defmacro lc-ent "Lowercase entity" ^String [ent] `(cs/lower-case (name ~ent)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -106,9 +108,9 @@
 
   "Escape string entity for sql"
 
-  (^String [c1 ent c2] (str c1 (uc-ent ent) c2))
-  (^String [ent] (uc-ent ent))
-  (^String [ch ent] (str ch (uc-ent ent) ch)))
+  (^String [c1 ent c2] {:pre [(some? ent)]} (str c1 (uc-ent ent) c2))
+  (^String [ent] (ese "" ent ""))
+  (^String [ch ent] (ese ch ent ch)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -118,6 +120,8 @@
 
   ^String
   [model]
+
+  {:pre [(map? model)]}
 
   (ese (:table model)))
 
@@ -129,6 +133,8 @@
 
   ^String
   [field]
+
+  {:pre [(map? field)]}
 
   (ese (:column field)))
 
@@ -157,6 +163,9 @@
 
   (^String
     [model-id cache]
+
+    {:pre [(map? cache)]}
+
     (dbTablename (cache model-id))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -171,22 +180,23 @@
 
   (^String
     [fld-id model]
-    (-> (:fields (meta model))
-        (get fld-id)
-        (dbColname ))))
+
+    {:pre [(map? model)]}
+
+    (-> (:fields (meta model)) (get fld-id) (dbColname ))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defmacro eseLHS [] `(ese COL_LHS_ROWID))
-(defmacro eseRHS [] `(ese COL_RHS_ROWID))
-(defmacro eseOID [] `(ese COL_ROWID))
-(defmacro eseVID [] `(ese COL_VERID))
+;;(defmacro eseLHS "" [] `(ese COL_LHS_ROWID))
+;;(defmacro eseRHS "" [] `(ese COL_RHS_ROWID))
+;;(defmacro eseOID "" [] `(ese COL_ROWID))
+;;(defmacro eseVID "" [] `(ese COL_VERID))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defn mkJdbc
 
-  "Make a JDBCInfo record"
+  "Basic jdbc parameters"
 
   ^JDBCInfo
   [^String id cfg ^PasswordAPI pwdObj]
@@ -212,20 +222,20 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defonce DBTYPES {
-    :sqlserver {:test-string "select count(*) from sysusers" }
-    :postgresql { :test-string "select 1" }
-    :mysql { :test-string "select version()" }
-    :h2  { :test-string "select 1" }
-    :oracle { :test-string "select 1 from DUAL" }
-  })
+(defonce DBTYPES
+  {:sqlserver {:test-string "select count(*) from sysusers" }
+   :postgresql { :test-string "select 1" }
+   :mysql { :test-string "select version()" }
+   :h2  { :test-string "select 1" }
+   :oracle { :test-string "select 1 from DUAL" } })
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defn ^:no-doc mkDbioError
+(defn throwDBError
 
   "Throw a DBIOError execption"
 
+  ^:no-doc
   [^String msg]
 
   (trap! DBIOError msg))
@@ -246,7 +256,7 @@
 
   "Try to detect the database vendor"
 
-  [^String product]
+  [product]
 
   (let [fc #(embeds? %2 %1)
         lp (lcase product)]
@@ -256,7 +266,7 @@
       "oracle" :oracle
       "mysql" :mysql
       "h2" :h2
-      (mkDbioError (str "Unknown db product " product)))))
+      (throwDBError (str "Unknown db product " product)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -264,13 +274,16 @@
 
   "Extract key attributes from this object"
 
+  ^:no-doc
   [obj]
 
-  (select-keys (meta obj) [:rowid :verid]))
+  (select-keys (meta obj) [:rowid]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defn- fmtfkey ""
+(defn- fmtfkey
+
+  ""
 
   [p1 p2]
 
@@ -282,7 +295,8 @@
 
   "Ensure the database type is supported"
 
-  [^String dbtype]
+  ^:no-doc
+  [dbtype]
 
   (let [kw (keyword (lcase dbtype))]
     (when
@@ -296,7 +310,7 @@
 
   [^String url]
 
-  (let [ss (StringUtils/split url \:) ]
+  (let [ss (.split url ":")]
     (when
       (> (alength ss) 1)
       (matchDbType (aget ss 1)))))
@@ -309,6 +323,10 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
+(defn- sanitizeName "" [s] (cs/replace (name s) #"[^a-zA-Z0-9_]" "_"))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
 (defn dbioModel
 
   "Define a generic database model"
@@ -316,8 +334,8 @@
   ([^String nm] (dbioModel (str *ns*) nm))
 
   ([^String nsp ^String nm]
-   {:id (keyword (str nsp "/" nm))
-    :table (ucase nm)
+   {:table (ucase (sanitizeName nm))
+    :id (keyword (str nsp "/" nm))
     :parent nil
     :abstract false
     :system false
@@ -325,7 +343,7 @@
     :indexes {}
     :uniques {}
     :fields {}
-    :assocs {} }) )
+    :assocs {} }))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -362,8 +380,8 @@
 
   `(def ~modelname
       (-> (dbioModel ~nsp ~(name modelname))
-          (withParentModel JOINED-MODEL-MONIKER)
-          (withJoinedModel ~lhs ~rhs))))
+          (withParent JOINED-MODEL-MONIKER)
+          (withJoined ~lhs ~rhs))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -375,12 +393,12 @@
 
   `(def ~modelname
       (-> (dbioModel ~(name modelname))
-          (withParentModel JOINED-MODEL-MONIKER)
-          (withJoinedModel ~lhs ~rhs))))
+          (withParent JOINED-MODEL-MONIKER)
+          (withJoined ~lhs ~rhs))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defn withParentModel
+(defn withParent
 
   "Give a parent to the model"
 
@@ -392,7 +410,7 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defn withJoinedModel
+(defn withJoined
 
   "A special model with 2 assocs,
    left hand side and right hand side"
@@ -402,13 +420,15 @@
   {:pre [(map? pojo)
          (keyword? lhs) (keyword? rhs)]}
 
-  (let [a1 {:kind :MXM :other lhs :fkey :lhs_rowid}
-        a2 {:kind :MXM :other rhs :fkey :rhs_rowid}
-        m2 (-> (:assocs pojo)
-               (assoc :lhs a1)
-               (assoc :rhs a2))]
+  (let [a2 (merge (:assocs pojo)
+                  {:lhs {:kind :MXM
+                         :other lhs
+                         :fkey :lhs_rowid}
+                   :rhs {:kind :MXM
+                         :other rhs
+                         :fkey :rhs_rowid} }) ]
     (-> pojo
-        (assoc :assocs m2)
+        (assoc :assocs a2)
         (assoc :mxm true))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -417,11 +437,11 @@
 
   "Set the table name"
 
-  [pojo tablename]
+  [pojo table]
 
   {:pre [(map? pojo)]}
 
-  (assoc pojo :table (ucase tablename)))
+  (assoc pojo :table (ucase (sanitizeName table))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -433,13 +453,16 @@
 
   {:pre [(map? pojo) (map? indices)]}
 
+  ;;indices = { :a [ :f1 :f2 ] :b [ f3 f4 ] }
   ;;turn indices from array to set
-  (let [m (reduce
-            #(assoc %1
-                    (first %2)
-                    (into (ordered-set) (last %2)))
-            {}
-            indices)]
+  (let [m (persistent!
+            (reduce
+              #(assoc! %1
+                       (first %2)
+                       (into (ordered-set) (last %2)))
+              (transient {})
+              indices))]
+    ;;merge new stuff onto old stuff
     (interject pojo :indexes #(merge (%2 %1) m))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -452,12 +475,15 @@
 
   {:pre [(map? pojo) (map? uniqs)]}
 
-  (let [m (reduce
-            #(assoc %1
-                    (first %2)
-                    (into (ordered-set) (last %2)))
-            {}
-            uniqs)]
+  ;;uniques = { :a [ :f1 :f2 ] :b [ f3 f4 ] }
+  ;;turn uniques from array to set
+  (let [m (persistent!
+            (reduce
+              #(assoc %1
+                      (first %2)
+                      (into (ordered-set) (last %2)))
+              (transient {})
+              uniqs))]
     (interject pojo :uniques #(merge (%2 %1) m))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -468,7 +494,7 @@
 
   [fid]
 
-  {:column (ucase (name fid))
+  {:column (ucase (sanitizeName fid))
    :domain :String
    :size 255
    :id (keyword fid)
@@ -485,7 +511,7 @@
 ;;
 (defn withField
 
-  "Create a new field"
+  "Add a new field"
 
   [pojo fid fdef]
 
@@ -499,22 +525,23 @@
 ;;
 (defn withFields
 
-  "Create a batch of fields"
+  "Add a bunch of fields"
 
   [pojo flddefs]
 
   {:pre [(map? pojo) (coll? flddefs)]}
 
   (with-local-vars [rcmap pojo]
-    (doseq [[k v] (seq flddefs)]
-      (var-set rcmap (withField @rcmap k v)))
+    (doseq [[k v] flddefs]
+      (->> (withField @rcmap k v)
+           (var-set rcmap)))
     @rcmap))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defn withAssoc
 
-  "Set an association"
+  "Add an association"
 
   [pojo aid adef]
 
@@ -528,7 +555,7 @@
              (:M2M :MXM)
              ad
              ;;else
-             (mkDbioError (str "Invalid assoc def " adef)))
+             (throwDBError (str "Invalid assoc def " adef)))
         k (keyword aid)]
     (interject pojo :assocs #(assoc (%2 %1) k a2))))
 
@@ -536,15 +563,16 @@
 ;;
 (defn withAssocs
 
-  "Set a batch of associations"
+  "Add a batch of associations"
 
   [pojo assocs]
 
   {:pre [(map? pojo) (coll? assocs)]}
 
   (with-local-vars [rcmap pojo ]
-    (doseq [[k v] (seq assocs)]
-      (var-set rcmap (withAssoc @rcmap k v)))
+    (doseq [[k v] assocs]
+      (->> (withAssoc @rcmap k v)
+           (var-set rcmap )))
     @rcmap))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -580,7 +608,7 @@
   (cond
     (and (set? src)(set? des)) (cset/union src des)
     (and (map? src)(map? des)) (merge src des)
-    :else des))
+    :else (throwDBError "Unsupported collection type to merge")))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Defining the base model here
@@ -588,15 +616,14 @@
   (with-db-system)
   (withAbstract)
   (withFields
-    {:rowid {:column COL_ROWID :pkey true :domain :Long
+    {;;:verid {:column COL_VERID :domain :Long :system true :dft ["0"] }
+     :rowid {:column COL_ROWID :pkey true :domain :Long
              :auto true :system true :updatable false}
-     :verid {:column COL_VERID :domain :Long :system true
-             :dft ["0"] }
      :last-modify {:column COL_LASTCHANGED :domain :Timestamp
-                   :system true :dft [""] }
+                   :system true :updatable false :dft [""] }
      :created-on {:column COL_CREATED_ON :domain :Timestamp
                   :system true :dft [""] :updatable false}
-     :created-by {:column COL_CREATED_BY :system true :domain :String } }))
+     :created-by {:column COL_CREATED_BY :domain :String } }))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -613,10 +640,12 @@
 ;;
 (defn mkDbSchema
 
-  "A schema holds the set of models"
+  "Holds a set of model definitions"
 
   ^Schema
   [theModels]
+
+  {:pre [(coll? theModels)]}
 
   (reify
 
@@ -626,43 +655,57 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
+(defmacro mkfkdef
+
+  ""
+
+  ^:private
+  [fid]
+
+  `(merge (getDftFldObj ~fid)
+          {:assoc-key true :domain :Long }))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
 (defn- resolve-assocs
 
   "Walk through all models, for each model, study its assocs.
   For o2o or o2m assocs, we need to artificially inject a new
-  field/column into the model (foreign key)"
+  field/column into the (other/rhs) model (foreign key)"
 
   ;; map of models
   [ms]
 
-  (with-local-vars
-    [fdef {:domain :Long :assoc-key true }
-     rc (transient {})
-     xs (transient {})]
-    ;; create placeholder maps for each model,
-    ;; to hold new fields from assocs
-    (doseq [[k m] ms]
-      (var-set rc (assoc! @rc k {} )))
-    ;; as we find new assoc fields, add them to the placeholder maps
-    (doseq [[k m]  ms]
-      (doseq [[x s] (:assocs m) ]
-        (case (:kind s)
-          (:O2O :O2M)
-          (let [fid (keyword (:fkey s))
-                rhs (@rc (:other s))
-                ft (merge (getDftFldObj fid) @fdef)]
-            (var-set rc (assoc! @rc (:other s) (assoc rhs fid ft))))
-          nil)))
+  {:pre [(map? ms)]}
+
+  ;; 1st, create placeholder maps for each model,
+  ;; to hold new fields from assocs
+  (with-local-vars [phd (reduce
+                          #(assoc! %1 %2 {})
+                          (transient {}) (keys ms))
+                    xs (transient {})]
+    ;; as we find new assoc fields,
+    ;; add them to the placeholder maps
+    (doseq [m (vals ms)]
+      (doseq [s (vals (:assocs m))
+              :let [rid (:other s)
+                    k (:kind s)
+                    fid (:fkey s)]
+              :when (or (= :O2O k)
+                        (= :O2M k))]
+        (var-set phd
+                 (assoc! @phd
+                         rid
+                         (->> (mkfkdef fid)
+                              (assoc (@phd rid) fid ))))))
     ;; now walk through all the placeholder maps and merge those new
     ;; fields to the actual models
-    (let [tm (persistent! @rc)]
-      (doseq [[k v] tm]
-        (let [mcz (ms k)
-              fs (:fields mcz)]
-          (var-set xs (assoc! @xs
-                              k
-                              (assoc mcz :fields (merge fs v))))))
-      (persistent! @xs))))
+    (doseq [[k v] (persistent! @phd)
+            :let [mcz (ms k)]]
+      (->> (assoc! @xs k
+                       (assoc mcz :fields (merge (:fields mcz) v)))
+           (var-set xs )))
+    (persistent! @xs)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -679,14 +722,14 @@
     (cond
       (keyword? par)
       (if (nil? (mcz par))
-        (mkDbioError (str "Unknown parent model " par))
+        (throwDBError (str "Unknown parent model " par))
         model)
 
       (nil? par)
       (assoc model :parent BASEMODEL-MONIKER)
 
       :else
-      (mkDbioError (str "Invalid parent " par)))))
+      (throwDBError (str "Invalid parent " par)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Idea is walk through all models and ultimately
@@ -732,7 +775,7 @@
     :map
 
     :else
-    (mkDbioError (str "Invalid arg " b))))
+    (throwDBError (str "Invalid arg " b))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -853,7 +896,7 @@
                 (.put "user" user)
                 (.put "username" user)))
             pps)]
-    (when (nil? d) (mkDbioError (str "Can't load Jdbc Url: " url)))
+    (when (nil? d) (throwDBError (str "Can't load Jdbc Url: " url)))
     (when (and (hgl? dv)
                (not= (-> d (.getClass) (.getName)) dv))
       (log/warn "expected %s, loaded with driver: %s" dv (.getClass d)))
@@ -874,7 +917,7 @@
                (safeGetConn jdbc)
                (DriverManager/getConnection url))]
     (when (nil? conn)
-      (mkDbioError (str "Failed to create db connection: " url)))
+      (throwDBError (str "Failed to create db connection: " url)))
     (doto conn
       (.setTransactionIsolation Connection/TRANSACTION_SERIALIZABLE))))
 
@@ -1081,7 +1124,7 @@
             (.getConnection impl)
           (catch Throwable e#
             (log/error e# "")
-            (mkDbioError (str "No free connection"))))))))
+            (throwDBError (str "No free connection"))))))))
 
       ;;Object
       ;;Clojure CLJ-1347
@@ -1314,7 +1357,7 @@
         fid (:fkey ac)
         fv (:rowid (meta lhsObj))]
     (if (nil? ac)
-      (mkDbioError "Unknown assoc " (:as ctx))
+      (throwDBError "Unknown assoc " (:as ctx))
       [ sqlr (or rt (:other ac)) {fid fv} ])))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -1329,7 +1372,7 @@
         ac (dbioGetAssoc mcache mcz (:as ctx))
         fv (:rowid (meta lhsObj))
         fid (:fkey ac) ]
-    (when (nil? ac) (mkDbioError "Unknown assoc " (:as ctx)))
+    (when (nil? ac) (throwDBError "Unknown assoc " (:as ctx)))
     (let [x (-> (dbioCreateObj (getTypeId rhsObj))
                 (dbioSetFld fid fv)
                 (vary-meta mergeMeta (concise rhsObj)))
@@ -1383,7 +1426,7 @@
         rt (:cast ctx)
         rp (or rt (:other ac))
         fid (:fkey ac) ]
-    (when (nil? ac)(mkDbioError "Unknown assoc " (:as ctx)))
+    (when (nil? ac)(throwDBError "Unknown assoc " (:as ctx)))
     (if (:cascade ac)
       (.exec sqlr (str "delete from "
                        (gtable (mcache rp))
@@ -1426,7 +1469,7 @@
         fv (:rowid (meta lhsObj))
         rt (:cast ctx)
         fid (:fkey ac) ]
-    (when (nil? ac) (mkDbioError "Unknown assoc " (:as ctx)))
+    (when (nil? ac) (throwDBError "Unknown assoc " (:as ctx)))
     (let [y (.findOne sqlr
                       (or rt (:other ac))
                       { fid fv } ) ]
@@ -1497,7 +1540,7 @@
                 (:column (:rhs-oid flds)) (:column (:rhs-typeid flds)) ]
               [ (:column (:rhs-oid flds)) (:column (:rhs-typeid flds))
                 (:column (:lhs-oid flds)) (:column (:lhs-typeid flds)) ]) ]
-      (when (nil? ac) (mkDbioError "Unkown assoc " (:as ctx)))
+      (when (nil? ac) (throwDBError "Unkown assoc " (:as ctx)))
       (if (nil? rhsObj)
         (.exec sqlr
                (str "delete from "
@@ -1536,7 +1579,7 @@
         (if (= ml lid)
           [:lhs-typeid :rhs-typeid :lhs-oid :rhs-oid ml rl]
           [:rhs-typeid :lhs-typeid :rhs-oid :lhs-oid rl ml] ) ]
-    (when (nil? ac) (mkDbioError "Unknown assoc " (:as ctx)))
+    (when (nil? ac) (throwDBError "Unknown assoc " (:as ctx)))
     (.select sqlr
              t
              (str "select distinct "

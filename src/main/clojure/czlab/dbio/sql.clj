@@ -233,7 +233,7 @@
     Calendar (.setTimestamp ps pos
                             (Timestamp. (.getTimeInMillis ^Calendar p))
                             (gmtCal))
-    (mkDbioError (str "Unsupported param type: " (type p)))))
+    (throwDBError (str "Unsupported param type: " (type p)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -471,7 +471,7 @@
                 (partial row2Obj
                          (partial modelInjtor mcz))
                 #(postFmtModelRow model %))
-    (mkDbioError (str "Unknown model " model))))
+    (throwDBError (str "Unknown model " model))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -533,7 +533,7 @@
                    (ese (dbTablename mcz))
                    " WHERE "
                    (fmtUpdateWhere mcz)) [(:rowid info)])
-      (mkDbioError (str "Unknown model " m)))))
+      (throwDBError (str "Unknown model " m)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -560,13 +560,13 @@
                       pms
                       {:pkey (dbColname :rowid mcz)})]
             (if (empty? out)
-              (mkDbioError (str "Insert requires row-id to be returned."))
+              (throwDBError (str "Insert requires row-id to be returned."))
               (log/debug "Exec-with-out %s" out))
             (let [wm {:rowid (:1 out) } ]
               (when-not (number? (:rowid wm))
-                (mkDbioError (str "RowID data-type must be a Long.")))
+                (throwDBError (str "RowID data-type must be a Long.")))
               (vary-meta obj mergeMeta wm)))))
-      (mkDbioError (str "Unknown model " m)))))
+      (throwDBError (str "Unknown model " m)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -592,7 +592,7 @@
                        sb1 " WHERE " (fmtUpdateWhere mcz))
                   (conj pms (:rowid info)))
           0))
-      (mkDbioError (str "Unknown model " m)))))
+      (throwDBError (str "Unknown model " m)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
