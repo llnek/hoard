@@ -47,6 +47,8 @@ public interface SQLr {
 
   public Object  metas();
 
+  public String escId(String s);
+
 }
 
 

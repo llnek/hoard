@@ -104,22 +104,6 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defn canAssignFrom?
-
-  "Check if cur type is a subclass of the root type"
-
-  [root cur]
-
-  {:pre [(keyword? root) (map? cur)]}
-
-  (loop [t cur]
-    (cond
-      (= root t) true
-      (nil? t) false
-      :else (recur (:parent cur)))))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;
 (defn ese
 
   "Escape string entity for sql"
@@ -127,6 +111,32 @@
   (^String [c1 ent c2] {:pre [(some? ent)]} (str c1 (uc-ent ent) c2))
   (^String [ent] (ese "" ent ""))
   (^String [ch ent] (ese ch ent ch)))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
+(defn gtable
+
+  "Get the table name (escaped) of this model"
+
+  ^String
+  [model]
+
+  {:pre [(map? model)]}
+
+  (ese (:table model)))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
+(defn gcolumn
+
+  "Get the column name (escaped) of this field"
+
+  ^String
+  [field]
+
+  {:pre [(map? field)]}
+
+  (ese (:column field)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; have to be function , not macro as this is passed into another higher
@@ -333,7 +343,7 @@
     :indexes {}
     :uniques {}
     :fields {}
-    :rels {} }))
+    :assocs {} }))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -410,7 +420,7 @@
   {:pre [(map? pojo)
          (keyword? lhs) (keyword? rhs)]}
 
-  (let [a2 (merge (:rels pojo)
+  (let [a2 (merge (:assocs pojo)
                   {:lhs {:kind :MXM
                          :other lhs
                          :fkey :lhs_rowid}
@@ -418,7 +428,7 @@
                          :other rhs
                          :fkey :rhs_rowid} }) ]
     (-> pojo
-        (assoc :rels a2)
+        (assoc :assocs a2)
         (assoc :mxm true))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -547,7 +557,7 @@
              ;;else
              (throwDBError (str "Invalid assoc def " adef)))
         k (keyword aid)]
-    (interject pojo :rels #(assoc (%2 %1) k a2))))
+    (interject pojo :assocs #(assoc (%2 %1) k a2))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -677,7 +687,7 @@
     ;; as we find new assoc fields,
     ;; add them to the placeholder maps
     (doseq [m (vals ms)]
-      (doseq [s (vals (:rels m))
+      (doseq [s (vals (:assocs m))
               :let [rid (:other s)
                     k (:kind s)
                     fid (:fkey s)]
@@ -1328,7 +1338,7 @@
   [cache model-def id]
 
   (when (some? model-def)
-    (let [rc ((:rels model-def) id)]
+    (let [rc ((:assocs model-def) id)]
       (if (nil? rc)
         (dbioGetAssoc cache (cache (:parent model-def)) id)
         rc))))
@@ -1489,8 +1499,8 @@
         mcz (mcache lid)
         ac (dbioGetAssoc mcache mcz (:as ctx))
         mm (mcache (:joined ac))
-        rl (:other (:rhs (:rels mm)))
-        ml (:other (:lhs (:rels mm)))
+        rl (:other (:rhs (:assocs mm)))
+        ml (:other (:lhs (:assocs mm)))
         x (dbioCreateObj (:id mm))
         y  (if (= ml lid)
               (-> x
@@ -1522,8 +1532,8 @@
           ac (dbioGetAssoc mcache mcz (:as ctx))
           mm (mcache (:joined ac))
           flds (:fields (meta mm))
-          rl (:other (:rhs (:rels mm)))
-          ml (:other (:lhs (:rels mm)))
+          rl (:other (:rhs (:assocs mm)))
+          ml (:other (:lhs (:assocs mm)))
           [x y a b]
           (if (= ml lid)
               [ (:column (:lhs-oid flds)) (:column (:lhs-typeid flds))
@@ -1549,62 +1559,50 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defn- selectSide
-
-  ""
-  [mxm oid]
-
-  (let [rhs (get-in mxm [:rels :rhs])
-        lhs (get-in mxm [:rels :lhs])
-        rt (:other rhs)
-        lf (:other lhs)]
-    (cond
-      (canAssignFrom? rt oid)
-      [:rhs-oid :lhs-oid lf]
-      (canAssignFrom? lf oid)
-      [:lhs-oid :rhs-oid rt]
-      (throwDBError "Failed to match relation"))))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;
 (defn dbioGetM2M
 
   ""
 
-  [ctx obj]
+  [ctx lhsObj]
 
-  {:pre [(map? ctx)(map? obj)]}
+  {:pre [(map? ctx)(map? lhsObj)]}
 
-  (let [eseRS (.escId sqlr "RES")
-        eseMM (.escId sqlr "MM")
+  (let [lid (:typeid (meta lhsObj))
+        lv (:rowid (meta lhsObj))
         ^SQLr sqlr (:with ctx)
-        oid (getTypeId obj)
+        eseRES (.escId sqlr "RES")
+        eseMM (.escId sqlr "MM")
         metas (.metas sqlr)
-        jon (:joined ctx)]
-    (if-let [mm (metas jon)]
-      (let [[ck tk t] (selectSide mm oid)
-            fs (:fields mm)
-            tm (metas t)]
-        (when (nil? tm)
-          (throwDBError (format "Unknown model %s" t)))
-        (.select
-          sqlr
-          (or (:cast ctx) t)
-          (format
-            (str "SELECT DISTINCT %s.* FROM %s %s "
-                 "JOIN %s %s ON "
-                 "%s.%s=? AND %s.%s=%s.%s"),
-            eseRS
-            (.escId sqlr (dbTablename tm))
-            eseRS
-            (.escId sqlr (dbTablename mm))
-            eseMM
-            eseMM (.escId sqlr (dbColname (ck fs)))
-            eseMM
-            eseMM (.escId sqlr (dbColname (tk fs)))
-            eseRS (.escId sqlr (dbColname (:rowid fs))))
-          [ (:rowid (meta obj)) ]))
-      (throwDBError "Unknown joined model " jon))))
+        mcz (metas lid)
+        ac (dbioGetAssoc metas mcz (:as ctx))]
+    (if (nil? ac)
+      (throwDBError "Unknown assoc " (:as ctx))
+      (let
+        [mm (metas (:joined ac))
+         flds (:fields (meta mm))
+         rl (get-in mm [:assocs :rhs :other])
+         ml (get-in mm [:assocs :lhs :other])
+         [x y z k a t]
+         (case lid
+           ml [:lhs-typeid :rhs-typeid :lhs-oid :rhs-oid ml rl]
+           rl [:rhs-typeid :lhs-typeid :rhs-oid :lhs-oid rl ml]
+           (throwDBError "")) ]
+        (.select sqlr
+                 t
+                 (str "select distinct "
+                      eseRES
+                      ".* from "
+                      (gtable (metas t))
+                      " " eseRES " join " (gtable mm) " " eseMM " on "
+                      (str eseMM "." (ese (:column (x flds))))
+                      "=? and "
+                      (str eseMM "." (ese (:column (y flds))))
+                      "=? and "
+                      (str eseMM "." (ese (:column (z flds))))
+                      "=? and "
+                      (str eseMM "." (ese (:column (k flds))))
+                      " = " (str eseRES "." (ese (:column (:rowid flds)))))
+                 [ (stripNSPath a) (stripNSPath t) lv ])))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;EOF

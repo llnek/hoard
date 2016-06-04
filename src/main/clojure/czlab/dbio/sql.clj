@@ -651,6 +651,8 @@
                                (doExtraSQL s extraSQL) [] model)))]
           (runc (getc db) func)))
 
+      (escId [_ s] (ese "" s ""))
+
       (metas [_] metaz)
 
       (update [_ obj]
