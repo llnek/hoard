@@ -1509,21 +1509,22 @@
 ;;
 (defn dbioClrM2M
 
-  ([ctx lhsObj] (dbioClrM2M ctx lhsObj nil))
+  ""
 
-  ([ctx lhsObj rhsObj]
+  ([ctx obj] (dbioClrM2M ctx obj nil))
+
+  ([ctx objA objB]
     (let [^SQLr sqlr (:with ctx)
-          mcache (.metas sqlr)
-          rv (:rowid (meta rhsObj))
-          lv (:rowid (meta lhsObj))
-          lid (getTypeId lhsObj)
-          rid (getTypeId rhsObj)
-          mcz (mcache lid)
-          ac (dbioGetAssoc mcache mcz (:as ctx))
-          mm (mcache (:joined ac))
+          metas (.metas sqlr)
+          rv (:rowid (meta objA))
+          lv (:rowid (meta objB))
+          lid (getTypeId objA)
+          rid (getTypeId objB)
+          jon (:joined ctx)
+          mm (metas jon)
           flds (:fields (meta mm))
-          rl (:other (:rhs (:rels mm)))
-          ml (:other (:lhs (:rels mm)))
+          rl (get-in mm [:rels :rhs])
+          ml (get-in mm [:rels :lhs])
           [x y a b]
           (if (= ml lid)
               [ (:column (:lhs-oid flds)) (:column (:lhs-typeid flds))
@@ -1602,7 +1603,7 @@
             eseMM (.escId sqlr (dbColname (ck fs)))
             eseMM
             eseMM (.escId sqlr (dbColname (tk fs)))
-            eseRS (.escId sqlr (dbColname (:rowid fs))))
+            eseRS (.escId sqlr COL_ROWID))
           [ (:rowid (meta obj)) ]))
       (throwDBError "Unknown joined model " jon))))
 
