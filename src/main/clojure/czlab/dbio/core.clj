@@ -51,6 +51,7 @@
              sname
              lcase
              ucase
+             strimAny
              strim
              embeds?
              addDelim!
@@ -1162,51 +1163,54 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defn- splitLines ""
+(defn- splitLines
+
+  ""
 
   [^String lines]
 
-  (with-local-vars
-    [w (.length DDL_SEP)
-     rc []
-     s2 lines]
-    (loop [sum (transient [])
-           ddl lines
-           pos (.indexOf ddl DDL_SEP)]
-      (if (< pos 0)
-        (do (var-set rc (persistent! sum))
-            (var-set s2 (strim ddl)))
-        (let [nl (strim (.substring ddl 0 pos))
-              d2 (.substring ddl (+ pos @w))
-              p2 (.indexOf d2 DDL_SEP) ]
-          (recur (conj! sum nl) d2 p2))))
-    (if (hgl? @s2)
-      (conj @rc @s2)
-      @rc)))
+  (let [w (.length DDL_SEP)]
+    (with-local-vars [sum (transient [])
+                      s2 lines]
+      (loop [ddl lines
+             pos (.indexOf ddl DDL_SEP)]
+        (if (< pos 0)
+          (var-set s2 (strim ddl))
+          (let [a (.substring ddl 0 pos)
+                b (.substring ddl (+ pos w))]
+            (->> (conj! @sum (strim a))
+                 (var-set sum ))
+            (recur b (.indexOf b DDL_SEP)))))
+      (persistent!
+        (if (hgl? @s2)
+          (conj! @sum @s2)
+          @sum)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defn- maybeOK ""
+(defn- maybeOK
+
+  ""
 
   [^String dbn ^Throwable e]
 
-  (let [oracle (embeds? (str dbn) "oracle")
-        ee (rootCause e)
-        ec (when (instance? SQLException ee)
-             (.getErrorCode ^SQLException ee)) ]
-    (if (nil? ec)
-      (throw e)
+  (if-let [ee (->> (rootCause e)
+                   (cast? SQLException ))]
+    (let [ec (.getErrorCode
+               ^SQLException ee)]
       (cond
-        (and oracle (== 942 ec)
+        (and (embeds? (str dbn) "oracle")
+             (== 942 ec)
              (== 1418 ec)
              (== 2289 ec)(== 0 ec))
         true
         :else
-        (throw e)))))
+        (throw e)))
+    (throw e)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defmulti uploadDdl "Upload DDL to DB" (fn [a b] (class a)))
+(defmulti uploadDdl "Upload DDL to DB" class)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -1232,14 +1236,15 @@
 
   [^Connection conn ^String ddl]
 
+  {:pre [(some? conn)] }
+
   (log/debug "\n%s" ddl)
   (let [dbn (lcase (-> (.getMetaData conn)
                        (.getDatabaseProductName)))
         lines (splitLines ddl) ]
     (.setAutoCommit conn true)
-    (doseq [^String line (seq lines)
-            :let
-            [ln (StringUtils/strip (strim line) ";")]
+    (doseq [^String s (seq lines)
+            :let [ln (strimAny s ";" true)]
             :when (and (hgl? ln)
                        (not= (lcase ln) "go"))]
       (try
@@ -1255,35 +1260,37 @@
   "Creates a blank object of the given type
    model : keyword, the model type id"
 
-  [model-id]
+  [model]
 
-  {:pre [(keyword? model-id)]}
+  {:pre [(keyword? model)]}
 
-  (with-meta {} { :typeid model-id } ))
+  (with-meta {} { :typeid model } ))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defn dbioSetFlds
+(defn dbioSetFlds*
 
   "Set many field values"
 
   [pojo fld value & fvs]
 
+  {:pre [(or (empty? rvs)
+             (even? (count rvs)))]}
+
   (apply assoc pojo fld value fvs))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defn dbioSetFld
+(defn dbioSetFlds
 
   "Set many field values"
 
   [pojo fvs]
 
-  {:pre [(map? fvs)]}
+  {:pre [(map? pojo) (coll? fvs)]}
 
-  (if-not (empty? fvs)
-    (let [a (flatten (seq fvs))]
-      (apply dbioSetFlds pojo (first a)(second a) (drop 2 a)))
+  (if-let [a (seq rvs)]
+    (apply dbioSetFlds* pojo (first a)(second a) (drop 2 a))
     pojo))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -1293,6 +1300,8 @@
   "Set value to a field"
 
   [pojo fld value]
+
+  {:pre [(map? pojo) (:keyword? fld)]}
 
   (assoc pojo fld value))
 
@@ -1304,6 +1313,8 @@
 
   [pojo fld]
 
+  {:pre [(map? pojo) (:keyword? fld)]}
+
   (dissoc pojo fld))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -1313,6 +1324,8 @@
   "Get value of a field"
 
   [pojo fld]
+
+  {:pre [(map? pojo) (:keyword? fld)]}
 
   (get pojo fld))
 
@@ -1325,13 +1338,14 @@
    mcz : the model
    id : assoc id"
 
-  [cache model-def id]
+  [metas model id kind]
 
-  (when (some? model-def)
-    (let [rc ((:rels model-def) id)]
-      (if (nil? rc)
-        (dbioGetAssoc cache (cache (:parent model-def)) id)
-        rc))))
+  (when (some? model)
+    (let [rc ((:rels model) id)]
+      (if (and (some? rc)
+               (= (:kind rc) kind))
+        rc
+        (dbioGetAssoc metas (metas (:parent model)) id kind)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; handling assocs
@@ -1404,31 +1418,6 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defn dbioClrO2M ""
-
-  [ctx lhsObj]
-
-  (let [^SQLr sqlr (:with ctx)
-        mcache (.metas sqlr)
-        mcz (mcache (getTypeId lhsObj))
-        ac (dbioGetAssoc mcache mcz (:as ctx))
-        fv (:rowid (meta lhsObj))
-        rt (:cast ctx)
-        rp (or rt (:other ac))
-        fid (:fkey ac) ]
-    (when (nil? ac)(throwDBError "Unknown assoc " (:as ctx)))
-    (if (:cascade ac)
-      (.exec sqlr (str "delete from "
-                       (gtable (mcache rp))
-                       " where " (ese fid) " = ?") [fv])
-      (.exec sqlr (str "update "
-                       (gtable (mcache rp))
-                       " set " (ese fid) " = NULL "
-                       " where " (ese fid) " = ?") [fv]))
-    lhsObj))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;
 (defn dbioGetO2O
 
   "One to one assocs"
@@ -1440,37 +1429,87 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defn dbioSetO2O ""
+(defn dbioSetO2O
+
+  ""
 
   [ctx lhsObj rhsObj]
+
+  {:pre [(map? ctx) (map? lhsObj) (map? rhsObj)]}
 
   (dbio-set-o2x ctx lhsObj rhsObj))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defn dbioClrO2O ""
+(defn dbio-clr-o2x
+
+  ""
+
+  [ctx objA kind]
+
+  (let [^SQLr sqlr (:with ctx)
+        metas (.metas sqlr)
+        ta (getTypeId objA)
+        mA (metas ta)]
+    (if-let [ac (dbioGetAssoc
+                  metas
+                  mA (:as ctx))]
+      (let [rt (or (:cast ctx)
+                   (:other ac))
+            mB (metas rt)
+            tn (dbTablename mB)
+            cn (dbColname (:fkey ac) mB)]
+        (.exec
+          sqlr
+          (if (:cascade ac)
+            (format
+              "DELETE FROM %s WHERE %s=?"
+              (.escId sqlr tn)
+              (.escId sqlr cn))
+            (format
+              "UPDATE %s SET %s= NULL WHERE %s=?"
+              (.escId sqlr tn)
+              (.escId sqlr cn)
+              (.escId sqlr cn)))
+          [(:rowid objA)])
+        objA)
+      (throwDBError "Unknown assoc " (:as ctx)))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
+(defn dbioClrO2M
+
+  ""
 
   [ctx lhsObj]
 
-  (let [^SQLr sqlr (:with ctx)
-        mcache (.metas sqlr)
-        mcz (mcache (getTypeId lhsObj))
-        ac (dbioGetAssoc mcache mcz (:as ctx))
-        fv (:rowid (meta lhsObj))
-        rt (:cast ctx)
-        fid (:fkey ac) ]
-    (when (nil? ac) (throwDBError "Unknown assoc " (:as ctx)))
-    (let [y (.findOne sqlr
-                      (or rt (:other ac))
-                      { fid fv } ) ]
-      (when (some? y)
-        (let [x (vary-meta (-> (dbioCreateObj (getTypeId y))
-                               (dbioSetFld fid nil))
-                            mergeMeta (meta y))]
-          (if (:cascade ac)
-            (.delete sqlr x)
-            (.update sqlr x)))))
-    lhsObj))
+  {:pre [(map? ctx) (map? lhsObj)]}
+
+  (dbio-clr-o2x ctx lhsObj :O2M))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
+(defn dbioClrO2O
+
+  ""
+
+  [ctx lhsObj]
+
+  {:pre [(map? ctx) (map? lhsObj)]}
+
+  (dbio-clr-o2x ctx lhsObj :O2O))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
+(defn- xrefColType
+
+  ""
+  [col]
+
+  (case col
+    :rhs-oid :rhs-typeid
+    :lhs-oid :lhs-typeid
+    (throwDBError (str "Invaid column key " col))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -1478,32 +1517,22 @@
 
   "Many to many assocs"
 
-  [ctx lhsObj rhsObj]
+  [ctx objA objB]
+
+  {:pre [(map? objA) (map? objB)]}
 
   (let [^SQLr sqlr (:with ctx)
-        mcache (.metas sqlr)
-        rv (:rowid (meta rhsObj))
-        lv (:rowid (meta lhsObj))
-        lid (getTypeId lhsObj)
-        rid (getTypeId rhsObj)
-        mcz (mcache lid)
-        ac (dbioGetAssoc mcache mcz (:as ctx))
-        mm (mcache (:joined ac))
-        rl (:other (:rhs (:rels mm)))
-        ml (:other (:lhs (:rels mm)))
-        x (dbioCreateObj (:id mm))
-        y  (if (= ml lid)
-              (-> x
-                  (dbioSetFld :lhs-typeid (stripNSPath lid))
-                  (dbioSetFld :lhs-oid lv)
-                  (dbioSetFld :rhs-typeid (stripNSPath rid))
-                  (dbioSetFld :rhs-oid rv))
-              (-> x
-                  (dbioSetFld :lhs-typeid (stripNSPath rid))
-                  (dbioSetFld :lhs-oid rv)
-                  (dbioSetFld :rhs-typeid (stripNSPath lid))
-                  (dbioSetFld :rhs-oid lv))) ]
-    (.insert sqlr y)))
+        metas (.metas sqlr)
+        jon (:joined ctx)]
+    (if-let [mm (metas jon)]
+      (let [[ck tk t] (selectSide mm (:as ctx))
+            x (-> (dbioCreateObj (:id mm))
+                  (dbioSetFld ck (:rowid objA))
+                  (dbioSetFld tk (:rowid objB))
+                  (dbioSetFld (xrefColType ck) (getTypeId objA))
+                  (dbioSetFld (xrefColType tk) (getTypeId objB)))]
+        (.insert sqlr x))
+      (when (nil? ac) (throwDBError "Unkown assoc " (:as ctx))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -1516,55 +1545,43 @@
   ([ctx objA objB]
     (let [^SQLr sqlr (:with ctx)
           metas (.metas sqlr)
-          rv (:rowid (meta objA))
-          lv (:rowid (meta objB))
-          lid (getTypeId objA)
-          rid (getTypeId objB)
-          jon (:joined ctx)
-          mm (metas jon)
-          flds (:fields (meta mm))
-          rl (get-in mm [:rels :rhs])
-          ml (get-in mm [:rels :lhs])
-          [x y a b]
-          (if (= ml lid)
-              [ (:column (:lhs-oid flds)) (:column (:lhs-typeid flds))
-                (:column (:rhs-oid flds)) (:column (:rhs-typeid flds)) ]
-              [ (:column (:rhs-oid flds)) (:column (:rhs-typeid flds))
-                (:column (:lhs-oid flds)) (:column (:lhs-typeid flds)) ]) ]
-      (when (nil? ac) (throwDBError "Unkown assoc " (:as ctx)))
-      (if (nil? rhsObj)
-        (.exec sqlr
-               (str "delete from "
-                    (gtable mm)
-                    " where " (ese x) " =? and " (ese y) " =?")
-               [ lv (stripNSPath lid) ] )
-        (.exec sqlr
-               (str "delete from "
-                    (gtable mm)
-                    " where " (ese x) " =? and " (ese y) " =? and "
-                    (ese a)
-                    " =? and "
-                    (ese b)
-                    " =?" )
-               [ lv (stripNSPath lid) rv (stripNSPath rid) ])) )))
+          jon (:joined ctx)]
+      (if-let [mm (metas jon)]
+        (let [[ck tk t] (selectSide mm (:as ctx))
+              fs (:fields (meta mm))]
+          (if (nil? objB)
+            (.exec sqlr
+                   (format
+                     "DELETE FROM %s WHERE %s=?"
+                     (.escId sqlr (dbTablename mm))
+                     (.escId sqlr (DbColname (fs ck))))
+               [ (:rowid objA) ] )
+            (.exec sqlr
+                   (format
+                     "DELETE FROM %s WHERE %s=? AND %s=?"
+                     (.escId sqlr (dbTablename mm))
+                     (.escId sqlr (DbColname (fs ck)))
+                     (.escId sqlr (DbColname (fs tk))))
+                     [ (:rowid objA) (:rowid objB) ])) )
+        (when (nil? ac) (throwDBError "Unkown assoc " (:as ctx)))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defn- selectSide
 
   ""
-  [mxm oid]
+  [mxm side]
 
   (let [rhs (get-in mxm [:rels :rhs])
         lhs (get-in mxm [:rels :lhs])
         rt (:other rhs)
         lf (:other lhs)]
-    (cond
-      (canAssignFrom? rt oid)
+    (case side
+      :right
       [:rhs-oid :lhs-oid lf]
-      (canAssignFrom? lf oid)
+      :left
       [:lhs-oid :rhs-oid rt]
-      (throwDBError "Failed to match relation"))))
+      (throwDBError (str "Invaid side " side)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -1576,35 +1593,35 @@
 
   {:pre [(map? ctx)(map? obj)]}
 
-  (let [eseRS (.escId sqlr "RES")
-        eseMM (.escId sqlr "MM")
-        ^SQLr sqlr (:with ctx)
-        oid (getTypeId obj)
+  (let [^SQLr sqlr (:with ctx)
+        RS (.escId sqlr "RES")
+        MM (.escId sqlr "MM")
         metas (.metas sqlr)
         jon (:joined ctx)]
     (if-let [mm (metas jon)]
-      (let [[ck tk t] (selectSide mm oid)
+      (let [[ck tk t] (selectSide mm (:as ctx))
+            t2 (or (:cast ctx) t)
             fs (:fields mm)
-            tm (metas t)]
+            tm (metas t2)]
         (when (nil? tm)
-          (throwDBError (format "Unknown model %s" t)))
+          (throwDBError (format "Unknown model %s" t2)))
         (.select
           sqlr
-          (or (:cast ctx) t)
+          t2
           (format
             (str "SELECT DISTINCT %s.* FROM %s %s "
                  "JOIN %s %s ON "
                  "%s.%s=? AND %s.%s=%s.%s"),
-            eseRS
+            RS
             (.escId sqlr (dbTablename tm))
-            eseRS
+            RS
             (.escId sqlr (dbTablename mm))
-            eseMM
-            eseMM (.escId sqlr (dbColname (ck fs)))
-            eseMM
-            eseMM (.escId sqlr (dbColname (tk fs)))
-            eseRS (.escId sqlr COL_ROWID))
-          [ (:rowid (meta obj)) ]))
+            MM
+            MM (.escId sqlr (dbColname (ck fs)))
+            MM
+            MM (.escId sqlr (dbColname (tk fs)))
+            RS (.escId sqlr COL_ROWID))
+          [ (:rowid obj) ]))
       (throwDBError "Unknown joined model " jon))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
