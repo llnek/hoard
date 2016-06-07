@@ -38,14 +38,21 @@
   (:use [czlab.dbio.core])
 
   (:import
-    [java.util Calendar GregorianCalendar TimeZone]
+    [java.util
+     Calendar
+     TimeZone
+     GregorianCalendar]
     [czlab.dbio
-     MetaCache
+     Schema
      SQLr
      DBIOError
      OptLockError]
-    [java.math BigDecimal BigInteger]
-    [java.io Reader InputStream]
+    [java.math
+     BigDecimal
+     BigInteger]
+    [java.io
+     Reader
+     InputStream]
     [czlab.dbio DBAPI]
     [czlab.xlib XData]
     [java.sql
@@ -72,9 +79,9 @@
   ""
 
   ^String
-  [model]
+  [^Connection conn model]
 
-  (str (ese (dbColname :rowid model)) "=?"))
+  (str (fmtSQLIdStr conn (dbColname :rowid model)) "=?"))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -89,11 +96,11 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defn sqlFilterClause
+(defn- sqlFilterClause
 
   "[sql-filter-string, values]"
 
-  [model filters]
+  [^Connection conn model filters]
 
   (let
     [flds (:fields (meta model))
@@ -103,14 +110,15 @@
                  c (if (nil? fld)
                      (sname k)
                      (:column fld))]
-             (addDelim! %1
-                        " AND "
-                        (str (ese c)
-                             (if (nil? (last %2))
-                               " IS NULL "
-                               " =? "))))
+             (addDelim!
+               %1
+               " AND "
+               (str (fmtSQLIdStr conn c)
+                    (if (nil? (last %2))
+                      " IS NULL "
+                      " =? "))))
           (StringBuilder.)
-          (seq filters))]
+          filters)]
     [(str wc) (flattenNil (vals filters))]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -174,7 +182,7 @@
 
   [row cn ct cv]
 
-  (assoc! row (keyword (ucase cn)) cv))
+  (assoc! row (keyword cn) cv))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -272,7 +280,7 @@
   (let [sql (strim sqlstr)
         lcs (lcase sql)
         v (.vendor db)]
-    (if (= :sqlserver (:id v))
+    (if (= SQLServer (:id v))
       (cond
         (.startsWith lcs "select")
         (mssqlTweakSqlstr sql :where "NOLOCK")
@@ -385,7 +393,7 @@
 
   "Format sql string for insert"
 
-  [obj flds]
+  [^Connection conn obj flds]
 
   (with-local-vars [ps (transient []) ]
     (let [sb2 (StringBuilder.)
@@ -395,7 +403,7 @@
         (when (and (some? fdef)
                    (not (:auto fdef))
                    (not (:system fdef)))
-          (addDelim! sb1 "," (ese (dbColname fdef)))
+          (addDelim! sb1 "," (fmtSQLIdStr conn (dbColname fdef)))
           (addDelim! sb2 "," (if (nil? v) "NULL" "?"))
           (when (some? v)
             (var-set ps (conj! @ps v)))))
@@ -407,7 +415,7 @@
 
   "Format sql string for update"
 
-  [obj flds]
+  [^Connection conn obj flds]
 
   (with-local-vars [ps (transient []) ]
     (let [sb1 (StringBuilder.)]
@@ -418,7 +426,7 @@
                    (not (:auto fdef))
                    (not (:system fdef)))
           (doto sb1
-            (addDelim! "," (ese (dbColname fdef)))
+            (addDelim! "," (fmtSQLIdStr conn (dbColname fdef)))
             (.append (if (nil? v) "=NULL" "=?")))
           (when (some? v)
             (var-set ps (conj! @ps v)))))
@@ -432,11 +440,7 @@
 
   [model obj]
 
-  (let [mm (merge {:typeid model}
-                  (select-keys obj [:rowid :last-modify])) ]
-    (with-meta (-> obj
-                   (dbioClrFld :rowid)
-                   (dbioClrFld :last-modify)) mm)))
+  (with-meta obj {:model model}))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -496,7 +500,7 @@
                  metas
                  conn
                  (str "SELECT COUNT(*) FROM "
-                      (ese (dbTablename model metas)))
+                      (fmtSQLIdStr conn (dbTablename model metas)))
                  [])]
     (if (empty? rc)
       0
@@ -511,7 +515,7 @@
   [db metas conn model]
 
   (let [sql (str "DELETE FROM "
-                 (ese (dbTablename model metas))) ]
+                 (fmtSQLIdStr conn (dbTablename model metas))) ]
     (sqlExec db conn sql [])
     nil))
 
@@ -521,19 +525,18 @@
 
   ""
 
-  [db metas conn obj]
+  [db schema conn obj]
 
-  (let [info (meta obj)
-        m (:typeid info)]
-    (if-let [mcz (metas m) ]
-      (doExec db
-              metas
-              conn
-              (str "DELETE FROM "
-                   (ese (dbTablename mcz))
-                   " WHERE "
-                   (fmtUpdateWhere mcz)) [(:rowid info)])
-      (throwDBError (str "Unknown model " m)))))
+  (if-let [mcz (:model (meta obj))]
+    (doExec db
+            schema
+            conn
+            (str "DELETE FROM "
+                 (fmtSQLIdStr conn (dbTablename mcz))
+                 " WHERE "
+                 (fmtUpdateWhere conn mcz))
+            [(:rowid obj)])
+    (throwDBError (str "Unknown model for " obj))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -541,24 +544,21 @@
 
   ""
 
-  [db metas conn obj]
+  [db schema conn obj]
 
-  (let [info (meta obj)
-        m (:typeid info)
-        mcz (metas m) ]
-    (if-let [mcz (metas m)]
-      (let [[s1 s2 pms]
-            (insertFlds obj (:fields (meta mcz)))]
-        (when (hgl? s1)
-          (let [out (doExecWithOutput
-                      db
-                      metas
-                      conn
-                      (str "INSERT INTO "
-                           (ese (dbTablename mcz))
-                           "(" s1 ") VALUES (" s2 ")")
-                      pms
-                      {:pkey (dbColname :rowid mcz)})]
+  (if-let [mcz (:model (meta obj))]
+    (let [[s1 s2 pms]
+          (insertFlds conn obj (:fields (meta mcz)))]
+      (when (hgl? s1)
+        (let [out (doExecWithOutput
+                    db
+                    schema
+                    conn
+                    (str "INSERT INTO "
+                         (fmtSQLIdStr conn (dbTablename mcz))
+                         "(" s1 ") VALUES (" s2 ")")
+                    pms
+                    {:pkey (dbColname :rowid mcz)})]
             (if (empty? out)
               (throwDBError (str "Insert requires row-id to be returned."))
               (log/debug "Exec-with-out %s" out))
@@ -566,7 +566,7 @@
               (when-not (number? (:rowid wm))
                 (throwDBError (str "RowID data-type must be a Long.")))
               (vary-meta obj mergeMeta wm)))))
-      (throwDBError (str "Unknown model " m)))))
+      (throwDBError (str "Unknown model for " obj))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -574,25 +574,26 @@
 
   ""
 
-  [db metas conn obj]
+  [db schema conn obj]
 
-  (let [info (meta obj)
-        m (:typeid info)]
-    (if-let [mcz (metas m)]
-      (let [[sb1 pms]
-            (updateFlds obj
-                        (:fields (meta mcz)))]
-        (if (hgl? sb1)
-          (doExec db
-                  metas
-                  conn
-                  (str "UPDATE "
-                       (ese (dbTablename mcz))
-                       " SET "
-                       sb1 " WHERE " (fmtUpdateWhere mcz))
-                  (conj pms (:rowid info)))
-          0))
-      (throwDBError (str "Unknown model " m)))))
+  (if-let [mcz (:model (meta obj))]
+    (let [[sb1 pms]
+          (updateFlds conn
+                      obj
+                      (:fields (meta mcz)))]
+      (if (hgl? sb1)
+        (doExec db
+                metas
+                conn
+                (str "UPDATE "
+                     (fmtSQLIdStr conn (dbTablename mcz))
+                     " SET "
+                     sb1
+                     " WHERE "
+                     (fmtUpdateWhere conn mcz))
+                (conj pms (:rowid info)))
+        0))
+    (throwDBError (str "Unknown model for " obj))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;

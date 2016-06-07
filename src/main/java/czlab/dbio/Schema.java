@@ -19,8 +19,9 @@ package czlab.dbio;
 /**
  * @author kenl
  */
-@FunctionalInterface public interface Schema {
+public interface Schema {
   public Iterable<?> getModels();
+  public Object get(Object id);
 }
 
 

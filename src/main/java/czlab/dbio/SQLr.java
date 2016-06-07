@@ -45,7 +45,7 @@ public interface SQLr {
 
   public void purge(Object modeldef);
 
-  public Object  metas();
+  public Schema  metas();
 
   public String escId(String s);
 

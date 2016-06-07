@@ -20,7 +20,7 @@
   (:import
     [czlab.dbio
      DBAPI
-     MetaCache
+     Schema
      JDBCPool
      JDBCInfo
      DBIOLocal
@@ -47,8 +47,9 @@
 
   [^JDBCInfo jdbc options]
 
-  (let [^Map c (-> (DBIOLocal/getCache)
-                   (.get))
+  (let [^Map
+        c (-> (DBIOLocal/getCache)
+              (.get))
         hc (.getId jdbc)]
     (when-not (.containsKey c hc)
       (log/debug "No db-pool in DBIO-thread-local, creating one")
@@ -67,21 +68,22 @@
   "Connect to a datasource"
 
   ^DBAPI
-  [^JDBCInfo jdbc metaCache options]
+  [^JDBCInfo jdbc schema options]
 
-  ;;(log/debug "%s" (.getMetas metaCache))
+  ;;(log/debug "%s" (.metas schema))
   (reify
 
     DBAPI
 
-    (getMetas [_] (.getMetas ^MetaCache metaCache))
+    (newCompositeSQLr [this] (compositeSQLr this))
+
+    (newSimpleSQLr [this] (simpleSQLr this))
+
+    (getMetas [_] (.getModels ^Schema schema))
 
     (vendor [_] (resolveVendor jdbc))
 
-    (open [_] (mkDbConnection jdbc))
-
-    (newCompositeSQLr [this] (compositeSQLr this))
-    (newSimpleSQLr [this] (simpleSQLr this)) ))
+    (open [_] (mkDbConnection jdbc))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -90,19 +92,22 @@
   "Connect to a datasource"
 
   ^DBAPI
-  [^JDBCPool pool metaCache options]
+  [^JDBCPool pool schema options]
 
   (reify
 
     DBAPI
 
-    (getMetas [_] (.getMetas ^MetaCache metaCache))
+    (newCompositeSQLr [this] (compositeSQLr this))
+
+    (newSimpleSQLr [this] (simpleSQLr this))
+
+    (getMetas [_] (.getModels ^Schema schema))
 
     (vendor [_] (.vendor pool))
-    (open [_] (.nextFree pool))
 
-    (newCompositeSQLr [this] (compositeSQLr this))
-    (newSimpleSQLr [this] (simpleSQLr this)) ))
+    (open [_] (.nextFree pool))))
+
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;EOF

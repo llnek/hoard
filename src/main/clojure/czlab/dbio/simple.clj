@@ -25,7 +25,10 @@
         [czlab.dbio.sql])
 
   (:import
-    [czlab.dbio DBAPI MetaCache SQLr]
+    [czlab.dbio
+     DBAPI
+     Schema
+     SQLr]
     [java.sql Connection]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -56,7 +59,7 @@
   (reifySQLr
     db
     #(openDB %)
-    (fn [^Connection c f] (with-open [c c] (f c)))))
+    (fn [^Connection c f] (with-open [c2 c] (f c2)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;EOF

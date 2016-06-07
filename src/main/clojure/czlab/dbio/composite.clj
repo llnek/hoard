@@ -21,7 +21,7 @@
     [czlab.dbio
      SQLr
      DBAPI
-     MetaCache
+     Schema
      Transactable]
     [java.sql Connection])
 
@@ -81,20 +81,21 @@
 
       (execWith [me func]
         (with-local-vars [rc nil]
-        (with-open
-          [conn (begin db how)]
-          (try
-            (->> (reifySQLr
-                   db
-                   (fn [_] conn) #(%2 %1))
-                 (func )
-                 (var-set rc ))
-            (commit conn)
-            @rc
-            (catch Throwable e#
-              (undo conn)
-              (log/warn e# "")
-              (throw e#))) ))))))
+          (with-open
+            [c (begin db how)]
+              (try
+                (let
+                  [rc (->> (reifySQLr
+                             db
+                             (fn [_] c)
+                             #(%2 %1))
+                           (func ))]
+                  (commit c)
+                  rc)
+                (catch Throwable e#
+                  (undo c)
+                  (log/warn e# "")
+                  (throw e#)))))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;EOF
