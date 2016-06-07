@@ -70,20 +70,20 @@
   ^DBAPI
   [^JDBCInfo jdbc schema options]
 
-  ;;(log/debug "%s" (.metas schema))
-  (reify
+  (let [v (resolveVendor jdbc)]
+    (reify
 
-    DBAPI
+      DBAPI
 
-    (newCompositeSQLr [this] (compositeSQLr this))
+      (newCompositeSQLr [this] (compositeSQLr this))
 
-    (newSimpleSQLr [this] (simpleSQLr this))
+      (newSimpleSQLr [this] (simpleSQLr this))
 
-    (getMetas [_] (.getModels ^Schema schema))
+      (getSchema [_] schema)
 
-    (vendor [_] (resolveVendor jdbc))
+      (vendor [_] v)
 
-    (open [_] (mkDbConnection jdbc))))
+      (open [_] (mkDbConnection jdbc)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -94,20 +94,20 @@
   ^DBAPI
   [^JDBCPool pool schema options]
 
-  (reify
+  (let [v (.vendor pool)]
+    (reify
 
-    DBAPI
+      DBAPI
 
-    (newCompositeSQLr [this] (compositeSQLr this))
+      (newCompositeSQLr [this] (compositeSQLr this))
 
-    (newSimpleSQLr [this] (simpleSQLr this))
+      (newSimpleSQLr [this] (simpleSQLr this))
 
-    (getMetas [_] (.getModels ^Schema schema))
+      (getSchema [_] schema)
 
-    (vendor [_] (.vendor pool))
+      (vendor [_] v)
 
-    (open [_] (.nextFree pool))))
-
+      (open [_] (.nextFree pool)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;EOF

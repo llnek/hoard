@@ -79,9 +79,9 @@
   ""
 
   ^String
-  [^Connection conn model]
+  [vendor model]
 
-  (str (fmtSQLIdStr conn (dbColname :rowid model)) "=?"))
+  (str (fmtSQLIdStr vendor (dbColname :rowid model)) "=?"))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -637,22 +637,22 @@
 
       (findSome [_ model filters extraSQL]
         (let
-          [func #(let
-                   [mcz (metaz model)
-                    s (str "SELECT * FROM "
-                           (gtable mcz))
-                    [wc pms]
-                    (sqlFilterClause mcz filters) ]
-                   (if (hgl? wc)
-                     (doQuery+ db metaz %1
-                               (doExtraSQL (str s " WHERE " wc)
-                                           extraSQL)
-                               pms model)
-                     (doQuery+ db metaz %1
-                               (doExtraSQL s extraSQL) [] model)))]
+          [func (fn [^Connection conn]
+                  (let
+                    [mcz (metaz model)
+                     s (str "SELECT * FROM "
+                           (fmtSQLIdStr conn (gtable mcz)))
+                     [wc pms]
+                     (sqlFilterClause conn mcz filters) ]
+                    (if (hgl? wc)
+                      (doQuery+ db metaz conn
+                                (doExtraSQL (str s " WHERE " wc) extraSQL)
+                                pms model)
+                      (doQuery+ db metaz conn
+                                (doExtraSQL s extraSQL) [] model))))]
           (runc (getc db) func)))
 
-      (escId [_ s] (ese "" s ""))
+      (escId [_ s] (fmtSQLIdStr (.vendor db) s))
 
       (metas [_] metaz)
 

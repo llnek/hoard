@@ -87,7 +87,7 @@
                 (let
                   [rc (->> (reifySQLr
                              db
-                             (fn [_] c)
+                             (constantly c)
                              #(%2 %1))
                            (func ))]
                   (commit c)
