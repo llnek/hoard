@@ -23,7 +23,6 @@
   (:use [czlab.dbddl.drivers]
         [czlab.dbio.core :as dbcore]))
 
-
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;(set! *warn-on-reflection* true)
 
@@ -36,48 +35,54 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 ;; Postgresql
-(defmethod getTSKwd :postgresql [db] "TIMESTAMP WITH TIME ZONE")
-(defmethod getBlobKwd :postgresql [db] "BYTEA")
-(defmethod getDoubleKwd :postgresql [db] "DOUBLE PRECISION")
-(defmethod getFloatKwd :postgresql [db] "REAL")
+(defmethod getTSKwd :postgresql [_] "TIMESTAMP WITH TIME ZONE")
+(defmethod getBlobKwd :postgresql [_] "BYTEA")
+(defmethod getDoubleKwd :postgresql [_] "DOUBLE PRECISION")
+(defmethod getFloatKwd :postgresql [_] "REAL")
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defmethod genCaldr :postgresql
+(defmethod genCaldr
 
-  [db field]
+  Postgresql
 
-  (genTimestamp db field))
+  [dbtype field]
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;
-(defmethod genAutoInteger :postgresql
-
-  [db model field]
-
-  (genColDef db (genCol field) "SERIAL" false nil))
+  (genTimestamp dbtype field))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defmethod genAutoLong :postgresql
+(defmethod genAutoInteger
 
-  [db model field]
+  Postgresql
 
-  (genColDef db (genCol field) "BIGSERIAL" false nil))
+  [dbtype model field]
+
+  (genColDef dbtype (genCol field) "SERIAL" false nil))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defmethod genDrop :postgresql
+(defmethod genAutoLong
 
-  [db model]
+  Postgresql
+
+  [dbtype model field]
+
+  (genColDef dbtype (genCol field) "BIGSERIAL" false nil))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
+(defmethod genDrop
+
+  Postgresql
+
+  [dbtype model]
 
   (str "DROP TABLE IF EXISTS "
        (gtable model)
        " CASCADE "
-       (genExec db) "\n\n"))
+       (genExec dbtype) "\n\n"))
 
-;;(def XXX (.getMetas (reifyMetaCache testschema)))
-;;(println (getDDL (reifyMetaCache testschema) (Postgresql.) ))
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;EOF
 

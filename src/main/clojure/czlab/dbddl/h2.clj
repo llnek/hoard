@@ -47,56 +47,64 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; H2
-(defmethod getDateKwd H2 [db] "TIMESTAMP")
-(defmethod getDoubleKwd H2 [db] "DOUBLE")
-(defmethod getBlobKwd H2 [db] "BLOB")
-(defmethod getFloatKwd H2 [db] "FLOAT")
+(defmethod getDateKwd H2 [_] "TIMESTAMP")
+(defmethod getDoubleKwd H2 [_] "DOUBLE")
+(defmethod getBlobKwd H2 [_] "BLOB")
+(defmethod getFloatKwd H2 [_] "FLOAT")
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defmethod genAutoInteger H2
+(defmethod genAutoInteger
 
-  [db model field]
+  H2
 
-  (str (getPad db)
+  [dbtype model field]
+
+  (str (getPad dbtype)
        (genCol field)
        " "
-       (getIntKwd db)
+       (getIntKwd dbtype)
        (if (:pkey field)
          " IDENTITY(1) "
          " AUTO_INCREMENT(1) ")))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defmethod genAutoLong H2
+(defmethod genAutoLong
 
-  [db model field]
+  H2
 
-  (str (getPad db)
+  [dbtype model field]
+
+  (str (getPad dbtype)
        (genCol field)
        " "
-       (getLongKwd db)
+       (getLongKwd dbtype)
        (if (:pkey field)
          " IDENTITY(1) "
          " AUTO_INCREMENT(1) ")))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defmethod genBegin H2
+(defmethod genBegin
 
-  [db model]
+  H2
+
+  [_ model]
 
   (str "CREATE CACHED TABLE " (gtable model) " (\n" ))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defmethod genDrop H2
+(defmethod genDrop
 
-  [db model]
+  H2
+
+  [dbtype model]
 
   (str "DROP TABLE "
        (gtable model)
-       " IF EXISTS CASCADE" (genExec db) "\n\n"))
+       " IF EXISTS CASCADE" (genExec dbtype) "\n\n"))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -116,7 +124,7 @@
   (let [url (io/file dbFileDir dbid)
         u (.getCanonicalPath url)
         pwd (str pwdObj)
-        dbUrl (cs/replace H2-FILE-URL "{{path}}" u) ]
+        dbUrl (cs/replace H2-FILE-URL "{{path}}" u)]
     (log/debug "Creating H2: %s" dbUrl)
     (.mkdir dbFileDir)
     (with-open [c1 (DriverManager/getConnection dbUrl user pwd)]
@@ -146,14 +154,13 @@
   (let [url (io/file dbFileDir dbid)
         u (.getCanonicalPath url)
         pwd (str pwdObj)
-        dbUrl (cs/replace H2-FILE-URL "{{path}}" u) ]
+        dbUrl (cs/replace H2-FILE-URL "{{path}}" u)]
     (log/debug "Closing H2: %s" dbUrl)
     (with-open [c1 (DriverManager/getConnection dbUrl user pwd)]
       (.setAutoCommit c1 true)
       (with-open [s (.createStatement c1)]
         (.execute s "SHUTDOWN")) )))
 
-;;(println (getDDL (reifyMetaCache testschema) (H2.) ))
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;EOF
 

@@ -12,7 +12,6 @@
 ;;
 ;; Copyright (c) 2013-2016, Kenneth Leung. All rights reserved.
 
-
 (ns ^{:doc ""
       :author "kenl" }
 
@@ -26,58 +25,65 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;(set! *warn-on-reflection* true)
 
-(def MYSQL-DRIVER "com.mysql.jdbc.Driver")
+(defonce MYSQL-DRIVER "com.mysql.jdbc.Driver")
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; MySQL
-(defmethod getBlobKwd MySQL [db] "LONGBLOB")
-(defmethod getTSKwd MySQL [db] "TIMESTAMP")
-(defmethod getDoubleKwd MySQL [db] "DOUBLE")
-(defmethod getFloatKwd MySQL [db]  "DOUBLE")
+(defmethod getBlobKwd MySQL [_] "LONGBLOB")
+(defmethod getTSKwd MySQL [_] "TIMESTAMP")
+(defmethod getDoubleKwd MySQL [_] "DOUBLE")
+(defmethod getFloatKwd MySQL [_]  "DOUBLE")
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defmethod genEnd MySQL
+(defmethod genEnd
 
-  [db model]
+  MySQL
 
-  (str "\n) Type=InnoDB" (genExec db) "\n\n"))
+  [dbtype model]
+
+  (str "\n) Type=InnoDB" (genExec dbtype) "\n\n"))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defmethod genAutoInteger MySQL
+(defmethod genAutoInteger
 
-  [db model field]
+  MySQL
 
-  (str (getPad db)
+  [dbtype model field]
+
+  (str (getPad dbtype)
        (genCol field)
        " "
-       (getIntKwd db)
+       (getIntKwd dbtype)
        " NOT NULL AUTO_INCREMENT"))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defmethod genAutoLong MySQL
+(defmethod genAutoLong
 
-  [db model field]
+  MySQL
 
-  (str (getPad db)
+  [dbtype model field]
+
+  (str (getPad dbtype)
        (genCol field)
        " "
-       (getLongKwd db)
+       (getLongKwd dbtype)
        " NOT NULL AUTO_INCREMENT"))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defmethod genDrop MySQL
+(defmethod genDrop
 
-  [db model]
+  MySQL
+
+  [dbtype model]
 
   (str "DROP TABLE IF EXISTS "
        (gtable model)
-       (genExec db) "\n\n"))
+       (genExec dbtype) "\n\n"))
 
-;;(println (getDDL (reifyMetaCache testschema) (MySQL.) ))
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;EOF
 

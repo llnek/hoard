@@ -79,9 +79,9 @@
   ""
 
   ^String
-  [vendor model]
+  [db model]
 
-  (str (fmtSQLIdStr vendor (dbColname :rowid model)) "=?"))
+  (str (fmtSQLIdStr db (dbColname :rowid model)) "=?"))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -100,7 +100,7 @@
 
   "[sql-filter-string, values]"
 
-  [^Connection conn model filters]
+  [db model filters]
 
   (let
     [flds (:fields (meta model))
@@ -113,7 +113,7 @@
              (addDelim!
                %1
                " AND "
-               (str (fmtSQLIdStr conn c)
+               (str (fmtSQLIdStr db c)
                     (if (nil? (last %2))
                       " IS NULL "
                       " =? "))))
@@ -393,7 +393,7 @@
 
   "Format sql string for insert"
 
-  [^Connection conn obj flds]
+  [db obj flds]
 
   (with-local-vars [ps (transient []) ]
     (let [sb2 (StringBuilder.)
@@ -403,7 +403,7 @@
         (when (and (some? fdef)
                    (not (:auto fdef))
                    (not (:system fdef)))
-          (addDelim! sb1 "," (fmtSQLIdStr conn (dbColname fdef)))
+          (addDelim! sb1 "," (fmtSQLIdStr db (dbColname fdef)))
           (addDelim! sb2 "," (if (nil? v) "NULL" "?"))
           (when (some? v)
             (var-set ps (conj! @ps v)))))
@@ -415,7 +415,7 @@
 
   "Format sql string for update"
 
-  [^Connection conn obj flds]
+  [db obj flds]
 
   (with-local-vars [ps (transient []) ]
     (let [sb1 (StringBuilder.)]
@@ -426,7 +426,7 @@
                    (not (:auto fdef))
                    (not (:system fdef)))
           (doto sb1
-            (addDelim! "," (fmtSQLIdStr conn (dbColname fdef)))
+            (addDelim! "," (fmtSQLIdStr db (dbColname fdef)))
             (.append (if (nil? v) "=NULL" "=?")))
           (when (some? v)
             (var-set ps (conj! @ps v)))))
@@ -500,7 +500,7 @@
                  metas
                  conn
                  (str "SELECT COUNT(*) FROM "
-                      (fmtSQLIdStr conn (dbTablename model metas)))
+                      (fmtSQLIdStr db (dbTablename model metas)))
                  [])]
     (if (empty? rc)
       0
@@ -515,7 +515,7 @@
   [db metas conn model]
 
   (let [sql (str "DELETE FROM "
-                 (fmtSQLIdStr conn (dbTablename model metas))) ]
+                 (fmtSQLIdStr db (dbTablename model metas))) ]
     (sqlExec db conn sql [])
     nil))
 
@@ -532,9 +532,9 @@
             schema
             conn
             (str "DELETE FROM "
-                 (fmtSQLIdStr conn (dbTablename mcz))
+                 (fmtSQLIdStr db (dbTablename mcz))
                  " WHERE "
-                 (fmtUpdateWhere conn mcz))
+                 (fmtUpdateWhere db mcz))
             [(:rowid obj)])
     (throwDBError (str "Unknown model for " obj))))
 
@@ -548,14 +548,14 @@
 
   (if-let [mcz (:model (meta obj))]
     (let [[s1 s2 pms]
-          (insertFlds conn obj (:fields (meta mcz)))]
+          (insertFlds db obj (:fields (meta mcz)))]
       (when (hgl? s1)
         (let [out (doExecWithOutput
                     db
                     schema
                     conn
                     (str "INSERT INTO "
-                         (fmtSQLIdStr conn (dbTablename mcz))
+                         (fmtSQLIdStr db (dbTablename mcz))
                          "(" s1 ") VALUES (" s2 ")")
                     pms
                     {:pkey (dbColname :rowid mcz)})]
@@ -578,7 +578,7 @@
 
   (if-let [mcz (:model (meta obj))]
     (let [[sb1 pms]
-          (updateFlds conn
+          (updateFlds db
                       obj
                       (:fields (meta mcz)))]
       (if (hgl? sb1)
@@ -586,11 +586,11 @@
                 metas
                 conn
                 (str "UPDATE "
-                     (fmtSQLIdStr conn (dbTablename mcz))
+                     (fmtSQLIdStr db (dbTablename mcz))
                      " SET "
                      sb1
                      " WHERE "
-                     (fmtUpdateWhere conn mcz))
+                     (fmtUpdateWhere db mcz))
                 (conj pms (:rowid info)))
         0))
     (throwDBError (str "Unknown model for " obj))))
@@ -637,22 +637,21 @@
 
       (findSome [_ model filters extraSQL]
         (let
-          [func (fn [^Connection conn]
-                  (let
-                    [mcz (metaz model)
-                     s (str "SELECT * FROM "
-                           (fmtSQLIdStr conn (gtable mcz)))
-                     [wc pms]
-                     (sqlFilterClause conn mcz filters) ]
-                    (if (hgl? wc)
-                      (doQuery+ db metaz conn
+          [func #(let
+                   [mcz (metaz model)
+                    s (str "SELECT * FROM "
+                           (fmtSQLIdStr db (gtable mcz)))
+                    [wc pms]
+                    (sqlFilterClause db mcz filters) ]
+                   (if (hgl? wc)
+                      (doQuery+ db metaz %1
                                 (doExtraSQL (str s " WHERE " wc) extraSQL)
                                 pms model)
                       (doQuery+ db metaz conn
-                                (doExtraSQL s extraSQL) [] model))))]
+                                (doExtraSQL s extraSQL) [] model)))]
           (runc (getc db) func)))
 
-      (escId [_ s] (fmtSQLIdStr (.vendor db) s))
+      (escId [_ s] (fmtSQLIdStr db s))
 
       (metas [_] metaz)
 

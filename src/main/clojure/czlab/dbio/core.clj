@@ -89,8 +89,8 @@
 (defonce ^String COL_VERID "DBIO_VERID")
 (defonce ^String DDL_SEP "-- :")
 
+(def ^:dynamic *DDL_CFG* {:use-sep true :qstr "" :case-fn ucase })
 (def ^:dynamic ^Schema *DBIO-SCHEMA* nil)
-(def ^:dynamic *USE_DDL_SEP* true)
 (def ^:dynamic *DDL_BVS* nil)
 (def ^:dynamic *JDBC-INFO* nil)
 (def ^:dynamic *JDBC-POOL* nil)
@@ -112,6 +112,31 @@
 ;;
 (defmulti fmtSQLIdStr
   "Format SQL identifier based on the db metadata" class)
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
+(defmethod fmtSQLIdStr PersistentArrayMap
+
+  ^String
+  [info idstr]
+
+  (let [id (cond
+             (:ucis info)
+             (ucase idstr)
+             (:lcis info)
+             (lcase idstr)
+             :else idstr)
+        ch (strim (:qstr info))]
+    (str ch id ch)))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
+(defmethod fmtSQLIdStr DBAPI
+
+  ^String
+  [^DBAPI db idstr]
+
+  (fmtSQLIdStr (.vendor db) idstr))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -587,14 +612,23 @@
   (withAbstract true)
   (with-db-system)
   (withFields
-    {;;:verid {:column COL_VERID :domain :Long :system true :dft ["0"] }
-     :rowid {:column COL_ROWID :pkey true :domain :Long
-             :auto true :system true :updatable false}
-     :last-modify {:column COL_LASTCHANGED :domain :Timestamp
-                   :system true :updatable false :dft [""] }
-     :created-on {:column COL_CREATED_ON :domain :Timestamp
-                  :system true :dft [""] :updatable false}
-     :created-by {:column COL_CREATED_BY :domain :String } }))
+    {:rowid {:column COL_ROWID :pkey true :domain :Long
+             :auto true :system true :updatable false} }))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
+(defn- checkField
+
+  ""
+  [fld]
+
+  (not
+    (clojure.core/contains
+      #{:lhs-rowid
+        :rhs-rowid
+        :rowid
+        :lhs-typeid
+        :rhs-typeid} fld)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -687,20 +721,20 @@
 ;;
 (defmethod collectDbXXX :keyword
 
-  [kw cache model-id]
+  [kw schema model-id]
 
-  (if-some [mcz (cache model-id)]
-    (collectDbXXX kw cache mcz)
+  (if-some [mcz (.get schema model-id)]
+    (collectDbXXX kw schema mcz)
     (log/warn "Unknown database model id: %s" model-id)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defmethod collectDbXXX :map
 
-  [kw cache model-def]
+  [kw schema model-def]
 
   (if-some [par (:parent model-def)]
-    (merge {} (collectDbXXX kw cache par)
+    (merge {} (collectDbXXX kw schema par)
               (kw model-def))
     (merge {} (kw model-def))))
 
@@ -726,11 +760,11 @@
   "Inject extra meta-data properties into each model.  Each model will have
    its (complete) set of fields keyed by column nam or field id"
 
-  [cache]
+  [schema]
 
   (with-local-vars [sum (transient {})]
     (doseq [[k m] cache]
-      (let [flds (collectDbXXX :fields cache m)
+      (let [flds (collectDbXXX :fields schema m)
             cols (colmap-fields flds)]
         (var-set sum
                  (assoc! @sum

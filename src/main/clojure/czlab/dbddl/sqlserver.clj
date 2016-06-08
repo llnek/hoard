@@ -31,53 +31,57 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 ;; SQLServer
-(defmethod getDoubleKwd SQLServer [db] "FLOAT(53)")
-(defmethod getFloatKwd SQLServer [db] "FLOAT(53)")
-(defmethod getBlobKwd SQLServer [db] "IMAGE")
-(defmethod getTSKwd SQLServer [db] "DATETIME")
+(defmethod getDoubleKwd SQLServer [_] "FLOAT(53)")
+(defmethod getFloatKwd SQLServer [_] "FLOAT(53)")
+(defmethod getBlobKwd SQLServer [_] "IMAGE")
+(defmethod getTSKwd SQLServer [_] "DATETIME")
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defmethod genAutoInteger SQLServer
+(defmethod genAutoInteger
 
-  [db model fld]
+  SQLServer
 
-  (str (getPad db)
+  [dbtype model fld]
+
+  (str (getPad dbtype)
        (genCol fld)
        " "
-       (getIntKwd db)
+       (getIntKwd dbtype)
        (if (:pkey fld)
          " IDENTITY (1,1) "
          " AUTOINCREMENT ")))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defmethod genAutoLong SQLServer
+(defmethod genAutoLong
 
-  [db model fld]
+  SQLServer
 
-  (str (getPad db)
+  [dbtype model fld]
+
+  (str (getPad dbtype)
        (genCol fld)
        " "
-       (getLongKwd db)
+       (getLongKwd dbtype)
        (if (:pkey fld)
          " IDENTITY (1,1) "
          " AUTOINCREMENT ")))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defmethod genDrop SQLServer
+(defmethod genDrop
 
-  [db model]
+  SQLServer
 
-  (let [table (gtable model)]
-    (str "IF EXISTS (SELECT * FROM dbo.sysobjects WHERE id=object_id('"
-         table
-         "')) DROP TABLE "
-         table
-         (genExec db) "\n\n")))
+  [dbtype model]
 
-;;(println (getDDL (reifyMetaCache testschema) (SQLServer.) ))
+  (str "IF EXISTS (SELECT * FROM dbo.sysobjects WHERE id=object_id('"
+       (gtable model false)
+       "')) DROP TABLE "
+       (gtable model)
+       (genExec db) "\n\n"))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;EOF
 

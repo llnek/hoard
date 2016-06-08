@@ -12,7 +12,6 @@
 ;;
 ;; Copyright (c) 2013-2016, Kenneth Leung. All rights reserved.
 
-
 (ns ^{:doc ""
       :author "kenl" }
 
@@ -31,82 +30,105 @@
 ;;
 (defn- createSequenceTrigger
 
-  [db model field]
+  [dbtype model field]
 
-  (let [table (gtable model)]
-    (str "CREATE OR REPLACE TRIGGER TRIG_" table "\n"
-         "BEFORE INSERT ON " table "\n"
-         "REFERENCING NEW AS NEW\n"
-         "FOR EACH ROW\n"
-         "BEGIN\n"
-         "SELECT SEQ_" table ".NEXTVAL INTO :NEW."
-         (gcolumn field) " FROM DUAL;\n"
-         "END" (genExec db) "\n\n")))
+  (str "CREATE OR REPLACE TRIGGER "
+       (gSQLId (str "T_" (:table model) "_" (:column field)))
+       "\n"
+       "BEFORE INSERT ON "
+       (gtable model)
+       "\n"
+       "REFERENCING NEW AS NEW\n"
+       "FOR EACH ROW\n"
+       "BEGIN\n"
+       "SELECT "
+       (gSQLId (str "S_" (:table model) "_" (:column field)))
+       ".NEXTVAL INTO :NEW."
+       (gcolumn field) " FROM DUAL;\n"
+       "END" (genExec dbtype) "\n\n"))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defn- createSequence
 
-  [db model]
+  [dbtype model field]
 
-  (str "CREATE SEQUENCE SEQ_"
-       (gtable model)
+  (str "CREATE SEQUENCE "
+       (gSQLId (str "S_" (:table model) "_" (:column field)))
        " START WITH 1 INCREMENT BY 1"
-       (genExec db) "\n\n"))
+       (genExec dbtype) "\n\n"))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Oracle
-(defmethod getTSDefault Oracle [db] "DEFAULT SYSTIMESTAMP")
-(defmethod getStringKwd Oracle [db] "VARCHAR2")
-(defmethod getLongKwd Oracle [db] "NUMBER(38)")
-(defmethod getDoubleKwd Oracle [db] "BINARY_DOUBLE")
-(defmethod getFloatKwd Oracle [db] "BINARY_FLOAT")
+(defmethod getTSDefault Oracle [_] "DEFAULT SYSTIMESTAMP")
+(defmethod getStringKwd Oracle [_] "VARCHAR2")
+(defmethod getLongKwd Oracle [_] "NUMBER(38)")
+(defmethod getDoubleKwd Oracle [_] "BINARY_DOUBLE")
+(defmethod getFloatKwd Oracle [_] "BINARY_FLOAT")
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defmethod genAutoInteger Oracle
+(defmethod genAutoInteger
 
-  [db model field]
+  Oracle
 
-  (swap! *DDL_BVS* assoc model field)
-  (genInteger db field))
+  [dbtype model field]
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;
-(defmethod genAutoLong Oracle
-
-  [db model field]
-
-  (swap! *DDL_BVS* assoc model field)
-  (genLong db field))
+  (let [m (deref *DDL_BVS*)
+        t (:id model)
+        r (or (m t) {})]
+    (->> (assoc r (:id field) field)
+         (swap! *DDL_BVS*  assoc t))
+    (genInteger dbtype field)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defmethod genEndSQL Oracle
+(defmethod genAutoLong
 
-  [db]
+  Oracle
 
-  (let [bf (StringBuilder.)]
-    (doseq [en (deref *DDL_BVS*)]
-      (doto bf
-        (.append (createSequence db (first en)))
-        (.append (createSequenceTrigger db
-                                        (first en)
-                                        (last en)))))
-    (.toString bf)))
+  [dbtype model field]
+
+  (let [m (deref *DDL_BVS*)
+          t (:id model)
+          r (or (m t) {})]
+    (->> (assoc r (:id field) field)
+         (swap! *DDL_BVS*  assoc t))
+    (genLong dbtype field)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defmethod genDrop Oracle
+(defmethod genEndSQL
 
-  [db model]
+  Oracle
+
+  [dbtype]
+
+  (str
+    (reduce
+      (fn [bd [model fields]]
+        (reduce
+          (fn [bd [_ fld]]
+            (.append bd (createSequence dbtype model fld))
+            (.append bd (createSequenceTrigger dbtype model fld)))
+          bd
+          fields))
+      (StringBuilder.)
+      (deref *DDL_BVS*))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
+(defmethod genDrop
+
+  Oracle
+
+  [dbtype model]
 
   (str "DROP TABLE "
        (gtable model)
        " CASCADE CONSTRAINTS PURGE"
-       (genExec db) "\n\n"))
+       (genExec dbtype) "\n\n"))
 
-;;(println (getDDL (reifyMetaCache testschema) (Oracle.) ))
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;EOF
 
