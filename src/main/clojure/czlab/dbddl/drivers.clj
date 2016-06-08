@@ -511,9 +511,13 @@
   ""
 
   ^String
-  [^Schema schema dbID]
+  [^Schema schema dbID & [dbver]]
 
-  (binding [*DDL_BVS* (atom {})]
+  (binding [*DDL_CFG* {:db-version (strim dbver)
+                       :use-sep true
+                       :qstr ""
+                       :case-fn ucase}
+            *DDL_BVS* (atom {})]
     (let [drops (StringBuilder.)
           body (StringBuilder.)
           ms (.getModels schema)]

@@ -38,8 +38,7 @@
      DatabaseMetaData]
     [java.lang Math]
     [czlab.crypto PasswordAPI]
-    [com.jolbox.bonecp BoneCP BoneCPConfig]
-    [org.apache.commons.lang3 StringUtils])
+    [com.jolbox.bonecp BoneCP BoneCPConfig])
 
   (:require
     [czlab.xlib.format :refer [writeEdnString]]
@@ -60,13 +59,11 @@
              try!
              trylet!
              trap!
-             getTypeId
              interject
              nnz
              nbf
              juid
-             rootCause
-             stripNSPath]]
+             rootCause]]
     [czlab.xlib.logging :as log]
     [clojure.string :as cs]
     [clojure.set :as cset]
@@ -81,19 +78,16 @@
 (defonce ^String COL_LASTCHANGED "DBIO_LASTCHANGED")
 (defonce ^String COL_CREATED_ON "DBIO_CREATED_ON")
 (defonce ^String COL_CREATED_BY "DBIO_CREATED_BY")
-(defonce ^String COL_LHS_TYPEID "LHS_TYPEID")
-(defonce ^String COL_LHS_ROWID "LHS_ROWID")
-(defonce ^String COL_RHS_TYPEID "RHS_TYPEID")
-(defonce ^String COL_RHS_ROWID "RHS_ROWID")
+(defonce ^String COL_LHS_TYPEID "DBIO_LHS_TYPEID")
+(defonce ^String COL_LHS_ROWID "DBIO_LHS_ROWID")
+(defonce ^String COL_RHS_TYPEID "DBIO_RHS_TYPEID")
+(defonce ^String COL_RHS_ROWID "DBIO_RHS_ROWID")
 (defonce ^String COL_ROWID "DBIO_ROWID")
 (defonce ^String COL_VERID "DBIO_VERID")
 (defonce ^String DDL_SEP "-- :")
 
-(def ^:dynamic *DDL_CFG* {:use-sep true :qstr "" :case-fn ucase })
-(def ^:dynamic ^Schema *DBIO-SCHEMA* nil)
+(def ^:dynamic *DDL_CFG* nil)
 (def ^:dynamic *DDL_BVS* nil)
-(def ^:dynamic *JDBC-INFO* nil)
-(def ^:dynamic *JDBC-POOL* nil)
 
 (def ^:private ^String _NSP "czc.dbio.core" )
 
@@ -110,58 +104,65 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defmulti fmtSQLIdStr
-  "Format SQL identifier based on the db metadata" class)
+(defmulti fmtSQLIdStr "Format SQL identifier" (fn [a & xs] (class a)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defmethod fmtSQLIdStr PersistentArrayMap
+(defmethod fmtSQLIdStr
 
-  ^String
-  [info idstr]
+  PersistentArrayMap
 
-  (let [id (cond
+  [info idstr & [quote?]]
+
+  (let [ch (strim (:qstr info))
+        id (cond
              (:ucis info)
              (ucase idstr)
              (:lcis info)
              (lcase idstr)
-             :else idstr)
-        ch (strim (:qstr info))]
-    (str ch id ch)))
+             :else idstr)]
+    (if (false? quote?)
+      id
+      (str ch id ch))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defmethod fmtSQLIdStr DBAPI
+(defmethod fmtSQLIdStr
 
-  ^String
-  [^DBAPI db idstr]
+  DBAPI
 
-  (fmtSQLIdStr (.vendor db) idstr))
+  [^DBAPI db idstr & [quote?]]
+
+  (fmtSQLIdStr (.vendor db) idstr quote?))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defmethod fmtSQLIdStr DatabaseMetaData
+(defmethod fmtSQLIdStr
 
-  ^String
-  [^DatabaseMetaData mt ^String idstr]
+  DatabaseMetaData
 
-  (let [id (cond
+  [^DatabaseMetaData mt idstr & [quote?]]
+
+  (let [ch (strim (.getIdentifierQuoteString mt))
+        id (cond
              (.storesUpperCaseIdentifiers mt)
              (ucase idstr)
              (.storesLowerCaseIdentifiers mt)
              (lcase idstr)
-             :else idstr)
-        ch (strim (.getIdentifierQuoteString mt))]
-    (str ch id ch)))
+             :else idstr)]
+    (if (false? quote?)
+      id
+      (str ch id ch))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defmethod fmtSQLIdStr Connection
+(defmethod fmtSQLIdStr
 
-  ^String
-  [^Connection conn ^String idstr]
+  Connection
 
-  (fmtSQLIdStr (.getMetaData conn) idstr))
+  [^Connection conn idstr & [quote?]]
+
+  (fmtSQLIdStr (.getMetaData conn) idstr quote?))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -169,15 +170,15 @@
 
   "Check if cur type is a subclass of the root type"
 
-  [root cur]
+  [root model]
 
-  {:pre [(keyword? root) (map? cur)]}
+  {:pre [(keyword? root) (keyword model)]}
 
-  (loop [t cur]
+  (loop [t model]
     (cond
       (= root t) true
       (nil? t) false
-      :else (recur (:parent cur)))))
+      :else (recur (:parent model)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; have to be function , not macro as this is passed into another higher
@@ -198,16 +199,11 @@
 
   "The table-name defined for this model"
 
-  (^String
-    [model]
-    (:table model))
+  ([model] (:table model))
 
-  (^String
-    [model-id cache]
-
-    {:pre [(map? cache)]}
-
-    (dbTablename (cache model-id))))
+  ([model-id schema]
+   {:pre [(some? schema)]}
+   (dbTablename (.get schema model-id))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -215,18 +211,13 @@
 
   "The column-name defined for this field"
 
-  (^String
-    [fdef]
-    (:column fdef))
+  ([fdef] (:column fdef))
 
-  (^String
-    [fld-id model]
-
-    {:pre [(map? model)]}
-
-    (-> (:fields model)
-        (get fld-id)
-        (dbColname ))))
+  ([fld-id model]
+   {:pre [(map? model)]}
+   (-> (:fields (meta model))
+       (get fld-id)
+       (dbColname ))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -274,7 +265,7 @@
   "Throw a DBIOError execption"
 
   ^:no-doc
-  [^String msg]
+  [msg]
 
   (trap! DBIOError msg))
 
@@ -284,6 +275,7 @@
 
   "Scope a type id"
 
+  ^:no-doc
   [t]
 
   (keyword (str *ns* "/" t)))
@@ -323,9 +315,9 @@
   "Ensure the database type is supported"
 
   ^:no-doc
-  [dbtype]
+  [db]
 
-  (let [kw (keyword (lcase dbtype))]
+  (let [kw (keyword (lcase db))]
     (when
       (some? (DBTYPES kw)) kw)))
 

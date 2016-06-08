@@ -37,7 +37,7 @@ public interface DBAPI {
   /**
    * Metadata related to the database.
    */
-  public Object getMetas();
+  public Schema getMetas();
 
   /**
    * Product information.
