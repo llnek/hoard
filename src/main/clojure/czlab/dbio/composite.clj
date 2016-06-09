@@ -66,6 +66,15 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
+(defn- runc
+
+  ""
+  [^Connection conn func]
+
+  (func conn))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
 (defn compositeSQLr
 
   "A composite supports transactions"
@@ -79,23 +88,19 @@
 
       Transactable
 
-      (execWith [me func]
-        (with-local-vars [rc nil]
-          (with-open
-            [c (begin db how)]
-              (try
-                (let
-                  [rc (->> (reifySQLr
-                             db
-                             (constantly c)
-                             #(%2 %1))
-                           (func ))]
-                  (commit c)
-                  rc)
-                (catch Throwable e#
-                  (undo c)
-                  (log/warn e# "")
-                  (throw e#)))))))))
+      (execWith [_ cb]
+        (with-open
+          [c (begin db how)]
+            (try
+              (let
+                [rc (cb (reifySQLr
+                          db (constantly c) runc))]
+                (commit c)
+                rc)
+              (catch Throwable e#
+                (undo c)
+                (log/warn e# "")
+                (throw e#))))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;EOF
