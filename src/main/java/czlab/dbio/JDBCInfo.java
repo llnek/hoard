@@ -16,10 +16,14 @@ package czlab.dbio;
 //////////////////////////////////////////////////////////////////////////////
 //
 
+import java.sql.Driver;
+
 /**
  * @author kenl
  */
 public interface JDBCInfo {
+
+  public Driver loadDriver(String url);
 
   public String getDriver();
 

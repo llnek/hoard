@@ -84,7 +84,7 @@
 (defonce ^String COL_RHS_ROWID "DBIO_RHS_ROWID")
 (defonce ^String COL_ROWID "DBIO_ROWID")
 (defonce ^String COL_VERID "DBIO_VERID")
-(defonce ^String DDL_SEP "-- :")
+(defonce DDL_SEP #"-- :")
 
 (def ^:dynamic *DDL_CFG* nil)
 (def ^:dynamic *DDL_BVS* nil)
@@ -98,13 +98,14 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defmacro set-oid "" ^:private [pojo oid] `(assoc ~pojo :rowid ~oid))
+(defmacro gschema "" ^:private [obj]  `(:schema (meta ~obj)))
 (defmacro gmodel "" ^:private [obj]  `(:model (meta ~obj)))
 (defmacro gtype "" ^:private [obj]  `(:id (:model (meta ~obj))))
 (defmacro goid "" ^:private [obj]  `(:rowid ~obj))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defmulti fmtSQLIdStr "Format SQL identifier" (fn [a & xs] (class a)))
+(defmulti fmtSQLIdStr "Format SQL identifier" ^String (fn [a & xs] (class a)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -112,13 +113,14 @@
 
   PersistentArrayMap
 
+  ^String
   [info idstr & [quote?]]
 
   (let [ch (strim (:qstr info))
         id (cond
-             (:ucis info)
+             (:ucs? info)
              (ucase idstr)
-             (:lcis info)
+             (:lcs? info)
              (lcase idstr)
              :else idstr)]
     (if (false? quote?)
@@ -131,6 +133,7 @@
 
   DBAPI
 
+  ^String
   [^DBAPI db idstr & [quote?]]
 
   (fmtSQLIdStr (.vendor db) idstr quote?))
@@ -141,6 +144,7 @@
 
   DatabaseMetaData
 
+  ^String
   [^DatabaseMetaData mt idstr & [quote?]]
 
   (let [ch (strim (.getIdentifierQuoteString mt))
@@ -160,6 +164,7 @@
 
   Connection
 
+  ^String
   [^Connection conn idstr & [quote?]]
 
   (fmtSQLIdStr (.getMetaData conn) idstr quote?))
@@ -172,13 +177,14 @@
 
   [root model]
 
-  {:pre [(keyword? root) (keyword model)]}
+  {:pre [(keyword? root) ]}
 
-  (loop [t model]
-    (cond
-      (= root t) true
-      (nil? t) false
-      :else (recur (:parent model)))))
+  (if (= root (:id model))
+    true
+    (if-let [p (:parent model)]
+      (canAssignFrom? root
+                      (.get (:schema (meta model)) p))
+      false)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; have to be function , not macro as this is passed into another higher
@@ -187,6 +193,7 @@
 
   "Merge 2 meta maps"
 
+  ^PersistentArrayMap
   [m1 m2]
 
   {:pre [(map? m1) (or (nil? m2)(map? m2))]}
@@ -199,9 +206,9 @@
 
   "The table-name defined for this model"
 
-  ([model] (:table model))
+  (^String [model] (:table model))
 
-  ([model-id schema]
+  (^String [model-id schema]
    {:pre [(some? schema)]}
    (dbTablename (.get schema model-id))))
 
@@ -211,9 +218,9 @@
 
   "The column-name defined for this field"
 
-  ([fdef] (:column fdef))
+  (^String [fdef] (:column fdef))
 
-  ([fld-id model]
+  (^String [fld-id model]
    {:pre [(map? model)]}
    (-> (:fields (meta model))
        (get fld-id)
@@ -236,6 +243,12 @@
     JDBCInfo
 
     (getUrl [_] (or (:server cfg) (:url cfg)))
+
+    (loadDriver [this]
+      (when-let [s (.getUrl this)]
+        (when (hgl? s)
+          (DriverManager/getDriver s))))
+
     (getDriver [_] (:driver cfg))
     (getUser [_] (:user cfg))
     (getId [_]  (str id))
@@ -275,6 +288,7 @@
 
   "Scope a type id"
 
+  ^Keyword
   ^:no-doc
   [t]
 
@@ -304,17 +318,18 @@
 
   "For o2o & o2m relations"
 
+  ^Keyword
   [tn rn]
 
   (keyword (str "fk_" (name tn) "_" (name rn))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defn matchDbType
+(defn- matchDbType
 
   "Ensure the database type is supported"
 
-  ^:no-doc
+  ^Keyword
   [db]
 
   (let [kw (keyword (lcase db))]
@@ -323,16 +338,17 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defn matchJdbcUrl
+(defn- matchJdbcUrl
 
   "From the jdbc url, get the database type"
 
-  [^String url]
+  ^Keyword
+  [urlStr]
 
-  (let [ss (.split url ":")]
+  (let [ss (cs/split urlStr #":")]
     (when
-      (> (alength ss) 1)
-      (matchDbType (aget ss 1)))))
+      (> (count ss) 1)
+      (matchDbType (nth ss 1)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; DATA MODELING
@@ -346,9 +362,9 @@
 
   "Define a generic model"
 
-  ([^String nm] (dbioModel (str *ns*) nm))
+  (^PersistentArrayMap [^String nm] (dbioModel (str *ns*) nm))
 
-  ([^String nsp ^String nm]
+  (^PersistentArrayMap [^String nsp ^String nm]
    {:id (keyword (str nsp "/" nm))
     :table (cleanName nm)
     :parent nil
@@ -417,6 +433,7 @@
 
   "Give a parent to the model"
 
+  ^PersistentArrayMap
   [pojo par]
 
   {:pre [(map? pojo)
@@ -433,6 +450,7 @@
   "A special model with 2 relations,
    left hand side and right hand side"
 
+  ^PersistentArrayMap
   [pojo lhs rhs]
 
   {:pre [(map? pojo)
@@ -454,6 +472,7 @@
 
   "Set the table name"
 
+  ^PersistentArrayMap
   [pojo table]
 
   {:pre [(map? pojo)]}
@@ -466,15 +485,16 @@
 
   ""
 
-  [pojo xxx fld]
+  [pojo kvs fld]
 
   (let [m (persistent!
             (reduce
-              #(assoc! %1
-                       (first %2)
-                       (into (ordered-set) (last %2)))
+              (fn [out [k v]]
+                (assoc! out
+                       k
+                       (into (ordered-set) v)))
               (transient {})
-              xxx))]
+              kvs))]
     ;;merge new stuff onto old stuff
     (interject pojo fld #(merge (%2 %1) m))))
 
@@ -484,6 +504,7 @@
 
   "Set indexes to the model"
 
+  ^PersistentArrayMap
   [pojo indices]
 
   {:pre [(map? pojo) (map? indices)]}
@@ -497,6 +518,7 @@
 
   "Set uniques to the model"
 
+  ^PersistentArrayMap
   [pojo uniqs]
 
   {:pre [(map? pojo) (map? uniqs)]}
@@ -510,6 +532,7 @@
 
   "The base field structure"
 
+  ^PersistentArrayMap
   [fid]
 
   {:column (cleanName fid)
@@ -531,6 +554,7 @@
 
   "Add a new field"
 
+  ^PersistentArrayMap
   [pojo fid fdef]
 
   {:pre [(map? pojo) (map? fdef)]}
@@ -545,6 +569,7 @@
 
   "Add a bunch of fields"
 
+  ^PersistentArrayMap
   [pojo flddefs]
 
   {:pre [(map? pojo) (map? flddefs)]}
@@ -561,6 +586,7 @@
 
   "Add a relation"
 
+  ^PersistentArrayMap
   [pojo rid rhs kind & [cascade?]]
 
   {:pre [(map? pojo) (keyword? rid) (keyword? rhs)]}
@@ -582,6 +608,7 @@
 
   "Set the model as abstract"
 
+  ^PersistentArrayMap
   [pojo flag]
 
   {:pre [(map? pojo)]}
@@ -609,7 +636,7 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defn- checkField
+(defn- checkField?
 
   ""
   [fld]
@@ -653,20 +680,17 @@
   For o2o or o2m assocs, we need to artificially inject a new
   field/column into the (other/rhs) model (foreign key)"
 
-  ;; map of models
-  [ms]
-
-  {:pre [(map? ms)]}
+  [metas]
 
   ;; 1st, create placeholder maps for each model,
   ;; to hold new fields from rels
   (with-local-vars [phd (reduce
                           #(assoc! %1 %2 {})
-                          (transient {}) (keys ms))
+                          (transient {}) (keys metas))
                     xs (transient {})]
     ;; as we find new relation fields,
     ;; add them to the placeholder maps
-    (doseq [m (vals ms)]
+    (doseq [m (vals metas)]
       (doseq [[k r] (:rels m)
               :let [rid (:other r)
                     t (:kind r)
@@ -681,7 +705,7 @@
     ;; now walk through all the placeholder maps and merge those new
     ;; fields to the actual models
     (doseq [[k v] (persistent! @phd)
-            :let [mcz (ms k)]]
+            :let [mcz (metas k)]]
       (->> (assoc! @xs k
                        (assoc mcz :fields (merge (:fields mcz) v)))
            (var-set xs )))
@@ -713,20 +737,20 @@
 ;;
 (defmethod collectDbXXX :keyword
 
-  [kw schema model-id]
+  [kw metas model-id]
 
-  (if-some [mcz (.get schema model-id)]
-    (collectDbXXX kw schema mcz)
-    (log/warn "Unknown database model id: %s" model-id)))
+  (if-some [mcz (metas model-id)]
+    (collectDbXXX kw metas mcz)
+    (log/warn "Unknown model id: %s" model-id)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defmethod collectDbXXX :map
 
-  [kw schema model-def]
+  [kw metas model-def]
 
   (if-some [par (:parent model-def)]
-    (merge {} (collectDbXXX kw schema par)
+    (merge {} (collectDbXXX kw metas par)
               (kw model-def))
     (merge {} (kw model-def))))
 
@@ -740,7 +764,7 @@
 
   (persistent!
     (reduce
-      (fn [m [k v]]
+      (fn [m [_ v]]
         (assoc! m (ucase (:column v)) v))
       (transient {})
       flds)))
@@ -752,17 +776,18 @@
   "Inject extra meta-data properties into each model.  Each model will have
    its (complete) set of fields keyed by column nam or field id"
 
-  [schema]
+  [metas schema]
 
   (with-local-vars [sum (transient {})]
-    (doseq [[k m] cache]
-      (let [flds (collectDbXXX :fields schema m)
+    (doseq [[k m] metas]
+      (let [flds (collectDbXXX :fields metas m)
             cols (colmap-fields flds)]
         (var-set sum
                  (assoc! @sum
                          k
                          (with-meta m
-                                    {:columns cols
+                                    {:schema schema
+                                     :columns cols
                                      :fields flds } ) ))))
     (persistent! @sum)))
 
@@ -775,12 +800,12 @@
 
   ;; map of models
   ;; model defn
-  [mcz model]
+  [metas model]
 
   (let [par (:parent model)]
     (cond
       (keyword? par)
-      (if (nil? (mcz par))
+      (if (nil? (metas par))
         (throwDBError (str "Unknown parent model " par))
         model)
 
@@ -793,17 +818,19 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Idea is walk through all models and ultimately
 ;; link it's root to base-model
-(defn- resolve-parents ""
+(defn- resolve-parents
 
-  ;; map of models
-  [ms]
+  ""
+
+  [metas]
 
   (persistent!
     (reduce
-      #(let [rc (resolve-parent ms (last %2))]
-         (assoc! %1 (:id rc) rc))
+      (fn [sum [_ v]]
+        (let [rc (resolve-parent metas v)]
+         (assoc! sum (:id rc) rc)))
       (transient {})
-      ms)))
+      metas)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -815,7 +842,12 @@
   [models]
 
   {:pre [(coll? models)]}
-  (let [ms (if (empty? models)
+
+  (let [data (atom {})
+        schema (reify Schema
+                 (getModel [_ id] (get (deref data) id))
+                 (getModels [_] (deref data)))
+        ms (if (empty? models)
              {}
              (persistent!
                (reduce #(assoc! %1 (:id %2) %2)
@@ -827,13 +859,9 @@
                  (resolve-parents)
                  (resolve-rels)
                  (assoc BASEMODEL-MONIKER DBIOBaseModel)
-                 (meta-models)))]
-    (reify
-
-      Schema
-
-      (getModel [_ id] (m2 id))
-      (getModels [_] m2))))
+                 (meta-models schema)))]
+    (reset! data m2)
+    schema))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -866,7 +894,7 @@
   (let [user (.getUser jdbc)
         dv (.getDriver jdbc)
         url (.getUrl jdbc)
-        d (if (hgl? url) (DriverManager/getDriver url))
+        d (.loadDriver jdbc)
         p (let [pps (Properties.)]
             (if (hgl? user)
               (doto pps
@@ -903,7 +931,7 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defn testConnection
+(defn testConnection?
 
   "true if able to connect to the database, as a test"
 
@@ -916,59 +944,74 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defmulti resolveVendor "Find out the type of database" class)
+(defmulti resolveVendor
+  "Find type of database" ^PersistentArrayMap (fn [a & xs] a))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defmethod resolveVendor JDBCInfo
+(defmethod resolveVendor
 
-  [^JDBCInfo jdbc]
+  JDBCInfo
+
+  ^PersistentArrayMap
+  [jdbc]
 
   (with-open [conn (mkDbConnection jdbc)]
     (resolveVendor conn)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defmethod resolveVendor Connection
+(defmethod resolveVendor
 
-  [^Connection conn]
+  Connection
 
-  (let [md (.getMetaData conn) ]
-    (-> {:id (maybeGetVendor (.getDatabaseProductName md)) }
-        (assoc :qstr (strim (.getIdentifierQuoteString md)))
-        (assoc :version (.getDatabaseProductVersion md))
-        (assoc :name (.getDatabaseProductName md))
-        (assoc :url (.getURL md))
-        (assoc :user (.getUserName md))
-        (assoc :lcis (.storesLowerCaseIdentifiers md))
-        (assoc :ucis (.storesUpperCaseIdentifiers md))
-        (assoc :mcis (.storesMixedCaseIdentifiers md)))))
+  ^PersistentArrayMap
+  [conn]
+
+  (let [md (.getMetaData ^Connection conn) ]
+    {:id (maybeGetVendor (.getDatabaseProductName md))
+     :qstr (strim (.getIdentifierQuoteString md))
+     :version (.getDatabaseProductVersion md)
+     :name (.getDatabaseProductName md)
+     :url (.getURL md)
+     :user (.getUserName md)
+     :lcs? (.storesLowerCaseIdentifiers md)
+     :ucs? (.storesUpperCaseIdentifiers md)
+     :mcs? (.storesMixedCaseIdentifiers md)}))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defmulti tableExist? "Is this table defined in db?" class)
+(defmulti tableExist? "Is this table defined in db?" (fn [a & xs] a))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defmethod tableExist? JDBCPool
+(defmethod tableExist?
+
+  JDBCPool
 
   [^JDBCPool pool ^String table]
 
-  (with-open [conn (.nextFree pool) ]
+  (with-open
+    [conn (.nextFree pool) ]
     (tableExist? conn table)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defmethod tableExist? JDBCInfo
+(defmethod tableExist?
+
+  JDBCInfo
 
   [jdbc ^String table]
 
-  (with-open [conn (mkDbConnection jdbc)]
+  (with-open
+    [conn (mkDbConnection jdbc)]
     (tableExist? conn table)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defmethod tableExist? Connection
+(defmethod tableExist?
+
+  Connection
 
   [^Connection conn ^String table]
 
@@ -987,27 +1030,32 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defmulti rowExist? "Is there any rows in the table?" class)
+(defmulti rowExist? "Is there any rows in the table?" (fn [a & xs] a))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defmethod rowExist? JDBCInfo
+(defmethod rowExist?
+
+  JDBCInfo
 
   [^JDBCInfo jdbc ^String table]
 
-  (with-open [conn (mkDbConnection jdbc)]
+  (with-open
+    [conn (mkDbConnection jdbc)]
     (rowExist? conn table)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defmethod rowExist? Connection
+(defmethod rowExist?
+
+  Connection
 
   [^Connection conn ^String table]
 
   (with-local-vars [rc false]
     (trylet!
-      [sql (format
-             "SELECT COUNT(*) FROM  %s"
+      [sql (str
+             "SELECT COUNT(*) FROM  "
              (fmtSQLIdStr conn table))]
       (with-open [stmt (.createStatement conn)
                   res (.executeQuery stmt sql)]
@@ -1026,10 +1074,11 @@
    ^String catalog
    ^String schema ^String table]
 
-  (with-local-vars [pkeys #{} cms {} ]
+  (with-local-vars [pkeys #{}
+                    cms {} ]
     (with-open [rs (.getPrimaryKeys mt
                                     catalog
-                                    schema table) ]
+                                    schema table)]
       (loop [sum (transient #{})
              more (.next rs)]
         (if-not more
@@ -1075,7 +1124,7 @@
         mt (.getMetaData conn)
         catalog nil
         schema (if (= (:id dbv) :oracle) "%" nil)
-        tbl (fmtSQLIdStr conn table)]
+        tbl (fmtSQLIdStr conn table false)]
     ;; not good, try mixed case... arrrrrrrrrrhhhhhhhhhhhhhh
     ;;rs = m.getTables( catalog, schema, "%", null)
     (load-columns mt catalog schema tbl)))
@@ -1106,7 +1155,7 @@
             (.getConnection impl)
           (catch Throwable e#
             (log/error e# "")
-            (throwDBError (str "No free connection"))))))))
+            (throwDBError "No free connection")))))))
 
       ;;Object
       ;;Clojure CLJ-1347
@@ -1123,6 +1172,7 @@
 
   "Create a db connection pool"
 
+  ^JDBCPool
   [^JDBCInfo jdbc options]
 
   (let [options (or options {})
@@ -1154,32 +1204,7 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defn- splitLines
-
-  ""
-
-  [^String lines]
-
-  (let [w (.length DDL_SEP)]
-    (with-local-vars [sum (transient [])
-                      s2 lines]
-      (loop [ddl lines
-             pos (.indexOf ddl DDL_SEP)]
-        (if (< pos 0)
-          (var-set s2 (strim ddl))
-          (let [a (.substring ddl 0 pos)
-                b (.substring ddl (+ pos w))]
-            (->> (conj! @sum (strim a))
-                 (var-set sum ))
-            (recur b (.indexOf b DDL_SEP)))))
-      (persistent!
-        (if (hgl? @s2)
-          (conj! @sum @s2)
-          @sum)))))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;
-(defn- maybeOK
+(defn- maybeOK?
 
   ""
 
@@ -1201,11 +1226,13 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defmulti uploadDdl "Upload DDL to DB" class)
+(defmulti uploadDdl "Upload DDL to DB" (fn [a & xs] a))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defmethod uploadDdl JDBCPool
+(defmethod uploadDdl
+
+  JDBCPool
 
   [^JDBCPool pool ^String ddl]
 
@@ -1215,7 +1242,9 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defmethod uploadDdl JDBCInfo
+(defmethod uploadDdl
+
+  JDBCInfo
 
   [^JDBCInfo jdbc ^String ddl]
 
@@ -1225,26 +1254,29 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defmethod uploadDdl Connection
+(defmethod uploadDdl
+
+  Connection
 
   [^Connection conn ^String ddl]
 
   {:pre [(some? conn)] }
 
-  (log/debug "\n%s" ddl)
-  (let [dbn (lcase (-> (.getMetaData conn)
-                       (.getDatabaseProductName)))
-        lines (splitLines ddl) ]
+  (let [lines (map #(strim %) (cs/split lines DDL_SEP))
+        dbn (lcase (-> (.getMetaData conn)
+                       (.getDatabaseProductName)))]
     (.setAutoCommit conn true)
+    (log/debug "\n%s" ddl)
     (doseq [^String s (seq lines)
             :let [ln (strimAny s ";" true)]
             :when (and (hgl? ln)
                        (not= (lcase ln) "go"))]
-      (try
-        (with-open [stmt (.createStatement conn)]
-          (.executeUpdate stmt ln))
+
+      (with-open [s (.createStatement conn)]
+        (try
+          (.executeUpdate s ln)
         (catch SQLException e#
-          (maybeOK dbn e#))))))
+          (maybeOK? dbn e#)))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -1252,11 +1284,12 @@
 
   "Creates a blank object of the given type"
 
+  ^PersistentArrayMap
   [model]
 
   {:pre [(some? model)]}
 
-  (with-meta {} { :model model } ))
+  (with-meta {:rowid -1} { :model model } ))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -1267,28 +1300,19 @@
 ;;
 (defn dbioSetFlds*
 
-  "Set many field values"
+  "Set many field values such as f1 v1 f2 v2 ... fn vn"
 
+  ^PersistentArrayMap
   [pojo fld value & fvs]
 
   {:pre [(or (empty? rvs)
              (even? (count rvs)))]}
 
-  (apply assoc pojo fld value fvs))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;
-(defn dbioSetFlds
-
-  "Set many field values"
-
-  [pojo fvs]
-
-  {:pre [(map? pojo) (coll? fvs)]}
-
-  (if-let [a (seq rvs)]
-    (apply dbioSetFlds* pojo (first a)(second a) (drop 2 a))
-    pojo))
+  (reduce
+    (fn [p [f v]]
+      (dbioSetFld p f v))
+    (dbioSetFld pojo fld value)
+    (partition 2 rvs)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -1300,7 +1324,7 @@
 
   {:pre [(map? pojo) (:keyword? fld)]}
 
-  (if (checkField fld)
+  (if (checkField? fld)
     (assoc pojo fld value)
     pojo))
 
@@ -1314,7 +1338,7 @@
 
   {:pre [(map? pojo) (:keyword? fld)]}
 
-  (if (checkField fld)
+  (if (checkField? fld)
     (dissoc pojo fld)
     pojo))
 
@@ -1334,21 +1358,18 @@
 ;;
 (defn dbioGetRelation
 
-  "Get the relation definition
-   cache : schema
-   mcz : the model
-   id : relation id"
+  "Get the relation definition"
 
-  [schema model id kind]
+  [model rid kind]
 
   (when (some? model)
-    (let [rc ((:rels model) id)]
+    (let [schema (gschema model)
+          rc ((:rels model) rid)]
       (if (and (some? rc)
                (= (:kind rc) kind))
         rc
-        (dbioGetRelation schema
-                         (->> (:parent model)
-                              (.getModel schema)) id kind)))))
+        (-> (.get schema (:parent model))
+            (dbioGetRelation rid kind))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; handling assocs
@@ -1356,20 +1377,21 @@
 
   ""
 
-  [ctx lhsObj]
+  [ctx lhsObj kind]
 
   (let [^SQLr sqlr (:with ctx)
         schema (.metas sqlr)
         rid (:as ctx)
         mcz (gmodel lhsObj)]
-    (if-let [r (dbioGetRelation schema mcz rid)]
-      [(or (:cast ctx) (:other r))
-       {(:fkey r) (goid lhsObj)} ]
+    (if-let [r (dbioGetRelation mcz rid kind)]
+      r
       (throwDBError (str "Unknown relation " rid)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defn- dbio-set-o2x ""
+(defn- dbio-set-o2x
+
+  ""
 
   [ctx lhsObj rhsObj]
 
@@ -1396,11 +1418,12 @@
 
   {:pre [(map? ctx)(map? lhsObj)]}
 
-  (let [[rt pms]
-        (dbio-get-o2x ctx lhsObj)]
-    (->> ^SQLr
-         (:with ctx)
-         (.findSome  rt pms))))
+  (when-let [r (dbio-get-o2x ctx lhsObj :O2M)]
+    (-> ^SQLr
+        (:with ctx)
+        (.findSome (or (:cast ctx)
+                       (:other r))
+                   {(:fkey r) (goid lhsObj)}))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -1439,11 +1462,14 @@
 
   [ctx lhsObj]
 
-  (let [[rt pms]
-        (dbio-get-o2x ctx lhsObj)]
+  {:pre [(map? ctx) (map? lhsObj)]}
+
+  (when-let [r (dbio-get-o2x ctx lhsObj :O2O)]
     (-> ^SQLr
         (:with ctx)
-        (.findOne  rt pms))))
+        (.findOne (or (:cast ctx)
+                      (:other r))
+                  {(:fkey r) (goid lhsObj)}))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
