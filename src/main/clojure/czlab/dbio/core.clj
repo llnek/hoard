@@ -18,12 +18,17 @@
   czlab.dbio.core
 
   (:import
+    [clojure.lang
+     Keyword
+     PersistentVector
+     PersistentArrayMap ]
     [java.util
      HashMap
      TimeZone
      Properties
      GregorianCalendar]
     [czlab.dbio
+     DBAPI
      Schema
      BoneCPHook
      DBIOError
@@ -55,7 +60,8 @@
              addDelim!
              hasNoCase?]]
     [czlab.xlib.core
-     :refer [tryc
+     :refer [cast?
+             tryc
              try!
              trylet!
              trap!
@@ -93,19 +99,22 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defn- cleanName "" [s] (cs/replace (name s) #"[^a-zA-Z0-9_]" "_"))
+(defn- cleanName "" [s]
+  (-> (cs/replace (name s) #"[^a-zA-Z0-9_-]" "")
+      (cs/replace  #"-" "_")))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defmacro set-oid "" ^:private [pojo oid] `(assoc ~pojo :rowid ~oid))
-(defmacro gschema "" ^:private [obj]  `(:schema (meta ~obj)))
-(defmacro gmodel "" ^:private [obj]  `(:model (meta ~obj)))
-(defmacro gtype "" ^:private [obj]  `(:id (:model (meta ~obj))))
-(defmacro goid "" ^:private [obj]  `(:rowid ~obj))
+(defmacro gschema "" ^:no-doc [obj]  `(:schema (meta ~obj)))
+(defmacro gmodel "" ^:no-doc [obj]  `(:model (meta ~obj)))
+(defmacro gtype "" ^:no-doc [obj]  `(:id (:model (meta ~obj))))
+(defmacro goid "" ^:no-doc [obj]  `(:rowid ~obj))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defmulti fmtSQLIdStr "Format SQL identifier" ^String (fn [a & xs] (class a)))
+(defmulti fmtSQLIdStr
+  "Format SQL identifier" ^String (fn [a & xs] (class a)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -181,10 +190,11 @@
 
   (if (= root (:id model))
     true
-    (if-let [p (:parent model)]
-      (canAssignFrom? root
-                      (.get (:schema (meta model)) p))
-      false)))
+    (let [^Schema s (gschema model)
+          p (:parent model)]
+      (if (some? p)
+        (canAssignFrom? root (.get s p))
+        false))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; have to be function , not macro as this is passed into another higher
@@ -208,7 +218,7 @@
 
   (^String [model] (:table model))
 
-  (^String [model-id schema]
+  (^String [model-id ^Schema schema]
    {:pre [(some? schema)]}
    (dbTablename (.get schema model-id))))
 
@@ -278,7 +288,7 @@
   "Throw a DBIOError execption"
 
   ^:no-doc
-  [msg]
+  [^String msg]
 
   (trap! DBIOError msg))
 
@@ -308,7 +318,7 @@
       "microsoft" SQLServer
       "postgres" Postgresql
       "oracle" Oracle
-      "mysql" MySql
+      "mysql" MySQL
       "h2" H2
       (throwDBError (str "Unknown db product " product)))))
 
@@ -642,7 +652,7 @@
   [fld]
 
   (not
-    (clojure.core/contains
+    (clojure.core/contains?
       #{:lhs-rowid
         :rhs-rowid
         :rowid
@@ -845,7 +855,7 @@
 
   (let [data (atom {})
         schema (reify Schema
-                 (getModel [_ id] (get (deref data) id))
+                 (get [_ id] (get (deref data) id))
                  (getModels [_] (deref data)))
         ms (if (empty? models)
              {}
@@ -1015,9 +1025,10 @@
 
   [^Connection conn ^String table]
 
-  (log/debug "testing the existence of table: %s" table)
   (with-local-vars [rc false]
+    (log/debug "testing table: %s" table)
     (trylet!
+      [mt (.getMetaData conn)]
       (with-open [res (.getColumns mt
                                    nil
                                    nil
@@ -1262,7 +1273,7 @@
 
   {:pre [(some? conn)] }
 
-  (let [lines (map #(strim %) (cs/split lines DDL_SEP))
+  (let [lines (map #(strim %) (cs/split ddl DDL_SEP))
         dbn (lcase (-> (.getMetaData conn)
                        (.getDatabaseProductName)))]
     (.setAutoCommit conn true)
@@ -1289,30 +1300,12 @@
 
   {:pre [(some? model)]}
 
-  (with-meta {:rowid -1} { :model model } ))
+  (with-meta {} { :model model } ))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defmacro mockObj "" ^:private [obj]
   `(with-meta {:rowid (goid ~obj)} (meta ~obj)))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;
-(defn dbioSetFlds*
-
-  "Set many field values such as f1 v1 f2 v2 ... fn vn"
-
-  ^PersistentArrayMap
-  [pojo fld value & fvs]
-
-  {:pre [(or (empty? rvs)
-             (even? (count rvs)))]}
-
-  (reduce
-    (fn [p [f v]]
-      (dbioSetFld p f v))
-    (dbioSetFld pojo fld value)
-    (partition 2 rvs)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -1327,6 +1320,24 @@
   (if (checkField? fld)
     (assoc pojo fld value)
     pojo))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
+(defn dbioSetFlds*
+
+  "Set many field values such as f1 v1 f2 v2 ... fn vn"
+
+  ^PersistentArrayMap
+  [pojo fld value & fvs]
+
+  {:pre [(or (empty? fvs)
+             (even? (count fvs)))]}
+
+  (reduce
+    (fn [p [f v]]
+      (dbioSetFld p f v))
+    (dbioSetFld pojo fld value)
+    (partition 2 fvs)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -1363,13 +1374,32 @@
   [model rid kind]
 
   (when (some? model)
-    (let [schema (gschema model)
+    (let [^Schema schema (gschema model)
           rc ((:rels model) rid)]
       (if (and (some? rc)
                (= (:kind rc) kind))
         rc
         (-> (.get schema (:parent model))
             (dbioGetRelation rid kind))))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
+(defn- selectSide
+
+  ""
+
+  [mxm side]
+
+  (let [rhs (get-in mxm [:rels :rhs])
+        lhs (get-in mxm [:rels :lhs])
+        rt (:other rhs)
+        lf (:other lhs)]
+    (case side
+      :right
+      [:rhs-rowid :lhs-rowid lf]
+      :left
+      [:lhs-rowid :rhs-rowid rt]
+      (throwDBError (str "Invaid side " side)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; handling assocs
@@ -1393,13 +1423,13 @@
 
   ""
 
-  [ctx lhsObj rhsObj]
+  [ctx lhsObj rhsObj kind]
 
   (let [^SQLr sqlr (:with ctx)
         schema (.metas sqlr)
         mcz (gmodel lhsObj)
         rid (:as ctx)]
-    (if-let [r (dbioGetRelation schema mcz (:as ctx))]
+    (if-let [r (dbioGetRelation mcz (:as ctx) kind)]
       (let [fv (goid lhsObj)
             fid (:fkey r)
             y (->> (-> (mockObj rhsObj)
@@ -1435,7 +1465,7 @@
 
   {:pre [(map? ctx)(map? lhsObj)(map? rhsObj)]}
 
-  (dbio-set-o2x ctx lhsObj rhsObj))
+  (dbio-set-o2x ctx lhsObj rhsObj :O2M))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -1443,6 +1473,7 @@
 
   ""
 
+  ^PersistentVector
   [ctx lhsObj & rhsObjs]
 
   (persistent!
@@ -1460,6 +1491,7 @@
 
   "One to one relation"
 
+  ^PersistentArrayMap
   [ctx lhsObj]
 
   {:pre [(map? ctx) (map? lhsObj)]}
@@ -1481,11 +1513,11 @@
 
   {:pre [(map? ctx) (map? lhsObj) (map? rhsObj)]}
 
-  (dbio-set-o2x ctx lhsObj rhsObj))
+  (dbio-set-o2x ctx lhsObj rhsObj :O2O))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defn dbio-clr-o2x
+(defn- dbio-clr-o2x
 
   ""
 
@@ -1495,10 +1527,10 @@
         schema (.metas sqlr)
         rid (:as ctx)
         mA (gmodel objA)]
-    (if-let [r (dbioGetRelation schema mA rid)]
+    (if-let [r (dbioGetRelation mA rid kind)]
       (let [rt (or (:cast ctx)
                    (:other r))
-            mB (.getModel schema rt)
+            mB (.get schema rt)
             tn (dbTablename mB)
             cn (dbColname (:fkey r) mB)]
         (.exec
@@ -1560,6 +1592,7 @@
 
   "Many to many relations"
 
+  ^PersistentArrayMap
   [ctx objA objB]
 
   {:pre [(map? ctx) (map? objA) (map? objB)]}
@@ -1570,7 +1603,7 @@
     (if-let [mm (.get schema jon)]
       (let [[ck tk t]
             (selectSide mm (:as ctx))]
-        (->> (-> (dbioCreateObj (:id mm))
+        (->> (-> (dbioCreateObj mm)
                  (dbioSetFld ck (goid objA))
                  (dbioSetFld tk (goid objB))
                  (dbioSetFld (xrefColType ck) (gtype objA))
@@ -1599,35 +1632,16 @@
                    (format
                      "DELETE FROM %s WHERE %s=?"
                      (.escId sqlr (dbTablename mm))
-                     (.escId sqlr (DbColname (fs ck))))
+                     (.escId sqlr (dbColname (fs ck))))
                    [ (goid objA) ])
             (.exec sqlr
                    (format
                      "DELETE FROM %s WHERE %s=? AND %s=?"
                      (.escId sqlr (dbTablename mm))
-                     (.escId sqlr (DbColname (fs ck)))
-                     (.escId sqlr (DbColname (fs tk))))
+                     (.escId sqlr (dbColname (fs ck)))
+                     (.escId sqlr (dbColname (fs tk))))
                    [ (goid objA) (goid objB) ])))
         (throwDBError (str "Unkown assoc " jon))))))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;
-(defn- selectSide
-
-  ""
-
-  [mxm side]
-
-  (let [rhs (get-in mxm [:rels :rhs])
-        lhs (get-in mxm [:rels :lhs])
-        rt (:other rhs)
-        lf (:other lhs)]
-    (case side
-      :right
-      [:rhs-rowid :lhs-rowid lf]
-      :left
-      [:lhs-rowid :rhs-rowid rt]
-      (throwDBError (str "Invaid side " side)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -1648,7 +1662,7 @@
       (let [[ck tk t]
             (selectSide mm (:as ctx))
             t2 (or (:cast ctx) t)
-            fs (:fields mm)
+            fs (:fields (meta mm))
             tm (.get schema t2)]
         (when (nil? tm)
           (throwDBError (str "Unknown model " t2)))

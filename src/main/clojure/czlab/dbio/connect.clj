@@ -79,7 +79,7 @@
 
       (newSimpleSQLr [this] (simpleSQLr this))
 
-      (getSchema [_] schema)
+      (getMetas [_] schema)
 
       (vendor [_] v)
 
@@ -103,7 +103,7 @@
 
       (newSimpleSQLr [this] (simpleSQLr this))
 
-      (getSchema [_] schema)
+      (getMetas [_] schema)
 
       (vendor [_] v)
 

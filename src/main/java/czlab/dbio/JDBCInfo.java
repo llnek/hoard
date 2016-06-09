@@ -23,7 +23,7 @@ import java.sql.Driver;
  */
 public interface JDBCInfo {
 
-  public Driver loadDriver(String url);
+  public Driver loadDriver();
 
   public String getDriver();
 

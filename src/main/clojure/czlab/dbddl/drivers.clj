@@ -22,6 +22,7 @@
     [czlab.xlib.str
      :refer [lcase
              ucase
+             strim
              hgl?
              addDelim!]]
     [clojure.string :as cs])
@@ -263,7 +264,7 @@
 
   [dbtype field]
 
-  (genColDef dbtype (getBlobKwd db) field))
+  (genColDef dbtype (getBlobKwd dbtype) field))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -387,7 +388,7 @@
 
   (str
     (reduce
-      (fn [b [k v]]
+      (fn [^StringBuilder b [k v]]
         (when-not (empty? v)
           (.append
             b
@@ -516,7 +517,7 @@
   (binding [*DDL_CFG* {:db-version (strim dbver)
                        :use-sep true
                        :qstr ""
-                       :case-fn ucase}
+                       :case-fn clojure.string/upper-case}
             *DDL_BVS* (atom {})]
     (let [drops (StringBuilder.)
           body (StringBuilder.)

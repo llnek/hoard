@@ -115,7 +115,7 @@
       (reduce
         (fn [bd [model fields]]
           (reduce
-            (fn [bd [_ fld]]
+            (fn [^StringBuilder bd [_ fld]]
               (.append bd (createSeq dbtype model fld)))
             bd
             fields))

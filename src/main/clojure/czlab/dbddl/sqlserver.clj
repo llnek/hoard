@@ -80,7 +80,7 @@
        (gtable model false)
        "')) DROP TABLE "
        (gtable model)
-       (genExec db) "\n\n"))
+       (genExec dbtype) "\n\n"))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;EOF

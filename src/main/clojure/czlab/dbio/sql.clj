@@ -105,18 +105,18 @@
   (let
     [flds (:fields (meta model))
      wc (reduce
-          #(let [k (first %2)
-                 fld (flds k)
-                 c (if (nil? fld)
-                     (sname k)
-                     (:column fld))]
-             (addDelim!
-               %1
-               " AND "
-               (str (fmtSQLIdStr db c)
-                    (if (nil? (last %2))
-                      " IS NULL "
-                      " =? "))))
+          (fn [sum [k v]]
+            (let [fld (flds k)
+                  c (if (nil? fld)
+                      (sname k)
+                      (:column fld))]
+              (addDelim!
+                sum
+                " AND "
+                (str (fmtSQLIdStr db c)
+                     (if (nil? v)
+                       " IS NULL "
+                       " =? ")))))
           (StringBuilder.)
           filters)]
     [(str wc) (flattenNil (vals filters))]))
@@ -525,11 +525,11 @@
 
   ""
 
-  [db schema conn obj]
+  [db metas conn obj]
 
-  (if-let [mcz (:model (meta obj))]
+  (if-let [mcz (gmodel obj)]
     (doExec db
-            schema
+            metas
             conn
             (str "DELETE FROM "
                  (fmtSQLIdStr db (dbTablename mcz))
@@ -544,15 +544,15 @@
 
   ""
 
-  [db schema conn obj]
+  [db metas conn obj]
 
-  (if-let [mcz (:model (meta obj))]
+  (if-let [mcz (gmodel obj)]
     (let [[s1 s2 pms]
           (insertFlds db obj (:fields (meta mcz)))]
       (when (hgl? s1)
         (let [out (doExecWithOutput
                     db
-                    schema
+                    metas
                     conn
                     (str "INSERT INTO "
                          (fmtSQLIdStr db (dbTablename mcz))
@@ -574,9 +574,9 @@
 
   ""
 
-  [db schema conn obj]
+  [db metas conn obj]
 
-  (if-let [mcz (:model (meta obj))]
+  (if-let [mcz (gmodel obj)]
     (let [[sb1 pms]
           (updateFlds db
                       obj
@@ -591,7 +591,7 @@
                      sb1
                      " WHERE "
                      (fmtUpdateWhere db mcz))
-                (conj pms (:rowid info)))
+                (conj pms (:rowid obj)))
         0))
     (throwDBError (str "Unknown model for " obj))))
 
@@ -617,7 +617,8 @@
 
   {:pre [(fn? getc) (fn? runc)]}
 
-  (let [metaz (.getMetas db)]
+  (let [schema (.getMetas db)
+        metas (.getModels schema)]
     (reify
 
       SQLr
@@ -638,58 +639,58 @@
       (findSome [_ model filters extraSQL]
         (let
           [func #(let
-                   [mcz (metaz model)
+                   [mcz (metas model)
                     s (str "SELECT * FROM "
-                           (fmtSQLIdStr db (gtable mcz)))
+                           (fmtSQLIdStr db (:table mcz)))
                     [wc pms]
                     (sqlFilterClause db mcz filters) ]
                    (if (hgl? wc)
-                      (doQuery+ db metaz %1
+                      (doQuery+ db metas %1
                                 (doExtraSQL (str s " WHERE " wc) extraSQL)
                                 pms model)
-                      (doQuery+ db metaz conn
+                      (doQuery+ db metas %1
                                 (doExtraSQL s extraSQL) [] model)))]
           (runc (getc db) func)))
 
       (escId [_ s] (fmtSQLIdStr db s))
 
-      (metas [_] metaz)
+      (metas [_] schema)
 
       (update [_ obj]
-        (->> #(doUpdate db metaz %1 obj)
+        (->> #(doUpdate db metas %1 obj)
              (runc (getc db) )))
 
       (delete [_ obj]
-        (->> #(doDelete db metaz %1 obj)
+        (->> #(doDelete db metas %1 obj)
              (runc (getc db) )))
 
       (insert [_ obj]
-        (->> #(doInsert db metaz %1 obj)
+        (->> #(doInsert db metas %1 obj)
              (runc (getc db) )))
 
       (select [_ model sql params]
-        (->> #(doQuery+ db metaz %1 sql params model)
+        (->> #(doQuery+ db metas %1 sql params model)
              (runc (getc db) )))
 
       (select [_ sql params]
-        (->> #(doQuery db metaz %1 sql params)
+        (->> #(doQuery db metas %1 sql params)
              (runc (getc db) )))
 
       (execWithOutput [_ sql pms]
-        (->> #(doExecWithOutput db metaz %1
+        (->> #(doExecWithOutput db metas %1
                                 sql pms {:pkey COL_ROWID})
              (runc (getc db) )))
 
       (exec [_ sql pms]
-        (->> #(doExec db metaz %1 sql pms)
+        (->> #(doExec db metas %1 sql pms)
              (runc (getc db) )))
 
       (countAll [_ model]
-        (->> #(doCount db metaz %1 model)
+        (->> #(doCount db metas %1 model)
              (runc (getc db) )))
 
       (purge [_ model]
-        (->> #(doPurge db metaz %1 model)
+        (->> #(doPurge db metas %1 model)
              (runc (getc db) ))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
