@@ -243,26 +243,27 @@
   "Basic jdbc parameters"
 
   ^JDBCInfo
-  [id cfg ^PasswordAPI pwdObj]
+  [cfg]
 
   {:pre [(map? cfg)]}
 
   ;;(log/debug "JDBC id= %s, cfg = %s" id cfg)
-  (reify
+  (let [id (juid)]
+    (reify
 
-    JDBCInfo
+      JDBCInfo
 
-    (getUrl [_] (or (:server cfg) (:url cfg)))
+      (getUrl [_] (or (:server cfg) (:url cfg)))
+      (getId [_]  (or (:id cfg) id))
 
-    (loadDriver [this]
-      (when-let [s (.getUrl this)]
-        (when (hgl? s)
-          (DriverManager/getDriver s))))
+      (loadDriver [this]
+        (when-let [s (.getUrl this)]
+          (when (hgl? s)
+            (DriverManager/getDriver s))))
 
-    (getDriver [_] (:driver cfg))
-    (getUser [_] (:user cfg))
-    (getId [_]  (str id))
-    (getPwd [_] (str pwdObj))))
+      (getDriver [_] (:driver cfg))
+      (getUser [_] (:user cfg))
+      (getPwd [_] (str (:passwd cfg))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -592,11 +593,10 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defn withRelation
+(defn- withRelation
 
-  "Add a relation"
+  ""
 
-  ^PersistentArrayMap
   [pojo rid rhs kind & [cascade?]]
 
   {:pre [(map? pojo) (keyword? rid) (keyword? rhs)]}
@@ -611,6 +611,28 @@
                         :other rhs})
              (throwDBError (str "Invalid relation " rid)))]
     (interject pojo :rels #(assoc (%2 %1) rid r2))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
+(defn withO2M
+
+  "Add a one to many relation"
+
+  ^PersistentArrayMap
+  [pojo rid rhs & [cascade?]]
+
+  (withRelation pojo rid rhs :O2M cascade?))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
+(defn withO2O
+
+  "Add a one to one relation"
+
+  ^PersistentArrayMap
+  [pojo rid rhs & [cascade?]]
+
+  (withRelation pojo rid rhs :O2O cascade?))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -700,8 +722,11 @@
                     xs (transient {})]
     ;; as we find new relation fields,
     ;; add them to the placeholder maps
-    (doseq [m (vals metas)]
-      (doseq [[k r] (:rels m)
+    (doseq [[_ m] metas
+            :let [rs (:rels m)]
+            :when (and (not (:abstract m))
+                       (not (empty? rs)))]
+      (doseq [[_ r] rs
               :let [rid (:other r)
                     t (:kind r)
                     fid (:fkey r)]
@@ -849,9 +874,7 @@
   "A cache storing meta-data for all models"
 
   ^Schema
-  [models]
-
-  {:pre [(coll? models)]}
+  [ & models]
 
   (let [data (atom {})
         schema (reify Schema
@@ -1373,33 +1396,37 @@
 
   [model rid kind]
 
-  (when (some? model)
-    (let [^Schema schema (gschema model)
-          rc ((:rels model) rid)]
-      (if (and (some? rc)
-               (= (:kind rc) kind))
-        rc
-        (-> (.get schema (:parent model))
-            (dbioGetRelation rid kind))))))
+  (if-let [r (get (:rels model) rid)]
+    (when (= (:kind r) kind)
+      r)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defn- selectSide
+(defn- selectSide+
 
   ""
 
-  [mxm side]
+  [mxm obj]
 
   (let [rhs (get-in mxm [:rels :rhs])
         lhs (get-in mxm [:rels :lhs])
+        t (gtype obj)
         rt (:other rhs)
         lf (:other lhs)]
-    (case side
-      :right
+    (case t
+      rt
       [:rhs-rowid :lhs-rowid lf]
-      :left
+      lf
       [:lhs-rowid :rhs-rowid rt]
-      (throwDBError (str "Invaid side " side)))))
+      (throwDBError (str "Mismatched mxm relation for " t)))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
+(defmacro selectSide
+  ""
+  ^:private
+  [mxm obj]
+  `(first (selectSide+ ~mxm  ~obj)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; handling assocs
@@ -1601,13 +1628,12 @@
         schema (.metas sqlr)
         jon (:joined ctx)]
     (if-let [mm (.get schema jon)]
-      (let [[ck tk t]
-            (selectSide mm (:as ctx))]
+      (let [ka (selectSide mm objA)
+            kb (selectSide mm objB)]
         (->> (-> (dbioCreateObj mm)
-                 (dbioSetFld ck (goid objA))
-                 (dbioSetFld tk (goid objB))
-                 (dbioSetFld (xrefColType ck) (gtype objA))
-                 (dbioSetFld (xrefColType tk) (gtype objB)))
+                 (dbioSetFlds*
+                   ka (goid objA)
+                   kb (goid objB)))
              (.insert sqlr )))
       (throwDBError (str "Unkown relation " jon)))))
 
@@ -1620,26 +1646,27 @@
   ([ctx obj] (dbioClrM2M ctx obj nil))
 
   ([ctx objA objB]
+   {:pre [(some? objA)]}
     (let [^SQLr sqlr (:with ctx)
           schema (.metas sqlr)
           jon (:joined ctx)]
       (if-let [mm (.get schema jon)]
         (let [fs (:fields (meta mm))
-              [ck tk t]
-              (selectSide mm (:as ctx))]
+              ka (selectSide mm objA)
+              kb (selectSide mm objB)]
           (if (nil? objB)
             (.exec sqlr
                    (format
                      "DELETE FROM %s WHERE %s=?"
                      (.escId sqlr (dbTablename mm))
-                     (.escId sqlr (dbColname (fs ck))))
+                     (.escId sqlr (dbColname (fs ka))))
                    [ (goid objA) ])
             (.exec sqlr
                    (format
                      "DELETE FROM %s WHERE %s=? AND %s=?"
                      (.escId sqlr (dbTablename mm))
-                     (.escId sqlr (dbColname (fs ck)))
-                     (.escId sqlr (dbColname (fs tk))))
+                     (.escId sqlr (dbColname (fs ka)))
+                     (.escId sqlr (dbColname (fs kb))))
                    [ (goid objA) (goid objB) ])))
         (throwDBError (str "Unkown assoc " jon))))))
 
@@ -1659,8 +1686,8 @@
         schema (.metas sqlr)
         jon (:joined ctx)]
     (if-let [mm (.get schema jon)]
-      (let [[ck tk t]
-            (selectSide mm (:as ctx))
+      (let [[ka kb t]
+            (selectSide+ mm obj)
             t2 (or (:cast ctx) t)
             fs (:fields (meta mm))
             tm (.get schema t2)]
@@ -1678,9 +1705,9 @@
             RS
             (.escId sqlr (dbTablename mm))
             MM
-            MM (.escId sqlr (dbColname (ck fs)))
+            MM (.escId sqlr (dbColname (ka fs)))
             MM
-            MM (.escId sqlr (dbColname (tk fs)))
+            MM (.escId sqlr (dbColname (kb fs)))
             RS (.escId sqlr COL_ROWID))
           [ (goid obj) ]))
       (throwDBError (str "Unknown joined model " jon)))))

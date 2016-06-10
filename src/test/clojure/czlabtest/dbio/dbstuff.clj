@@ -26,422 +26,430 @@
         [clojure.test])
 
   (:import
-    [org.apache.commons.lang3 StringUtils]
     [czlab.crypto PasswordAPI]
     [java.io File]
     [java.util GregorianCalendar Calendar]
-    [czlab.dbio Transactable SQLr MetaCache DBAPI]))
+    [czlab.dbio Transactable SQLr Schema DBAPI]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defModel Address
-  (withFields {
-    :addr1 { :size 200 :null false }
-    :addr2 { :size 64}
-    :city { :null false}
-    :state {:null false}
-    :zip {:null false}
-    :country {:null false}
-                   })
-  (withIndexes { :i1 [ :city :state :country ]
-    :i2 [ :zip :country ]
-    :state [ :state ]
-    :zip [ :zip ] } ))
+  (withFields
+    {:addr1 { :size 200 :null false }
+     :addr2 { :size 64}
+     :city { :null false}
+     :state {:null false}
+     :zip {:null false}
+     :country {:null false} })
+  (withIndexes
+    {:i1 #{ :city :state :country }
+     :i2 #{ :zip :country }
+     :state #{ :state }
+     :zip #{ :zip } } ))
 
 (defModel Person
-  (withFields {
-    :first_name { :null false }
-    :last_name { :null false }
-    :iq { :domain :Int }
-    :bday {:domain :Calendar :null false }
-    :sex {:null false}
-                   })
-  (withAssocs {
-    :spouse { :kind :O2O :other (dbioScopeType "Person") }
-                   })
-  (withIndexes { :i1 [ :first_name :last_name ]
-    :i2 [ :bday ]
-    } ))
+  (withFields
+    {:first_name { :null false }
+     :last_name { :null false }
+     :iq { :domain :Int }
+     :bday {:domain :Calendar :null false }
+     :sex {:null false} })
+  (withIndexes
+    {:i1 #{ :first_name :last_name }
+     :i2 #{ :bday } } )
+  (withO2O :spouse (dbioScopeType "Person")))
+
+(defModel Employee
+  (withParent  (dbioScopeType "Person"))
+  (withFields
+    {:salary { :domain :Float :null false }
+     :passcode { :domain :Password }
+     :pic { :domain :Bytes }
+     :descr {}
+     :login {:null false} })
+  (withIndexes { :i1 #{ :login } } ))
+
+(defModel Department
+  (withFields
+    {:dname { :null false } })
+  (withUniques
+    {:u1 #{ :dname }} ))
+
+(defModel Company
+  (withFields
+    {:revenue { :domain :Double :null false }
+     :cname { :null false }
+     :logo { :domain :Bytes } })
+  (withO2M :depts (dbioScopeType "Department"))
+  (withO2M :emps (dbioScopeType "Employee"))
+  (withO2O :hq (dbioScopeType "Address"))
+  (withUniques
+    {:u1 #{ :cname } } ))
 
 (defJoined EmpDepts
            (dbioScopeType "Department")
            (dbioScopeType "Employee"))
 
-(defModel Employee
-  (withParentModel  (dbioScopeType "Person"))
-  (withFields {
-    :salary { :domain :Float :null false }
-    :pic { :domain :Bytes }
-    :passcode { :domain :Password }
-    :descr {}
-    :login {:null false}
-                   })
-  (withAssocs {
-    :depts { :kind :M2M :joined (dbioScopeType "EmpDepts") }
-                   })
-  (withIndexes { :i1 [ :login ]
-    } ))
-
-(defModel Department
-  (withFields {
-    :dname { :null false }
-                   })
-  (withAssocs {
-    :emps { :kind :M2M :joined (dbioScopeType "EmpDepts") }
-                   })
-  (withUniques {
-    :u1 [ :dname ]
-    } ))
-
-(defModel Company
-  (withFields {
-    :cname { :null false }
-    :revenue { :domain :Double :null false }
-    :logo { :domain :Bytes }
-                   })
-  (withAssocs {
-    :depts { :kind :O2M :other (dbioScopeType "Department") }
-    :emps { :kind :O2M :other (dbioScopeType "Employee") }
-    :hq { :kind :O2O :other (dbioScopeType "Address") }
-                   })
-  (withUniques {
-    :u1 [ :cname ]
-    } ))
-
 (def METAC (atom nil))
 (def JDBC (atom nil))
 (def DB (atom nil))
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
 (defn init-test [f]
   (reset! METAC
-    (mkMetaCache (mkDbSchema
-                      [Address Person EmpDepts Employee Department Company])))
-  (let [ dir (File. (System/getProperty "java.io.tmpdir"))
-         db (str "" (System/currentTimeMillis))
-         url (H2Db dir db "sa" (pwdify ""))
-        jdbc (mkJdbc (juid)
-               { :d H2-DRIVER :url url :user "sa" :passwd "" }
-               (pwdify ""))]
-    (writeOneFile (File. dir "dbstuff.out") (dbgShowMetaCache @METAC))
+    (mkDbSchema Address Person EmpDepts Employee Department Company))
+  (let [dir (File. (System/getProperty "java.io.tmpdir"))
+        db (str "" (System/currentTimeMillis))
+        url (H2Db dir db "sa" (pwdify "hello"))
+        jdbc (mkJdbc
+               {:driver H2-DRIVER
+                :url url
+                :user "sa"
+                :passwd "hello" })]
+    (writeOneFile (File. dir "dbstuff.out") (dbgShowSchema @METAC))
     (reset! JDBC jdbc)
     (uploadDdl jdbc (getDDL @METAC :h2))
     (reset! DB (dbioConnect jdbc @METAC {})))
-  (if (nil? f) nil (f)))
+  (when (fn? f) (f)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
+(defn- mkt "" [t] (keyword (str "czlabtest.dbio.dbstuff/" t)))
 
-(defn- mkt [t] (keyword (str "czlabtest.dbio.dbstuff/" t)))
+(defn- mkEmp
 
+  ""
+  [fname lname login]
 
-(defn- mkEmp [fname lname login]
-  (let [ emp (dbioCreateObj (mkt "Employee")) ]
-    (-> emp
-      (dbioSetFld :first_name fname)
-      (dbioSetFld :last_name  lname)
-      (dbioSetFld :iq 100)
-      (dbioSetFld :bday (GregorianCalendar.))
-      (dbioSetFld :sex "male")
-      (dbioSetFld :salary 1000000.00)
-      (dbioSetFld :pic (.getBytes "poo"))
-      (dbioSetFld :passcode "secret")
-      (dbioSetFld :desc "idiot")
-      (dbioSetFld :login login ))))
+  (let [emp (-> (.get @METAC (mkt "Employee"))
+                 dbioCreateObj)]
+    (dbioSetFlds*
+      emp
+      :first_name fname
+      :last_name  lname
+      :iq 100
+      :bday (GregorianCalendar.)
+      :sex "male"
+      :salary 1000000.00
+      :pic (.getBytes "poo")
+      :passcode "secret"
+      :desc "idiot"
+      :login login)))
 
-(defn- create-company [cname]
-  (-> (dbioCreateObj (mkt "Company"))
-    (dbioSetFld :cname cname)
-    (dbioSetFld :revenue 100.00)
-    (dbioSetFld :logo (.getBytes "hi"))))
+(defn- create-company
 
-(defn- create-dept [dname]
-  (-> (dbioCreateObj (mkt "Department"))
-    (dbioSetFld :dname dname)))
+  ""
+  [cname]
 
-(defn- create-emp[fname lname login]
-  (let [ obj (mkEmp fname lname login)
-         ^Transactable sql (.newCompositeSQLr ^DBAPI @DB)
-         o2 (.execWith sql
-             (fn [^SQLr tx]
-               (.insert tx obj))) ]
-    o2))
+  (let [c (-> (.get @METAC (mkt "Company"))
+              (dbioCreateObj))]
+    (dbioSetFld*
+      c
+      :cname cname
+      :revenue 100.00
+      :logo (.getBytes "hi"))))
 
-(defn- fetch-all-emps []
-  (let [ ^SQLr sql (.newSimpleSQLr ^DBAPI @DB)
-         o1 (.findAll sql (mkt "Employee")) ]
-    o1))
+(defn- create-dept
 
-(defn- fetch-emp [login]
-  (let [ ^SQLr sql (.newSimpleSQLr ^DBAPI @DB)
-         o1 (.findOne sql (mkt "Employee") {:login login} ) ]
-    o1))
+  ""
+  [dname]
 
-(defn- change-emp [login]
-  (let [ ^Transactable sql (.newCompositeSQLr ^DBAPI @DB) ]
+  (-> (-> (.get @METAC (mkt "Department"))
+          (dbioCreateObj))
+      (dbioSetFld :dname dname)))
+
+(defn- create-emp
+
+  ""
+  [fname lname login]
+
+  (let [sql (.newCompositeSQLr ^DBAPI @DB)
+        obj (mkEmp fname lname login)]
+    (.execWith sql
+               #(.insert ^SQLr %1 obj))))
+
+(defn- fetch-all-emps
+
+  ""
+  []
+
+  (let [sql (.newSimpleSQLr ^DBAPI @DB)]
+    (.findAll sql (mkt "Employee"))))
+
+(defn- fetch-emp
+
+  ""
+  [login]
+
+  (let [sql (.newSimpleSQLr ^DBAPI @DB)]
+    (.findOne sql
+              (mkt "Employee")
+              {:login login})))
+
+(defn- change-emp
+
+  ""
+  [login]
+
+  (let [sql (.newCompositeSQLr ^DBAPI @DB)]
     (.execWith
       sql
-      (fn [^SQLr tx]
-        (let [ o1 (.findOne tx (mkt "Employee") {:login login} )
-               o2 (-> o1 (dbioSetFld :salary 99.9234)
-                         (dbioSetFld :iq 0)) ]
-          (.update tx o2))))))
+      #(let [o1 (.findOne ^SQLr %1
+                          (mkt "Employee") {:login login})]
+         (.update ^SQLr %1
+                  (dbioSetFlds* o1
+                                :salary 99.9234 :iq 0))))))
 
-(defn- delete-emp [login]
-  (let [ ^Transactable sql (.newCompositeSQLr ^DBAPI @DB) ]
+(defn- delete-emp
+
+  ""
+  [login]
+
+  (let [sql (.newCompositeSQLr ^DBAPI @DB)]
     (.execWith
       sql
-      (fn [^SQLr tx]
-        (let [ o1 (.findOne tx (mkt "Employee") {:login login} ) ]
-          (.delete tx o1))))
+      #(let [o1 (.findOne ^SQLr %1
+                          (mkt "Employee") {:login login} )]
+         (.delete ^SQLr %1 o1)))
     (.execWith
       sql
-      (fn [^SQLr tx]
-        (.countAll tx (mkt "Employee"))))))
+      #(.countAll ^SQLr %1 (mkt "Employee")))))
 
-(defn- create-person [fname lname]
-  (let [ p (-> (dbioCreateObj (mkt "Person"))
-                (dbioSetFld :first_name fname)
-                (dbioSetFld :last_name  lname)
-                (dbioSetFld :iq 100)
-                (dbioSetFld :bday (GregorianCalendar.))
-                (dbioSetFld :sex "female"))
-         ^Transactable sql (.newCompositeSQLr ^DBAPI @DB)
-         o2 (.execWith sql
-             (fn [^SQLr tx]
-               (.insert tx p))) ]
-    o2))
+(defn- create-person
 
-(defn- wedlock []
-    (let [ ^Transactable sql (.newCompositeSQLr ^DBAPI @DB)
-           h (create-emp "joe" "blog" "joeb")
-           w (create-person "mary" "lou")
-           mc (.getMetas ^DBAPI @DB)
-           [h1 w1] (.execWith
-                     sql
-                     (fn [^SQLr tx] (dbioSetO2O {:as :spouse :with tx :cache mc} h w)))
-           w2 (.execWith
-                sql
-                (fn [^SQLr tx] (dbioGetO2O
-                           {:as :spouse
-                            :cast :czlabtest.dbio.dbstuff/Person
-                            :cache mc
-                            :with tx } h1))) ]
-      (and (not (nil? h))
-           (not (nil? w))
-           (not (nil? w2)))))
+  ""
+  [fname lname]
 
+  (let [p (-> (-> (.get @METAC (mkt "Person"))
+                  (dbioCreateObj))
+              (dbioSetFlds*
+                :first_name fname
+                :last_name  lname
+                :iq 100
+                :bday (GregorianCalendar.)
+                :sex "female"))
+        sql (.newCompositeSQLr ^DBAPI @DB)]
+    (.execWith sql
+               #(.insert ^SQLr %1 p))))
 
-(defn- undo-wedlock []
-    (let [ ^Transactable sql (.newCompositeSQLr ^DBAPI @DB)
-           mc (.getMetas ^DBAPI @DB)
-           h (fetch-emp "joeb")
-           w (.execWith
+(defn- wedlock
+
+  ""
+  []
+
+  (let [sql (.newCompositeSQLr ^DBAPI @DB)
+        h (create-emp "joe" "blog" "joeb")
+        w (create-person "mary" "lou")
+        [h1 w1]
+        (.execWith sql
+                   #(dbioSetO2O {:as :spouse :with %1 } h w))
+        w2
+        (.execWith sql
+                   #(dbioGetO2O {:as :spouse
+                                 :cast (mkt "Person")
+                                 :with %1 } h1))]
+    (and (not (nil? h))
+         (not (nil? w))
+         (not (nil? w1))
+         (not (nil? w2)))))
+
+(defn- undo-wedlock
+
+  ""
+  []
+
+  (let [sql (.newCompositeSQLr ^DBAPI @DB)
+        h (fetch-emp "joeb")
+        w (.execWith
+            sql
+            #(dbioGetO2O {:as :spouse
+                          :with %1
+                          :cast (mkt "Person")} h))
+        h1 (.execWith
+             sql
+             #(dbioClrO2O {:as :spouse
+                           :with %1
+                           :cast (mkt "Person") } h))
+        w1 (.execWith
+             sql
+             #(dbioGetO2O {:as :spouse
+                           :with %1
+                           :cast (mkt "Person")} h1))]
+    (and (not (nil? h))
+         (not (nil? w))
+         (not (nil? h1))
+         (nil? w1))))
+
+(defn- test-company
+
+  ""
+  []
+
+  (let [sql (.newCompositeSQLr ^DBAPI @DB)
+        c (.execWith
+            sql
+            #(.insert ^SQLr %1 (create-company "acme")))]
+    (.execWith
+      sql
+      #(dbioSetO2M {:as :depts :with %1 }
+                   c
+                   (.insert ^SQLr %1 (create-dept "d1"))))
+    (.execWith
+      sql
+      #(dbioSetO2M* {:as :depts :with %1 }
+                    c
+                   (.insert ^SQLr %1 (create-dept "d2"))
+                   (.insert ^SQLr %1 (create-dept "d3"))))
+    (.execWith
+      sql
+      #(dbioSetO2M* {:as :emps :with %1 }
+                    c
+                    (.insert tx (mkEmp "emp1" "ln1" "e1"))
+                    (.insert tx (mkEmp "emp2" "ln2" "e2"))
+                    (.insert tx (mkEmp "emp3" "ln3" "e3")) ))
+    (let [ds (.execWith
                sql
-               (fn [^SQLr tx] (dbioGetO2O
-                          { :as :spouse
-                            :cache mc
-                            :with tx
-                            :cast :czlabtest.dbio.dbstuff/Person } h)))
-           h1 (.execWith
-                sql
-                (fn [^SQLr tx] (dbioClrO2O
-                           {:as :spouse
-                             :with tx
-                             :cache mc
-                             :cast :czlabtest.dbio.dbstuff/Person } h)))
-           w1 (.execWith
-                sql
-                (fn [^SQLr tx] (dbioGetO2O
-                           { :as :spouse
-                             :with tx
-                             :cache mc
-                             :cast :czlabtest.dbio.dbstuff/Person } h1))) ]
-      (and
-        (not (nil? h))
-        (not (nil? w))
-        (not (nil? h1))
-        (nil? w1))))
-
-(defn- test-company []
-    (let [ ^Transactable sql (.newCompositeSQLr ^DBAPI @DB)
-           mc (.getMetas ^DBAPI @DB)
-           c (.execWith
+               #(dbioGetO2M  {:as :depts :with %1} c))
+          es (.execWith
                sql
-               (fn [^SQLr tx]
-                 (.insert tx (create-company "acme")))) ]
-      (.execWith
-         sql
-         (fn [^SQLr tx]
-           (dbioSetO2M {:as :depts :with tx :cache mc}
-                             c (.insert tx (create-dept "d1")))))
-      (.execWith
-         sql
-         (fn [^SQLr tx]
-           (dbioAddO2M {:as :depts :with tx :cache mc}
-                         c
-                         [ (.insert tx (create-dept "d2"))
-                           (.insert tx (create-dept "d3")) ] )))
-      (.execWith
-        sql
-        (fn [^SQLr tx]
-          (dbioAddO2M
-            {:as :emps :with tx :cache mc}
-            c
-            [ (.insert tx (mkEmp "emp1" "ln1" "e1"))
-              (.insert tx (mkEmp "emp2" "ln2" "e2"))
-              (.insert tx (mkEmp "emp3" "ln3" "e3")) ])))
+               #(dbioGetO2M  {:as :emps :with %1} c))]
+      (and (= (count ds) 3)
+           (= (count es) 3))) ))
 
-      (let [ ds (.execWith
-                  sql
-                  (fn [^SQLr tx] (dbioGetO2M  {:cache mc :as :depts :with tx} c)))
-             es (.execWith
-                  sql
-                  (fn [^SQLr tx] (dbioGetO2M  {:cache mc :as :emps :with tx} c))) ]
-        (and (= (count ds) 3)
-             (= (count es) 3))) ))
+(defn- test-m2m
 
-(defn- test-m2m []
-    (let [ ^Transactable sql (.newCompositeSQLr ^DBAPI @DB)
-           mc (.getMetas ^DBAPI @DB)
-           c (.execWith
+  ""
+  []
+
+  (let [sql (.newCompositeSQLr ^DBAPI @DB)
+        c (.execWith
+            sql
+            #(.findOne ^SQLr %1
+                       (mkt "Company") {:cname "acme"} ))
+        ds (.execWith
+             sql
+             #(dbioGetO2M {:as :depts :with %1} c))
+        es (.execWith
+             sql
+             #(dbioGetO2M {:as :emps :with %1} c))]
+    (.execWith
+      sql
+      #(do
+         (doseq [d ds]
+           (if (= (:dname d) "d2")
+             (doseq [e es]
+               (dbioSetM2M {:joined (mkt "EmpDepts") :with %1} d e))))
+         (doseq [e es]
+           (if (= (:login e) "e2")
+             (doseq [d ds
+                     :let [dn (:dname d)]
+                     :when (not= dn "d2")]
+               (dbioSetM2M {:joined (mkt "EmpDepts") :with %1} e d))))))
+
+    (let [s1 (.execWith
                sql
-               (fn [^SQLr tx]
-                 (.findOne tx :czlabtest.dbio.dbstuff/Company {:cname "acme"} )))
-           ds (.execWith
-                sql
-                (fn [^SQLr tx] (dbioGetO2M {:cache mc :as :depts :with tx} c)))
-           es (.execWith
-                sql
-                (fn [^SQLr tx] (dbioGetO2M {:cache mc :as :emps :with tx} c))) ]
-      (.execWith
-        sql
-        (fn [^SQLr tx]
-          (doseq [ d (seq ds) ]
-            (if (= (:dname d) "d2")
-              (doseq [ e (seq es) ]
-                (dbioSetM2M {:cache mc :as :emps :with tx} d e))))
-          (doseq [ e (seq es) ]
-            (if (= (:login e) "e2")
-              (doseq [ d (seq ds) ]
-                (dbioSetM2M {:cache mc :as :depts :with tx} e d)))) ))
-
-      (let [ s1 (.execWith
-                  sql
-                  (fn [^SQLr tx]
-                    (dbioGetM2M
-                    {:cache mc :as :emps :with tx}
-                    (some (fn [d]
-                              (if (= (:dname d) "d2") d nil)) ds) )))
-             s2 (.execWith
-                  sql
-                  (fn [^SQLr tx]
-                    (dbioGetM2M
-                    {:cache mc :as :depts :with tx}
-                    (some (fn [e]
-                              (if (= (:login e) "e2") e nil)) es) ))) ]
-        (and (== (count s1) 3)
-             (== (count s2) 3)) )))
-
-(defn- undo-m2m []
-    (let [ ^Transactable sql (.newCompositeSQLr ^DBAPI @DB)
-           mc (.getMetas ^DBAPI @DB)
-           d2 (.execWith
+               #(dbioGetM2M
+                  {:as :emps :with %1}
+                  (some #(if (= (:dname %) "d2") % nil)) ds))
+          s2 (.execWith
                sql
-               (fn [^SQLr tx]
-                 (.findOne tx :czlabtest.dbio.dbstuff/Department {:dname "d2"} )))
-           e2 (.execWith
+               #(dbioGetM2M
+                  {:as :depts :with %1}
+                  (some #(if (= (:login %) "e2") % nil)) es) )]
+      (and (== (count s1) 3)
+           (== (count s2) 3)) )))
+
+(defn- undo-m2m
+
+  ""
+  []
+
+  (let [sql (.newCompositeSQLr ^DBAPI @DB)
+        d2 (.execWith
+             sql
+             #(.findOne ^SQLr % (mkt "Department") {:dname "d2"} ))
+        e2 (.execWith
+             sql
+             #(.findOne ^SQLr % (mkt "Employee") {:login "e2"} ))]
+    (.execWith
+      sql
+      #(dbioClrM2M {:joined (mkt "EmpDepts") :with % } d2))
+    (.execWith
+      sql
+      #(dbioClrM2M {:joined (mkt "EmpDepts") :with % } e2)))
+
+  (let [s1 (.execWith
+             sql
+             #(dbioGetM2M {:joined (mkt "EmpDepts") :with %} d2))
+        s2 (.execWith
+             sql
+             #(dbioGetM2M {:joined (mkt "EmpDepts") :with %} e2))]
+    (and (== (count s1) 0)
+         (== (count s2) 0)) ))
+
+(defn- undo-company
+
+  ""
+  []
+
+  (let [sql (.newCompositeSQLr ^DBAPI @DB)
+        c (.execWith
+            sql
+            #(.findOne ^SQLr % (mkt "Company") {:cname "acme"} ))]
+    (.execWith
+      sql
+      #(dbioClrO2M {:as :depts :with %} c))
+    (.execWith
+      sql
+      #(dbioClrO2M {:as :emps :with %} c))
+    (let [s1 (.execWith
                sql
-               (fn [^SQLr tx]
-                 (.findOne tx :czlabtest.dbio.dbstuff/Employee {:login "e2"} ))) ]
-
-      (.execWith
-        sql
-        (fn [^SQLr tx]
-          (dbioClrM2M {:cache mc :as :emps :with tx } d2)))
-
-      (.execWith
-        sql
-        (fn [^SQLr tx]
-          (dbioClrM2M {:cache mc :as :depts :with tx } e2)))
-
-      (let [ s1 (.execWith
-                  sql
-                  (fn [^SQLr tx]
-                    (dbioGetM2M {:cache mc :as :emps :with tx} d2)))
-
-             s2 (.execWith
-                  sql
-                  (fn [^SQLr tx]
-                    (dbioGetM2M {:cache mc :as :depts :with tx} e2))) ]
-
-        (and (== (count s1) 0)
-             (== (count s2) 0)) )))
-
-
-(defn- undo-company []
-    (let [ ^Transactable sql (.newCompositeSQLr ^DBAPI @DB)
-           mc (.getMetas ^DBAPI @DB)
-           c (.execWith
+               #(dbioGetO2M {:as :depts :with %} c))
+          s2 (.execWith
                sql
-               (fn [^SQLr tx]
-                 (.findOne tx :czlabtest.dbio.dbstuff/Company {:cname "acme"} ))) ]
-      (.execWith
-        sql
-        (fn [^SQLr tx]
-          (dbioClrO2M {:cache mc :as :depts :with tx} c)))
-
-      (.execWith
-        sql
-        (fn [^SQLr tx]
-          (dbioClrO2M {:cache mc :as :emps :with tx} c)))
-
-      (let [ s1 (.execWith
-                  sql
-                  (fn [^SQLr tx]
-                    (dbioGetO2M {:cache mc :as :depts :with tx} c)))
-             s2 (.execWith
-                  sql
-                  (fn [^SQLr tx]
-                    (dbioGetO2M {:cache mc :as :emps :with tx} c))) ]
-
-        (and (== (count s1) 0)
-             (== (count s2) 0)))))
-
+               #(dbioGetO2M {:as :emps :with %} c))]
+      (and (== (count s1) 0)
+           (== (count s2) 0)))))
 
 (deftest czlabtestdbio-dbstuff
 
   (is (do (init-test nil) true))
 
-         ;; basic CRUD
-         ;;
-  (is (let [ m (meta (create-emp "joe" "blog" "joeb"))
-             r (:rowid m)
-             v (:verid m) ]
-        (and (> r 0) (== v 0))))
-  (is (let [ a (fetch-all-emps) ]
+  ;; basic CRUD
+  ;;
+  (is (let [m (create-emp "joe" "blog" "joeb")
+            r (:rowid m)]
+        (> r 0)))
+
+  (is (let [a (fetch-all-emps)]
         (== (count a) 1)))
-  (is (let [ a (fetch-emp "joeb" ) ]
+
+  (is (let [a (fetch-emp "joeb" ) ]
         (not (nil? a))))
-  (is (let [ a (change-emp "joeb" ) ]
+
+  (is (let [a (change-emp "joeb" ) ]
         (not (nil? a))))
-  (is (let [ rc (delete-emp "joeb") ]
+
+  (is (let [rc (delete-emp "joeb") ]
         (== rc 0)))
-  (is (let [ a (fetch-all-emps) ]
+
+  (is (let [a (fetch-all-emps) ]
         (== (count a) 0)))
 
-         ;; one to one assoc
-         ;;
+  ;; one to one assoc
+  ;;
   (is (wedlock))
   (is (undo-wedlock))
 
-         ;; one to many assocs
+  ;; one to many assocs
   (is (test-company))
 
-         ;; m to m assocs
+  ;; m to m assocs
   (is (test-m2m))
   (is (undo-m2m))
 
   (is (undo-company))
-
 )
 
 ;;(use-fixtures :each init-test)
