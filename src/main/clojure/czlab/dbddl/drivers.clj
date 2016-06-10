@@ -403,7 +403,7 @@
                  (genExec dbtype) "\n\n")))
         b)
       (StringBuilder.)
-      (collectDbXXX :indexes schema model))))
+      (collectDbXXX :indexes model))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -427,7 +427,7 @@
                  ")")))
         b)
       (StringBuilder.)
-      (collectDbXXX :uniques schema model))))
+      (collectDbXXX :uniques model))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -451,12 +451,12 @@
   [dbtype schema model]
 
   (let
-    [fields (collectDbXXX :fields schema model)
+    [fields (:fields (meta model))
      bf (StringBuilder.)
      pkeys
      (persistent!
        (reduce
-         (fn [p [_ fld]]
+         (fn [p [k fld]]
            (->> (case (:domain fld)
                   :Timestamp (genTimestamp dbtype fld)
                   :Date (genDate dbtype fld)
@@ -477,7 +477,7 @@
            (if (:pkey fld)
              (conj! p fld)
              p))
-         (transient {})
+         (transient [])
          fields))]
     (when (> (.length bf) 0)
       (when-not (empty? pkeys)

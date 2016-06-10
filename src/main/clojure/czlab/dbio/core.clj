@@ -20,8 +20,8 @@
   (:import
     [clojure.lang
      Keyword
-     PersistentVector
-     PersistentArrayMap ]
+     APersistentMap
+     APersistentVector]
     [java.util
      HashMap
      TimeZone
@@ -106,9 +106,9 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defmacro set-oid "" ^:private [pojo oid] `(assoc ~pojo :rowid ~oid))
+(defmacro gtype "" ^:no-doc [obj]  `(:id (:model (meta ~obj))))
 (defmacro gschema "" ^:no-doc [obj]  `(:schema (meta ~obj)))
 (defmacro gmodel "" ^:no-doc [obj]  `(:model (meta ~obj)))
-(defmacro gtype "" ^:no-doc [obj]  `(:id (:model (meta ~obj))))
 (defmacro goid "" ^:no-doc [obj]  `(:rowid ~obj))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -120,7 +120,7 @@
 ;;
 (defmethod fmtSQLIdStr
 
-  PersistentArrayMap
+  APersistentMap
 
   ^String
   [info idstr & [quote?]]
@@ -203,7 +203,7 @@
 
   "Merge 2 meta maps"
 
-  ^PersistentArrayMap
+  ^APersistentMap
   [m1 m2]
 
   {:pre [(map? m1) (or (nil? m2)(map? m2))]}
@@ -373,9 +373,9 @@
 
   "Define a generic model"
 
-  (^PersistentArrayMap [^String nm] (dbioModel (str *ns*) nm))
+  (^APersistentMap [^String nm] (dbioModel (str *ns*) nm))
 
-  (^PersistentArrayMap [^String nsp ^String nm]
+  (^APersistentMap [^String nsp ^String nm]
    {:id (keyword (str nsp "/" nm))
     :table (cleanName nm)
     :parent nil
@@ -444,7 +444,7 @@
 
   "Give a parent to the model"
 
-  ^PersistentArrayMap
+  ^APersistentMap
   [pojo par]
 
   {:pre [(map? pojo)
@@ -461,7 +461,7 @@
   "A special model with 2 relations,
    left hand side and right hand side"
 
-  ^PersistentArrayMap
+  ^APersistentMap
   [pojo lhs rhs]
 
   {:pre [(map? pojo)
@@ -483,7 +483,7 @@
 
   "Set the table name"
 
-  ^PersistentArrayMap
+  ^APersistentMap
   [pojo table]
 
   {:pre [(map? pojo)]}
@@ -515,7 +515,7 @@
 
   "Set indexes to the model"
 
-  ^PersistentArrayMap
+  ^APersistentMap
   [pojo indices]
 
   {:pre [(map? pojo) (map? indices)]}
@@ -529,7 +529,7 @@
 
   "Set uniques to the model"
 
-  ^PersistentArrayMap
+  ^APersistentMap
   [pojo uniqs]
 
   {:pre [(map? pojo) (map? uniqs)]}
@@ -543,7 +543,7 @@
 
   "The base field structure"
 
-  ^PersistentArrayMap
+  ^APersistentMap
   [fid]
 
   {:column (cleanName fid)
@@ -565,7 +565,7 @@
 
   "Add a new field"
 
-  ^PersistentArrayMap
+  ^APersistentMap
   [pojo fid fdef]
 
   {:pre [(map? pojo) (map? fdef)]}
@@ -580,7 +580,7 @@
 
   "Add a bunch of fields"
 
-  ^PersistentArrayMap
+  ^APersistentMap
   [pojo flddefs]
 
   {:pre [(map? pojo) (map? flddefs)]}
@@ -618,7 +618,7 @@
 
   "Add a one to many relation"
 
-  ^PersistentArrayMap
+  ^APersistentMap
   [pojo rid rhs & [cascade?]]
 
   (withRelation pojo rid rhs :O2M cascade?))
@@ -629,7 +629,7 @@
 
   "Add a one to one relation"
 
-  ^PersistentArrayMap
+  ^APersistentMap
   [pojo rid rhs & [cascade?]]
 
   (withRelation pojo rid rhs :O2O cascade?))
@@ -640,7 +640,7 @@
 
   "Set the model as abstract"
 
-  ^PersistentArrayMap
+  ^APersistentMap
   [pojo flag]
 
   {:pre [(map? pojo)]}
@@ -766,28 +766,44 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defmulti collectDbXXX "" collect-db-xxx-filter)
+(defmulti collect-db-xxx "" ^:private collect-db-xxx-filter)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defmethod collectDbXXX :keyword
+(defmethod collect-db-xxx
+
+  :keyword
 
   [kw metas model-id]
 
   (if-some [mcz (metas model-id)]
-    (collectDbXXX kw metas mcz)
+    (collect-db-xxx kw metas mcz)
     (log/warn "Unknown model id: %s" model-id)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defmethod collectDbXXX :map
+(defmethod collect-db-xxx
+
+  :map
 
   [kw metas model-def]
 
   (if-some [par (:parent model-def)]
-    (merge {} (collectDbXXX kw metas par)
+    (merge {} (collect-db-xxx kw metas par)
               (kw model-def))
     (merge {} (kw model-def))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
+(defn collectDbXXX
+
+  ""
+
+  ^:no-doc
+  [kw model]
+
+  (let [^Schema s (gschema model)]
+    (collect-db-xxx kw (.getModels s) model)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -815,7 +831,7 @@
 
   (with-local-vars [sum (transient {})]
     (doseq [[k m] metas]
-      (let [flds (collectDbXXX :fields metas m)
+      (let [flds (collect-db-xxx :fields metas m)
             cols (colmap-fields flds)]
         (var-set sum
                  (assoc! @sum
@@ -978,7 +994,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defmulti resolveVendor
-  "Find type of database" ^PersistentArrayMap (fn [a & xs] a))
+  "Find type of database" ^APersistentMap (fn [a & xs] (class a)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -986,7 +1002,7 @@
 
   JDBCInfo
 
-  ^PersistentArrayMap
+  ^APersistentMap
   [jdbc]
 
   (with-open [conn (mkDbConnection jdbc)]
@@ -998,7 +1014,7 @@
 
   Connection
 
-  ^PersistentArrayMap
+  ^APersistentMap
   [conn]
 
   (let [md (.getMetaData ^Connection conn) ]
@@ -1014,7 +1030,7 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defmulti tableExist? "Is this table defined in db?" (fn [a & xs] a))
+(defmulti tableExist? "Is this table defined in db?" (fn [a & xs] (class a)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -1064,7 +1080,7 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defmulti rowExist? "Is there any rows in the table?" (fn [a & xs] a))
+(defmulti rowExist? "Is there any rows in the table?" (fn [a & xs] (class a)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -1260,7 +1276,7 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defmulti uploadDdl "Upload DDL to DB" (fn [a & xs] a))
+(defmulti uploadDdl "Upload DDL to DB" (fn [a & xs] (class a)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -1318,7 +1334,7 @@
 
   "Creates a blank object of the given type"
 
-  ^PersistentArrayMap
+  ^APersistentMap
   [model]
 
   {:pre [(some? model)]}
@@ -1350,7 +1366,7 @@
 
   "Set many field values such as f1 v1 f2 v2 ... fn vn"
 
-  ^PersistentArrayMap
+  ^APersistentMap
   [pojo fld value & fvs]
 
   {:pre [(or (empty? fvs)
@@ -1500,7 +1516,7 @@
 
   ""
 
-  ^PersistentVector
+  ^APersistentVector
   [ctx lhsObj & rhsObjs]
 
   (persistent!
@@ -1518,7 +1534,7 @@
 
   "One to one relation"
 
-  ^PersistentArrayMap
+  ^APersistentMap
   [ctx lhsObj]
 
   {:pre [(map? ctx) (map? lhsObj)]}
@@ -1619,7 +1635,7 @@
 
   "Many to many relations"
 
-  ^PersistentArrayMap
+  ^APersistentMap
   [ctx objA objB]
 
   {:pre [(map? ctx) (map? objA) (map? objB)]}

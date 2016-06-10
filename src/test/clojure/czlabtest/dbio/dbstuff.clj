@@ -122,7 +122,7 @@
   ""
   [fname lname login]
 
-  (let [emp (-> (.get @METAC (mkt "Employee"))
+  (let [emp (-> (.get ^Schema @METAC (mkt "Employee"))
                  dbioCreateObj)]
     (dbioSetFlds*
       emp
@@ -142,9 +142,9 @@
   ""
   [cname]
 
-  (let [c (-> (.get @METAC (mkt "Company"))
+  (let [c (-> (.get ^Schema @METAC (mkt "Company"))
               (dbioCreateObj))]
-    (dbioSetFld*
+    (dbioSetFlds*
       c
       :cname cname
       :revenue 100.00
@@ -155,7 +155,7 @@
   ""
   [dname]
 
-  (-> (-> (.get @METAC (mkt "Department"))
+  (-> (-> (.get ^Schema @METAC (mkt "Department"))
           (dbioCreateObj))
       (dbioSetFld :dname dname)))
 
@@ -221,7 +221,7 @@
   ""
   [fname lname]
 
-  (let [p (-> (-> (.get @METAC (mkt "Person"))
+  (let [p (-> (-> (.get ^Schema @METAC (mkt "Person"))
                   (dbioCreateObj))
               (dbioSetFlds*
                 :first_name fname
@@ -305,9 +305,9 @@
       sql
       #(dbioSetO2M* {:as :emps :with %1 }
                     c
-                    (.insert tx (mkEmp "emp1" "ln1" "e1"))
-                    (.insert tx (mkEmp "emp2" "ln2" "e2"))
-                    (.insert tx (mkEmp "emp3" "ln3" "e3")) ))
+                    (.insert ^SQLr % (mkEmp "emp1" "ln1" "e1"))
+                    (.insert ^SQLr % (mkEmp "emp2" "ln2" "e2"))
+                    (.insert ^SQLr % (mkEmp "emp3" "ln3" "e3")) ))
     (let [ds (.execWith
                sql
                #(dbioGetO2M  {:as :depts :with %1} c))
@@ -349,14 +349,16 @@
 
     (let [s1 (.execWith
                sql
-               #(dbioGetM2M
-                  {:as :emps :with %1}
-                  (some #(if (= (:dname %) "d2") % nil)) ds))
+               (fn [s]
+                 (dbioGetM2M
+                   {:as :emps :with s}
+                   (some #(if (= (:dname %) "d2") % nil)) ds)))
           s2 (.execWith
                sql
-               #(dbioGetM2M
-                  {:as :depts :with %1}
-                  (some #(if (= (:login %) "e2") % nil)) es) )]
+               (fn [s]
+                 (dbioGetM2M
+                   {:as :depts :with s}
+                   (some #(if (= (:login %) "e2") % nil)) es)))]
       (and (== (count s1) 3)
            (== (count s2) 3)) )))
 
@@ -377,16 +379,15 @@
       #(dbioClrM2M {:joined (mkt "EmpDepts") :with % } d2))
     (.execWith
       sql
-      #(dbioClrM2M {:joined (mkt "EmpDepts") :with % } e2)))
-
-  (let [s1 (.execWith
-             sql
-             #(dbioGetM2M {:joined (mkt "EmpDepts") :with %} d2))
-        s2 (.execWith
-             sql
-             #(dbioGetM2M {:joined (mkt "EmpDepts") :with %} e2))]
-    (and (== (count s1) 0)
-         (== (count s2) 0)) ))
+      #(dbioClrM2M {:joined (mkt "EmpDepts") :with % } e2))
+    (let [s1 (.execWith
+               sql
+               #(dbioGetM2M {:joined (mkt "EmpDepts") :with %} d2))
+          s2 (.execWith
+               sql
+               #(dbioGetM2M {:joined (mkt "EmpDepts") :with %} e2))]
+      (and (== (count s1) 0)
+           (== (count s2) 0)) )))
 
 (defn- undo-company
 
