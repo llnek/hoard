@@ -1293,7 +1293,7 @@
 
   [pojo fld value]
 
-  {:pre [(map? pojo) (:keyword? fld)]}
+  {:pre [(map? pojo) (keyword? fld)]}
 
   (if (checkField? fld)
     (assoc pojo fld value)

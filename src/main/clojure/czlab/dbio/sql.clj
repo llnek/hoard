@@ -556,7 +556,7 @@
                     conn
                     (str "INSERT INTO "
                          (fmtSQLIdStr db (dbTablename mcz))
-                         "(" s1 ") VALUES (" s2 ")")
+                         " (" s1 ") VALUES (" s2 ")")
                     pms
                     {:pkey (dbColname :rowid mcz)})]
             (if (empty? out)
@@ -565,7 +565,7 @@
             (let [wm {:rowid (:1 out) } ]
               (when-not (number? (:rowid wm))
                 (throwDBError (str "RowID data-type must be a Long.")))
-              (vary-meta obj mergeMeta wm)))))
+              (merge obj wm)))))
       (throwDBError (str "Unknown model for " obj))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

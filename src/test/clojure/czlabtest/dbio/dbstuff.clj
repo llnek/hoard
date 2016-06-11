@@ -57,10 +57,12 @@
   (withIndexes
     {:i1 #{ :first_name :last_name }
      :i2 #{ :bday } } )
-  (withO2O :spouse (dbioScopeType "Person")))
+  (withO2O :spouse ::Person))
+
+(defO2O Spouse ::Person ::Person)
 
 (defModel Employee
-  (withParent  (dbioScopeType "Person"))
+  (withParent ::Person)
   (withFields
     {:salary { :domain :Float :null false }
      :passcode { :domain :Password }
@@ -80,15 +82,17 @@
     {:revenue { :domain :Double :null false }
      :cname { :null false }
      :logo { :domain :Bytes } })
-  (withO2M :depts (dbioScopeType "Department"))
-  (withO2M :emps (dbioScopeType "Employee"))
-  (withO2O :hq (dbioScopeType "Address"))
+  (withO2M :depts ::Department)
+  (withO2M :emps ::Employee)
+  (withO2O :hq ::Address)
   (withUniques
     {:u1 #{ :cname } } ))
 
-(defJoined EmpDepts
-           (dbioScopeType "Department")
-           (dbioScopeType "Employee"))
+(defO2M Depts ::Company ::Department true)
+(defO2M Emps ::Company ::Employee true)
+(defO2O HQ ::Company ::Address true)
+
+(defJoined EmpDepts ::Department ::Employee)
 
 (def METAC (atom nil))
 (def JDBC (atom nil))
