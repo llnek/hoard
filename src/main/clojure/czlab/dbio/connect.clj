@@ -12,7 +12,7 @@
 ;;
 ;; Copyright (c) 2013-2016, Kenneth Leung. All rights reserved.
 
-(ns ^{:doc ""
+(ns ^{:doc "Database connections"
       :author "kenl" }
 
   czlab.dbio.connect
@@ -29,7 +29,7 @@
     [java.util Map])
 
   (:require
-    [czlab.xlib.core :refer [try!]]
+    [czlab.xlib.core :refer [try! test-nonil]]
     [czlab.xlib.logging :as log])
 
   (:use [czlab.dbio.composite]
@@ -45,6 +45,7 @@
 
   "Add a thread-local db pool"
 
+  ^JDBCPool
   [^JDBCInfo jdbc options]
 
   (let [^Map
@@ -71,6 +72,7 @@
   [^JDBCInfo jdbc schema options]
 
   (let [v (resolveVendor jdbc)]
+    (test-nonil "database-vendor" v)
     (reify
 
       DBAPI
@@ -95,6 +97,7 @@
   [^JDBCPool pool schema options]
 
   (let [v (.vendor pool)]
+    (test-nonil "database-vendor" v)
     (reify
 
       DBAPI

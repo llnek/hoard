@@ -12,7 +12,7 @@
 ;;
 ;; Copyright (c) 2013-2016, Kenneth Leung. All rights reserved.
 
-(ns ^{:doc ""
+(ns ^{:doc "Database and modeling utilties"
       :author "kenl" }
 
   czlab.dbio.core
@@ -60,7 +60,9 @@
              addDelim!
              hasNoCase?]]
     [czlab.xlib.core
-     :refer [cast?
+     :refer [asFQKeyword
+             test-nonil
+             cast?
              tryc
              try!
              trylet!
@@ -288,22 +290,9 @@
 
   "Throw a DBIOError execption"
 
-  ^:no-doc
   [^String msg]
 
   (trap! DBIOError msg))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;
-(defn dbioScopeType
-
-  "Scope a type id"
-
-  ^Keyword
-  ^:no-doc
-  [t]
-
-  (keyword (str *ns* "/" t)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -335,37 +324,10 @@
   (keyword (str "fk_" (name tn) "_" (name rn))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;
-(defn- matchDbType
-
-  "Ensure the database type is supported"
-
-  ^Keyword
-  [db]
-
-  (let [kw (keyword (lcase db))]
-    (when
-      (some? (DBTYPES kw)) kw)))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;
-(defn- matchJdbcUrl
-
-  "From the jdbc url, get the database type"
-
-  ^Keyword
-  [urlStr]
-
-  (let [ss (cs/split urlStr #":")]
-    (when
-      (> (count ss) 1)
-      (matchDbType (nth ss 1)))))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; DATA MODELING
 ;;
-(defonce JOINED-MODEL-MONIKER :czc.dbio.core/DBIOJoinedModel)
-(defonce BASEMODEL-MONIKER :czc.dbio.core/DBIOBaseModel)
+(defonce JOINED-MODEL-MONIKER ::DBIOJoinedModel)
+(defonce BASEMODEL-MONIKER ::DBIOBaseModel)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -373,32 +335,19 @@
 
   "Define a generic model"
 
-  (^APersistentMap [^String nm] (dbioModel (str *ns*) nm))
+  ^APersistentMap
+  [^String nm]
 
-  (^APersistentMap [^String nsp ^String nm]
-   {:id (keyword (str nsp "/" nm))
-    :table (cleanName nm)
-    :parent nil
-    :abstract false
-    :system false
-    :mxm false
-    :indexes {}
-    :uniques {}
-    :fields {}
-    :rels {} }))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;
-(defmacro defModelWithNSP
-
-  "Define a data model (with namespace)"
-
-  [nsp modelname & body]
-
-  `(def ~modelname
-     (-> (dbioModel ~nsp
-                    ~(name modelname))
-         ~@body)))
+  {:table (cleanName nm)
+   :id (asFQKeyword nm)
+   :parent nil
+   :abstract false
+   :system false
+   :mxm false
+   :indexes {}
+   :uniques {}
+   :fields {}
+   :rels {} })
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -411,19 +360,6 @@
   `(def ~modelname
      (-> (dbioModel ~(name modelname))
          ~@body)))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;
-(defmacro defJoinedWithNSP
-
-  "Define a joined data model with namespace"
-
-  [nsp modelname lhs rhs]
-
-  `(def ~modelname
-      (-> (dbioModel ~nsp ~(name modelname))
-          (assoc :parent JOINED-MODEL-MONIKER)
-          (withJoined ~lhs ~rhs))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -442,7 +378,7 @@
 ;;
 (defn withParent
 
-  "Give a parent to the model"
+  "Link a parent to the model"
 
   ^APersistentMap
   [pojo par]
@@ -659,7 +595,7 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Defining the base model here
-(defModelWithNSP _NSP DBIOBaseModel
+(defModel DBIOBaseModel
   (withAbstract true)
   (with-db-system)
   (withFields
@@ -683,7 +619,7 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defModelWithNSP _NSP DBIOJoinedModel
+(defModel DBIOJoinedModel
   (withAbstract true)
   (with-db-system)
   (withFields
@@ -721,7 +657,7 @@
                           (transient {}) (keys metas))
                     xs (transient {})]
     ;; as we find new relation fields,
-    ;; add them to the placeholder maps
+    ;; add them to the placeholders
     (doseq [[_ m] metas
             :let [rs (:rels m)]
             :when (and (not (:abstract m))
@@ -742,19 +678,22 @@
     (doseq [[k v] (persistent! @phd)
             :let [mcz (metas k)]]
       (->> (assoc! @xs k
-                       (assoc mcz :fields (merge (:fields mcz) v)))
+                       (assoc mcz
+                              :fields
+                              (merge (:fields mcz) v)))
            (var-set xs )))
     (persistent! @xs)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defn- collect-db-xxx-filter
+(defmulti collect-db-xxx
 
   ""
+  ^:private
 
-  [k a b]
+  (fn [_ _ b]
 
-  (cond
+    (cond
     (keyword? b)
     :keyword
 
@@ -762,11 +701,7 @@
     :map
 
     :else
-    (throwDBError (str "Invalid arg " b))))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;
-(defmulti collect-db-xxx "" ^:private collect-db-xxx-filter)
+    (throwDBError (str "Invalid arg " b)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -801,6 +736,8 @@
 
   ^:no-doc
   [kw model]
+
+  {:pre [(map? model)]}
 
   (let [^Schema s (gschema model)]
     (collect-db-xxx kw (.getModels s) model)))
@@ -849,8 +786,6 @@
   "Ensure that all user defined models are
    all derived from the system base model"
 
-  ;; map of models
-  ;; model defn
   [metas model]
 
   (let [par (:parent model)]
@@ -890,12 +825,12 @@
   "A cache storing meta-data for all models"
 
   ^Schema
-  [ & models]
+  [& models]
 
   (let [data (atom {})
         schema (reify Schema
-                 (get [_ id] (get (deref data) id))
-                 (getModels [_] (deref data)))
+                 (get [_ id] (get @data id))
+                 (getModels [_] @data))
         ms (if (empty? models)
              {}
              (persistent!
@@ -1005,7 +940,8 @@
   ^APersistentMap
   [jdbc]
 
-  (with-open [conn (mkDbConnection jdbc)]
+  (with-open
+    [conn (mkDbConnection jdbc)]
     (resolveVendor conn)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -1030,7 +966,8 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defmulti tableExist? "Is this table defined in db?" (fn [a & xs] (class a)))
+(defmulti tableExist?
+  "Is this table defined in db?" (fn [a & xs] (class a)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -1080,7 +1017,8 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defmulti rowExist? "Is there any rows in the table?" (fn [a & xs] (class a)))
+(defmulti rowExist?
+  "Is there any rows in the table?" (fn [a & xs] (class a)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -1124,8 +1062,7 @@
    ^String catalog
    ^String schema ^String table]
 
-  (with-local-vars [pkeys #{}
-                    cms {} ]
+  (with-local-vars [pkeys #{} cms {}]
     (with-open [rs (.getPrimaryKeys mt
                                     catalog
                                     schema table)]
@@ -1134,7 +1071,7 @@
         (if-not more
           (var-set pkeys (persistent! sum))
           (recur
-            (conj! sum (ucase (.getString rs (int 4))))
+            (conj! sum (.getString rs (int 4)))
             (.next rs)))))
     (with-open [rs (.getColumns mt
                                 catalog
@@ -1145,13 +1082,14 @@
           (var-set cms (persistent! sum))
           (let [opt (not= (.getInt rs (int 11))
                           DatabaseMetaData/columnNoNulls)
-                cn (ucase (.getString rs (int 4)))
+                n (.getString rs (int 4))
+                cn (ucase n)
                 ctype (.getInt rs (int 5))]
             (recur
               (assoc! sum
                       (keyword cn)
-                      {:column cn :sql-type ctype :null opt
-                       :pkey (clojure.core/contains? @pkeys cn) })
+                      {:column n :sql-type ctype :null opt
+                       :pkey (clojure.core/contains? @pkeys n) })
               (.next rs))))))
     (with-meta @cms {:supportsGetGeneratedKeys
                      (.supportsGetGeneratedKeys mt)
@@ -1189,6 +1127,7 @@
   [^JDBCInfo jdbc ^BoneCP impl]
 
   (let [dbv (resolveVendor jdbc)]
+    (test-nonil "database-vendor" dbv)
     (reify
 
       JDBCPool
