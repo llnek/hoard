@@ -57,12 +57,13 @@
   (withIndexes
     {:i1 #{ :first_name :last_name }
      :i2 #{ :bday } } )
+  (withO2M :addrs ::Address)
   (withO2O :spouse ::Person))
 
-(defO2O Spouse ::Person ::Person)
-
 (defModel Employee
-  (withParent ::Person)
+  (withParent
+    ::Person
+    {:fields #{} :rels #{ :addrs } })
   (withFields
     {:salary { :domain :Float :null false }
      :passcode { :domain :Password }
@@ -82,15 +83,11 @@
     {:revenue { :domain :Double :null false }
      :cname { :null false }
      :logo { :domain :Bytes } })
-  (withO2M :depts ::Department)
-  (withO2M :emps ::Employee)
-  (withO2O :hq ::Address)
+  (withO2M :depts ::Department true)
+  (withO2M :emps ::Employee true)
+  (withO2O :hq ::Address true)
   (withUniques
     {:u1 #{ :cname } } ))
-
-(defO2M Depts ::Company ::Department true)
-(defO2M Emps ::Company ::Employee true)
-(defO2O HQ ::Company ::Address true)
 
 (defJoined EmpDepts ::Department ::Employee)
 

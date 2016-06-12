@@ -347,7 +347,8 @@
    :indexes {}
    :uniques {}
    :fields {}
-   :rels {} })
+   :rels {}
+   :excludes {} })
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -381,14 +382,17 @@
   "Link a parent to the model"
 
   ^APersistentMap
-  [pojo par]
+  [pojo par & [excludes]]
 
-  {:pre [(map? pojo)
-         (keyword? par)
+  {:pre [(or (nil? excludes) (map? excludes))
          (not= JOINED-MODEL-MONIKER par)
-         (not= BASEMODEL-MONIKER par)]}
+         (not= BASEMODEL-MONIKER par)
+         (map? pojo)
+         (keyword? par)]}
 
-  (assoc pojo :parent par))
+  (-> pojo
+      (assoc :parent par)
+      (assoc :excludes (or excludes {}))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -757,6 +761,14 @@
       (transient {})
       flds)))
 
+(defn- yyy)
+(defn- xxx
+  ""
+  [metas]
+  (let [bin (atom {})]
+  (doseq [[k m] metas]
+    (yyy m bin)
+  ))
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defn- meta-models
