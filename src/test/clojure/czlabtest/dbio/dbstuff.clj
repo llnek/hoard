@@ -33,37 +33,34 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defModel Address
-  (withFields
+(declModel Address
+  (declFields
     {:addr1 { :size 200 :null false }
      :addr2 { :size 64}
      :city { :null false}
      :state {:null false}
      :zip {:null false}
      :country {:null false} })
-  (withIndexes
+  (declIndexes
     {:i1 #{ :city :state :country }
      :i2 #{ :zip :country }
-     :state #{ :state }
-     :zip #{ :zip } } ))
+     :i3 #{ :state }
+     :i4 #{ :zip } } ))
 
-(defModel Person
-  (withFields
+(declModel Person
+  (declFields
     {:first_name { :null false }
      :last_name { :null false }
      :iq { :domain :Int }
      :bday {:domain :Calendar :null false }
      :sex {:null false} })
-  (withIndexes
+  (declIndexes
     {:i1 #{ :first_name :last_name }
      :i2 #{ :bday } } )
-  (withO2M :addrs ::Address)
-  (withO2O :spouse ::Person))
+  (declRelation :addrs :O2M  ::Address)
+  (declRelation :spouse :O2O ::Person))
 
-(defModel Employee
-  (withParent
-    ::Person
-    {:fields #{} :rels #{ :addrs } })
+(declModel Employee
   (withFields
     {:salary { :domain :Float :null false }
      :passcode { :domain :Password }

@@ -109,7 +109,7 @@
 ;;
 (defmacro set-oid "" ^:private [pojo oid] `(assoc ~pojo :rowid ~oid))
 (defmacro gtype "" ^:no-doc [obj]  `(:id (:model (meta ~obj))))
-(defmacro gschema "" ^:no-doc [obj]  `(:schema (meta ~obj)))
+(defn gschema "" ^Schema ^:no-doc [obj]  (:schema (meta obj)))
 (defmacro gmodel "" ^:no-doc [obj]  `(:model (meta ~obj)))
 (defmacro goid "" ^:no-doc [obj]  `(:rowid ~obj))
 
@@ -761,14 +761,6 @@
       (transient {})
       flds)))
 
-(defn- yyy)
-(defn- xxx
-  ""
-  [metas]
-  (let [bin (atom {})]
-  (doseq [[k m] metas]
-    (yyy m bin)
-  ))
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defn- meta-models
