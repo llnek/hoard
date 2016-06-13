@@ -57,36 +57,40 @@
   (declIndexes
     {:i1 #{ :first_name :last_name }
      :i2 #{ :bday } } )
-  (declRelation :addrs :O2M  ::Address)
-  (declRelation :spouse :O2O ::Person))
+  (declRelations
+    {:addrs {:kind :O2M :other ::Address :cascade true}
+     :spouse {:kind :O2O :other ::Person } }))
 
 (declModel Employee
-  (withFields
+  (declFields
     {:salary { :domain :Float :null false }
      :passcode { :domain :Password }
      :pic { :domain :Bytes }
      :descr {}
      :login {:null false} })
-  (withIndexes { :i1 #{ :login } } ))
+  (declIndexes {:i1 #{ :login } } )
+  (declRelations
+    {:person {:kind :O2O :other ::Person } }))
 
-(defModel Department
-  (withFields
+(declModel Department
+  (declFields
     {:dname { :null false } })
-  (withUniques
+  (declUniques
     {:u1 #{ :dname }} ))
 
-(defModel Company
-  (withFields
+(declModel Company
+  (declFields
     {:revenue { :domain :Double :null false }
      :cname { :null false }
      :logo { :domain :Bytes } })
-  (withO2M :depts ::Department true)
-  (withO2M :emps ::Employee true)
-  (withO2O :hq ::Address true)
-  (withUniques
+  (declRelations
+    {:depts {:kind :O2M :other ::Department :cascade true}}
+    {:emps {:kind :O2M :other ::Employee :cascade true}}
+    {:hq {:kind :O2O :other ::Address :cascade true}})
+  (declUniques
     {:u1 #{ :cname } } ))
 
-(defJoined EmpDepts ::Department ::Employee)
+(declJoined EmpDepts ::Department ::Employee)
 
 (def METAC (atom nil))
 (def JDBC (atom nil))

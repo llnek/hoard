@@ -346,13 +346,14 @@
    :mxm false
    :indexes {}
    :uniques {}
-   :fields {}
    :rels {}
-   :excludes {} })
+   :fields
+   {:rowid {:column COL_ROWID :pkey true :domain :Long
+            :auto true :system true :updatable false}}})
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defmacro defModel
+(defmacro declModel
 
   "Define a data model"
 
@@ -364,39 +365,7 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defmacro defJoined
-
-  "Define a joined data model"
-
-  [modelname lhs rhs]
-
-  `(def ~modelname
-      (-> (dbioModel ~(name modelname))
-          (assoc :parent JOINED-MODEL-MONIKER)
-          (withJoined ~lhs ~rhs))))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;
-(defn withParent
-
-  "Link a parent to the model"
-
-  ^APersistentMap
-  [pojo par & [excludes]]
-
-  {:pre [(or (nil? excludes) (map? excludes))
-         (not= JOINED-MODEL-MONIKER par)
-         (not= BASEMODEL-MONIKER par)
-         (map? pojo)
-         (keyword? par)]}
-
-  (-> pojo
-      (assoc :parent par)
-      (assoc :excludes (or excludes {}))))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;
-(defn withJoined
+(defn- withJoined
 
   "A special model with 2 relations,
    left hand side and right hand side"
@@ -419,7 +388,19 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defn withTablename
+(defmacro declJoined
+
+  "Define a joined data model"
+
+  [modelname lhs rhs]
+
+  `(def ~modelname
+      (-> (dbioModel ~(name modelname))
+          (withJoined ~lhs ~rhs))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
+(defn declTablename
 
   "Set the table name"
 
@@ -451,7 +432,7 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defn withIndexes
+(defn declIndexes
 
   "Set indexes to the model"
 
@@ -465,7 +446,7 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defn withUniques
+(defn declUniques
 
   "Set uniques to the model"
 
@@ -501,7 +482,7 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defn withField
+(defn declField
 
   "Add a new field"
 
@@ -516,7 +497,7 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defn withFields
+(defn declFields
 
   "Add a bunch of fields"
 
@@ -527,71 +508,54 @@
 
   (with-local-vars [rcmap pojo]
     (doseq [[k v] flddefs]
-      (->> (withField @rcmap k v)
+      (->> (declField @rcmap k v)
            (var-set rcmap)))
     @rcmap))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defn- withRelation
+(defn declRelations
 
   ""
+  [pojo reldefs]
 
-  [pojo rid rhs kind & [cascade?]]
+  {:pre [(map? pojo) (map? reldefs)]}
 
-  {:pre [(map? pojo) (keyword? rid) (keyword? rhs)]}
+  (with-local-vars [rcmap pojo]
+    (doseq [[k v] reldefs]
+      (->> (declRelation @rcmap k v)
+           (var-set rcmap)))
+    @rcmap))
 
-  (let [rd {:fkey nil :cascade false
-            :kind nil :other nil}
-        r2 (case kind
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
+(defn declRelation
+
+  ""
+  [pojo rid rel]
+
+  (let [rd (merge {:fkey nil :cascade false } rel)
+        r2 (case (:kind rd)
              (:O2O :O2M)
-             (merge rd {:fkey (fmtfkey (:id pojo) rid)
-                        :cascade (true? cascade?)
-                        :kind kind
-                        :other rhs})
+             (merge rd {:fkey (fmtfkey (:id pojo) rid) })
              (throwDBError (str "Invalid relation " rid)))]
     (interject pojo :rels #(assoc (%2 %1) rid r2))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defn withO2M
+(defn- with-abstract
 
-  "Add a one to many relation"
+  ""
 
-  ^APersistentMap
-  [pojo rid rhs & [cascade?]]
+  [pojo]
 
-  (withRelation pojo rid rhs :O2M cascade?))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;
-(defn withO2O
-
-  "Add a one to one relation"
-
-  ^APersistentMap
-  [pojo rid rhs & [cascade?]]
-
-  (withRelation pojo rid rhs :O2O cascade?))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;
-(defn withAbstract
-
-  "Set the model as abstract"
-
-  ^APersistentMap
-  [pojo flag]
-
-  {:pre [(map? pojo)]}
-
-  (assoc pojo :abstract flag))
+  (assoc pojo :abstract true))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defn- with-db-system
 
-  "This is a built-in system level model"
+  ""
 
   [pojo]
 
@@ -599,10 +563,10 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Defining the base model here
-(defModel DBIOBaseModel
-  (withAbstract true)
+(declModel DBIOBaseModel
+  (with-abstract true)
   (with-db-system)
-  (withFields
+  (declFields
     {:rowid {:column COL_ROWID :pkey true :domain :Long
              :auto true :system true :updatable false} }))
 
@@ -623,10 +587,10 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defModel DBIOJoinedModel
-  (withAbstract true)
+(declModel DBIOJoinedModel
+  (with-abstract true)
   (with-db-system)
-  (withFields
+  (declFields
     {:lhs-typeid {:column COL_LHS_TYPEID }
      :lhs-rowid {:column COL_LHS_ROWID :domain :Long :null false}
      :rhs-typeid {:column COL_RHS_TYPEID }
