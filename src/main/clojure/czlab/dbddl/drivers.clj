@@ -403,7 +403,7 @@
                  (genExec dbtype) "\n\n")))
         b)
       (StringBuilder.)
-      (collectDbXXX :indexes model))))
+      (:indexes model))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -427,7 +427,7 @@
                  ")")))
         b)
       (StringBuilder.)
-      (collectDbXXX :uniques model))))
+      (:uniques model))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -451,7 +451,7 @@
   [dbtype schema model]
 
   (let
-    [fields (:fields (meta model))
+    [fields (:fields model)
      bf (StringBuilder.)
      pkeys
      (persistent!

@@ -84,9 +84,9 @@
      :cname { :null false }
      :logo { :domain :Bytes } })
   (declRelations
-    {:depts {:kind :O2M :other ::Department :cascade true}}
-    {:emps {:kind :O2M :other ::Employee :cascade true}}
-    {:hq {:kind :O2O :other ::Address :cascade true}})
+    {:depts {:kind :O2M :other ::Department :cascade true}
+     :emps {:kind :O2M :other ::Employee :cascade true}
+     :hq {:kind :O2O :other ::Address :cascade true}})
   (declUniques
     {:u1 #{ :cname } } ))
 
@@ -122,17 +122,12 @@
 (defn- mkEmp
 
   ""
-  [fname lname login]
+  [login]
 
-  (let [emp (-> (.get ^Schema @METAC (mkt "Employee"))
+  (let [emp (-> (.get ^Schema @METAC ::Employee)
                  dbioCreateObj)]
     (dbioSetFlds*
       emp
-      :first_name fname
-      :last_name  lname
-      :iq 100
-      :bday (GregorianCalendar.)
-      :sex "male"
       :salary 1000000.00
       :pic (.getBytes "poo")
       :passcode "secret"
@@ -144,7 +139,7 @@
   ""
   [cname]
 
-  (let [c (-> (.get ^Schema @METAC (mkt "Company"))
+  (let [c (-> (.get ^Schema @METAC ::Company)
               (dbioCreateObj))]
     (dbioSetFlds*
       c
@@ -157,7 +152,7 @@
   ""
   [dname]
 
-  (-> (-> (.get ^Schema @METAC (mkt "Department"))
+  (-> (-> (.get ^Schema @METAC ::Department)
           (dbioCreateObj))
       (dbioSetFld :dname dname)))
 
@@ -167,9 +162,21 @@
   [fname lname login]
 
   (let [sql (.newCompositeSQLr ^DBAPI @DB)
-        obj (mkEmp fname lname login)]
-    (.execWith sql
-               #(.insert ^SQLr %1 obj))))
+        obj (mkEmp login)
+        e (.execWith
+            sql
+            (fn [^SQLr s] (.insert s obj)))]
+    (first
+      (.execWith
+        sql
+        (fn [^SQLr s]
+          (dbioSetO2O
+            {:with s :as :person}
+            e
+            (.findOne s
+                      ::Person
+                      {:first_name fname
+                       :last_name lname})))))))
 
 (defn- fetch-all-emps
 
@@ -177,7 +184,17 @@
   []
 
   (let [sql (.newSimpleSQLr ^DBAPI @DB)]
-    (.findAll sql (mkt "Employee"))))
+    (.findAll sql ::Employee)))
+
+(defn- fetch-person
+
+  ""
+  [fname lname]
+
+  (let [sql (.newSimpleSQLr ^DBAPI @DB)]
+    (.findOne sql
+              ::Person
+              {:first_name fname :last_name lname})))
 
 (defn- fetch-emp
 
@@ -186,7 +203,7 @@
 
   (let [sql (.newSimpleSQLr ^DBAPI @DB)]
     (.findOne sql
-              (mkt "Employee")
+              ::Employee
               {:login login})))
 
 (defn- change-emp
@@ -198,10 +215,9 @@
     (.execWith
       sql
       #(let [o1 (.findOne ^SQLr %1
-                          (mkt "Employee") {:login login})]
-         (.update ^SQLr %1
-                  (dbioSetFlds* o1
-                                :salary 99.9234 :iq 0))))))
+                          ::Employee {:login login})
+             o2 (dbioSetFlds* o1 :salary 99.9234 :iq 0)]
+         (if (> (.update ^SQLr %1 o2) 0) o2 nil)))))
 
 (defn- delete-emp
 
@@ -212,25 +228,25 @@
     (.execWith
       sql
       #(let [o1 (.findOne ^SQLr %1
-                          (mkt "Employee") {:login login} )]
+                          ::Employee {:login login} )]
          (.delete ^SQLr %1 o1)))
     (.execWith
       sql
-      #(.countAll ^SQLr %1 (mkt "Employee")))))
+      #(.countAll ^SQLr %1 ::Employee))))
 
 (defn- create-person
 
   ""
-  [fname lname]
+  [fname lname sex]
 
-  (let [p (-> (-> (.get ^Schema @METAC (mkt "Person"))
+  (let [p (-> (-> (.get ^Schema @METAC ::Person)
                   (dbioCreateObj))
               (dbioSetFlds*
                 :first_name fname
                 :last_name  lname
                 :iq 100
                 :bday (GregorianCalendar.)
-                :sex "female"))
+                :sex sex))
         sql (.newCompositeSQLr ^DBAPI @DB)]
     (.execWith sql
                #(.insert ^SQLr %1 p))))
@@ -242,14 +258,14 @@
 
   (let [sql (.newCompositeSQLr ^DBAPI @DB)
         h (create-emp "joe" "blog" "joeb")
-        w (create-person "mary" "lou")
+        w (create-person "mary" "lou" "female")
         [h1 w1]
         (.execWith sql
                    #(dbioSetO2O {:as :spouse :with %1 } h w))
         w2
         (.execWith sql
                    #(dbioGetO2O {:as :spouse
-                                 :cast (mkt "Person")
+                                 :cast ::Person
                                  :with %1 } h1))]
     (and (not (nil? h))
          (not (nil? w))
@@ -267,17 +283,17 @@
             sql
             #(dbioGetO2O {:as :spouse
                           :with %1
-                          :cast (mkt "Person")} h))
+                          :cast ::Person} h))
         h1 (.execWith
              sql
              #(dbioClrO2O {:as :spouse
                            :with %1
-                           :cast (mkt "Person") } h))
+                           :cast ::Person } h))
         w1 (.execWith
              sql
              #(dbioGetO2O {:as :spouse
                            :with %1
-                           :cast (mkt "Person")} h1))]
+                           :cast ::Person} h1))]
     (and (not (nil? h))
          (not (nil? w))
          (not (nil? h1))
@@ -328,7 +344,7 @@
         c (.execWith
             sql
             #(.findOne ^SQLr %1
-                       (mkt "Company") {:cname "acme"} ))
+                       ::Company {:cname "acme"} ))
         ds (.execWith
              sql
              #(dbioGetO2M {:as :depts :with %1} c))
@@ -341,14 +357,13 @@
          (doseq [d ds]
            (if (= (:dname d) "d2")
              (doseq [e es]
-               (dbioSetM2M {:joined (mkt "EmpDepts") :with %1} d e))))
+               (dbioSetM2M {:joined ::EmpDepts :with %1} d e))))
          (doseq [e es]
            (if (= (:login e) "e2")
              (doseq [d ds
                      :let [dn (:dname d)]
                      :when (not= dn "d2")]
-               (dbioSetM2M {:joined (mkt "EmpDepts") :with %1} e d))))))
-
+               (dbioSetM2M {:joined ::EmpDepts :with %1} e d))))))
     (let [s1 (.execWith
                sql
                (fn [s]
@@ -372,22 +387,22 @@
   (let [sql (.newCompositeSQLr ^DBAPI @DB)
         d2 (.execWith
              sql
-             #(.findOne ^SQLr % (mkt "Department") {:dname "d2"} ))
+             #(.findOne ^SQLr % ::Department {:dname "d2"} ))
         e2 (.execWith
              sql
-             #(.findOne ^SQLr % (mkt "Employee") {:login "e2"} ))]
+             #(.findOne ^SQLr % ::Employee {:login "e2"} ))]
     (.execWith
       sql
-      #(dbioClrM2M {:joined (mkt "EmpDepts") :with % } d2))
+      #(dbioClrM2M {:joined ::EmpDepts :with % } d2))
     (.execWith
       sql
-      #(dbioClrM2M {:joined (mkt "EmpDepts") :with % } e2))
+      #(dbioClrM2M {:joined ::EmpDepts :with % } e2))
     (let [s1 (.execWith
                sql
-               #(dbioGetM2M {:joined (mkt "EmpDepts") :with %} d2))
+               #(dbioGetM2M {:joined ::EmpDepts :with %} d2))
           s2 (.execWith
                sql
-               #(dbioGetM2M {:joined (mkt "EmpDepts") :with %} e2))]
+               #(dbioGetM2M {:joined ::EmpDepts :with %} e2))]
       (and (== (count s1) 0)
            (== (count s2) 0)) )))
 
@@ -399,7 +414,7 @@
   (let [sql (.newCompositeSQLr ^DBAPI @DB)
         c (.execWith
             sql
-            #(.findOne ^SQLr % (mkt "Company") {:cname "acme"} ))]
+            #(.findOne ^SQLr % ::Company {:cname "acme"} ))]
     (.execWith
       sql
       #(dbioClrO2M {:as :depts :with %} c))
@@ -421,6 +436,11 @@
 
   ;; basic CRUD
   ;;
+
+  (is (let [m (create-person "joe" "blog" "male")
+            r (:rowid m)]
+        (> r 0)))
+
   (is (let [m (create-emp "joe" "blog" "joeb")
             r (:rowid m)]
         (> r 0)))
@@ -440,6 +460,8 @@
   (is (let [a (fetch-all-emps) ]
         (== (count a) 0)))
 
+(comment
+
   ;; one to one assoc
   ;;
   (is (wedlock))
@@ -453,6 +475,8 @@
   (is (undo-m2m))
 
   (is (undo-company))
+
+)
 )
 
 ;;(use-fixtures :each init-test)

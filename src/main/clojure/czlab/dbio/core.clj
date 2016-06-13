@@ -234,7 +234,7 @@
 
   (^String [fld-id model]
    {:pre [(map? model)]}
-   (-> (:fields (meta model))
+   (-> (:fields model)
        (get fld-id)
        (dbColname ))))
 
@@ -348,7 +348,7 @@
    :uniques {}
    :rels {}
    :fields
-   {:rowid {:column COL_ROWID :pkey true :domain :Long
+   {:rowid {:id :rowid :column COL_ROWID :pkey true :domain :Long
             :auto true :system true :updatable false}}})
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -365,12 +365,13 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defn- withJoined
+(defn withJoined
 
   "A special model with 2 relations,
    left hand side and right hand side"
 
   ^APersistentMap
+  ^:no-doc
   [pojo lhs rhs]
 
   {:pre [(map? pojo)
@@ -514,6 +515,20 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
+(defn declRelation
+
+  ""
+  [pojo rid rel]
+
+  (let [rd (merge {:fkey nil :cascade false } rel)
+        r2 (case (:kind rd)
+             (:O2O :O2M)
+             (merge rd {:fkey (fmtfkey (:id pojo) rid) })
+             (throwDBError (str "Invalid relation " rid)))]
+    (interject pojo :rels #(assoc (%2 %1) rid r2))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
 (defn declRelations
 
   ""
@@ -529,27 +544,13 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defn declRelation
-
-  ""
-  [pojo rid rel]
-
-  (let [rd (merge {:fkey nil :cascade false } rel)
-        r2 (case (:kind rd)
-             (:O2O :O2M)
-             (merge rd {:fkey (fmtfkey (:id pojo) rid) })
-             (throwDBError (str "Invalid relation " rid)))]
-    (interject pojo :rels #(assoc (%2 %1) rid r2))))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;
 (defn- with-abstract
 
   ""
 
-  [pojo]
+  [pojo flag]
 
-  (assoc pojo :abstract true))
+  (assoc pojo :abstract flag))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -654,64 +655,6 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defmulti collect-db-xxx
-
-  ""
-  ^:private
-
-  (fn [_ _ b]
-
-    (cond
-    (keyword? b)
-    :keyword
-
-    (map? b)
-    :map
-
-    :else
-    (throwDBError (str "Invalid arg " b)))))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;
-(defmethod collect-db-xxx
-
-  :keyword
-
-  [kw metas model-id]
-
-  (if-some [mcz (metas model-id)]
-    (collect-db-xxx kw metas mcz)
-    (log/warn "Unknown model id: %s" model-id)))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;
-(defmethod collect-db-xxx
-
-  :map
-
-  [kw metas model-def]
-
-  (if-some [par (:parent model-def)]
-    (merge {} (collect-db-xxx kw metas par)
-              (kw model-def))
-    (merge {} (kw model-def))))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;
-(defn collectDbXXX
-
-  ""
-
-  ^:no-doc
-  [kw model]
-
-  {:pre [(map? model)]}
-
-  (let [^Schema s (gschema model)]
-    (collect-db-xxx kw (.getModels s) model)))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;
 (defn- colmap-fields
 
   "Create a map of fields keyed by the column name"
@@ -736,55 +679,15 @@
 
   (with-local-vars [sum (transient {})]
     (doseq [[k m] metas]
-      (let [flds (collect-db-xxx :fields metas m)
+      (let [flds (:fields m)
             cols (colmap-fields flds)]
         (var-set sum
                  (assoc! @sum
                          k
                          (with-meta m
                                     {:schema schema
-                                     :columns cols
-                                     :fields flds } ) ))))
+                                     :columns cols } ) ))))
     (persistent! @sum)))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;
-(defn- resolve-parent
-
-  "Ensure that all user defined models are
-   all derived from the system base model"
-
-  [metas model]
-
-  (let [par (:parent model)]
-    (cond
-      (keyword? par)
-      (if (nil? (metas par))
-        (throwDBError (str "Unknown parent model " par))
-        model)
-
-      (nil? par)
-      (assoc model :parent BASEMODEL-MONIKER)
-
-      :else
-      (throwDBError (str "Invalid parent " par)))))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; Idea is walk through all models and ultimately
-;; link it's root to base-model
-(defn- resolve-parents
-
-  ""
-
-  [metas]
-
-  (persistent!
-    (reduce
-      (fn [sum [_ v]]
-        (let [rc (resolve-parent metas v)]
-         (assoc! sum (:id rc) rc)))
-      (transient {})
-      metas)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -808,7 +711,6 @@
         m2 (if (empty? ms)
              {}
              (-> (assoc ms JOINED-MODEL-MONIKER DBIOJoinedModel)
-                 (resolve-parents)
                  (resolve-rels)
                  (assoc BASEMODEL-MONIKER DBIOBaseModel)
                  (meta-models schema)))]
@@ -1382,9 +1284,9 @@
     (if-let [r (dbioGetRelation mcz (:as ctx) kind)]
       (let [fv (goid lhsObj)
             fid (:fkey r)
-            y (->> (-> (mockObj rhsObj)
-                       (dbioSetFld fid fv))
-                   (.update sqlr))]
+            y (-> (mockObj rhsObj)
+                  (dbioSetFld fid fv))
+            cnt (.update sqlr y)]
         [ lhsObj (merge rhsObj y) ])
       (throwDBError (str "Unknown assoc " rid)))))
 
@@ -1574,7 +1476,7 @@
           schema (.metas sqlr)
           jon (:joined ctx)]
       (if-let [mm (.get schema jon)]
-        (let [fs (:fields (meta mm))
+        (let [fs (:fields mm)
               ka (selectSide mm objA)
               kb (selectSide mm objB)]
           (if (nil? objB)
@@ -1612,7 +1514,7 @@
       (let [[ka kb t]
             (selectSide+ mm obj)
             t2 (or (:cast ctx) t)
-            fs (:fields (meta mm))
+            fs (:fields mm)
             tm (.get schema t2)]
         (when (nil? tm)
           (throwDBError (str "Unknown model " t2)))

@@ -103,7 +103,7 @@
   [db model filters]
 
   (let
-    [flds (:fields (meta model))
+    [flds (:fields model)
      wc (reduce
           (fn [sum [k v]]
             (let [fld (flds k)
@@ -474,7 +474,7 @@
     (sqlSelect+ db conn sql pms
                 (partial row2Obj
                          (partial modelInjtor mcz))
-                #(postFmtModelRow model %))
+                #(postFmtModelRow mcz %))
     (throwDBError (str "Unknown model " model))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -500,7 +500,7 @@
                  metas
                  conn
                  (str "SELECT COUNT(*) FROM "
-                      (fmtSQLIdStr db (dbTablename model metas)))
+                      (fmtSQLIdStr db (dbTablename (get metas model) )))
                  [])]
     (if (empty? rc)
       0
@@ -515,7 +515,7 @@
   [db metas conn model]
 
   (let [sql (str "DELETE FROM "
-                 (fmtSQLIdStr db (dbTablename model metas))) ]
+                 (fmtSQLIdStr db (dbTablename (get metas model) ))) ]
     (sqlExec db conn sql [])
     nil))
 
@@ -548,7 +548,7 @@
 
   (if-let [mcz (gmodel obj)]
     (let [[s1 s2 pms]
-          (insertFlds db obj (:fields (meta mcz)))]
+          (insertFlds db obj (:fields mcz))]
       (when (hgl? s1)
         (let [out (doExecWithOutput
                     db
@@ -580,7 +580,7 @@
     (let [[sb1 pms]
           (updateFlds db
                       obj
-                      (:fields (meta mcz)))]
+                      (:fields mcz))]
       (if (hgl? sb1)
         (doExec db
                 metas
