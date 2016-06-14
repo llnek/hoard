@@ -58,8 +58,7 @@
 
   (reifySQLr
     db
-    #(openDB %)
-    (fn [^Connection c f] (with-open [c2 c] (f c2)))))
+    #(with-open [c2 (openDB db)] (% c2))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;EOF

@@ -79,9 +79,9 @@
   ""
 
   ^String
-  [db model]
+  [vendor model]
 
-  (str (fmtSQLIdStr db (dbColname :rowid model)) "=?"))
+  (str (fmtSQLIdStr vendor (dbColname :rowid model)) "=?"))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -100,7 +100,7 @@
 
   "[sql-filter-string, values]"
 
-  [db model filters]
+  [vendor model filters]
 
   (let
     [flds (:fields model)
@@ -113,7 +113,7 @@
               (addDelim!
                 sum
                 " AND "
-                (str (fmtSQLIdStr db c)
+                (str (fmtSQLIdStr vendor c)
                      (if (nil? v)
                        " IS NULL "
                        " =? ")))))
@@ -275,12 +275,11 @@
   ""
 
   ^String
-  [^DBAPI db ^String sqlstr]
+  [vendor ^String sqlstr]
 
   (let [sql (strim sqlstr)
-        lcs (lcase sql)
-        v (.vendor db)]
-    (if (= SQLServer (:id v))
+        lcs (lcase sql)]
+    (if (= SQLServer (:id vendor))
       (cond
         (.startsWith lcs "select")
         (mssqlTweakSqlstr sql :where "NOLOCK")
@@ -298,9 +297,9 @@
   ""
 
   ^PreparedStatement
-  [db ^Connection conn sqlstr params]
+  [vendor ^Connection conn sqlstr params]
 
-  (let [sql (jiggleSQL db sqlstr)
+  (let [sql (jiggleSQL vendor sqlstr)
         ps (if (insert? sql)
              (.prepareStatement conn
                                 sql
@@ -330,9 +329,9 @@
 
   ""
 
-  [db conn sql pms options]
+  [vendor conn sql pms options]
 
-  (with-open [stmt (buildStmt db conn sql pms) ]
+  (with-open [stmt (buildStmt vendor conn sql pms) ]
     (when (> (.executeUpdate stmt) 0)
       (with-open [rs (.getGeneratedKeys stmt) ]
         (let [cnt (if (nil? rs)
@@ -351,10 +350,10 @@
 
   ""
 
-  [db conn sql pms func post]
+  [vendor conn sql pms func post]
 
   (with-open
-    [stmt (buildStmt db conn sql pms)
+    [stmt (buildStmt vendor conn sql pms)
      rs (.executeQuery stmt) ]
     (let [rsmeta (.getMetaData rs) ]
       (loop [sum (transient [])
@@ -371,9 +370,9 @@
 
   ""
 
-  [db conn sql pms]
+  [vendor conn sql pms]
 
-  (sqlSelect+ db conn sql pms
+  (sqlSelect+ vendor conn sql pms
               (partial row2Obj stdInjtor) identity))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -382,9 +381,9 @@
 
   ""
 
-  [db conn sql pms]
+  [vendor conn sql pms]
 
-  (with-open [stmt (buildStmt db conn sql pms) ]
+  (with-open [stmt (buildStmt vendor conn sql pms) ]
     (.executeUpdate stmt)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -393,7 +392,7 @@
 
   "Format sql string for insert"
 
-  [db obj flds]
+  [vendor obj flds]
 
   (with-local-vars [ps (transient []) ]
     (let [sb2 (StringBuilder.)
@@ -403,7 +402,7 @@
         (when (and (some? fdef)
                    (not (:auto fdef))
                    (not (:system fdef)))
-          (addDelim! sb1 "," (fmtSQLIdStr db (dbColname fdef)))
+          (addDelim! sb1 "," (fmtSQLIdStr vendor (dbColname fdef)))
           (addDelim! sb2 "," (if (nil? v) "NULL" "?"))
           (when (some? v)
             (var-set ps (conj! @ps v)))))
@@ -415,7 +414,7 @@
 
   "Format sql string for update"
 
-  [db obj flds]
+  [vendor obj flds]
 
   (with-local-vars [ps (transient []) ]
     (let [sb1 (StringBuilder.)]
@@ -426,7 +425,7 @@
                    (not (:auto fdef))
                    (not (:system fdef)))
           (doto sb1
-            (addDelim! "," (fmtSQLIdStr db (dbColname fdef)))
+            (addDelim! "," (fmtSQLIdStr vendor (dbColname fdef)))
             (.append (if (nil? v) "=NULL" "=?")))
           (when (some? v)
             (var-set ps (conj! @ps v)))))
@@ -448,9 +447,9 @@
 
   ""
 
-  [db metas conn sql pms options]
+  [vendor conn sql pms options]
 
-  (sqlExecWithOutput db conn sql pms options))
+  (sqlExecWithOutput vendor conn sql pms options))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -458,9 +457,9 @@
 
   ""
 
-  [db metas conn sql pms]
+  [vendor conn sql pms]
 
-  (sqlExec db conn sql pms))
+  (sqlExec vendor conn sql pms))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -468,14 +467,15 @@
 
   ""
 
-  [db metas conn sql pms model]
+  [vendor conn sql pms model]
 
-  (if-let [mcz (metas model)]
-    (sqlSelect+ db conn sql pms
-                (partial row2Obj
-                         (partial modelInjtor mcz))
-                #(postFmtModelRow mcz %))
-    (throwDBError (str "Unknown model " model))))
+  (sqlSelect+ vendor
+              conn
+              sql
+              pms
+              (partial row2Obj
+                       (partial modelInjtor model))
+              #(postFmtModelRow model %)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -483,9 +483,9 @@
 
   ""
 
-  [db metas conn sql pms]
+  [vendor conn sql pms]
 
-  (sqlSelect db conn sql pms))
+  (sqlSelect vendor conn sql pms))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -493,14 +493,13 @@
 
   ""
 
-  [db metas conn model]
+  [vendor conn model]
 
   (let
-    [rc (doQuery db
-                 metas
+    [rc (doQuery vendor
                  conn
                  (str "SELECT COUNT(*) FROM "
-                      (fmtSQLIdStr db (dbTablename (get metas model) )))
+                      (fmtSQLIdStr vendor (dbTablename model) ))
                  [])]
     (if (empty? rc)
       0
@@ -512,11 +511,11 @@
 
   ""
 
-  [db metas conn model]
+  [vendor conn model]
 
   (let [sql (str "DELETE FROM "
-                 (fmtSQLIdStr db (dbTablename (get metas model) ))) ]
-    (sqlExec db conn sql [])
+                 (fmtSQLIdStr vendor (dbTablename model) ))]
+    (sqlExec vendor conn sql [])
     nil))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -525,17 +524,17 @@
 
   ""
 
-  [db metas conn obj]
+  [vendor conn obj]
 
   (if-let [mcz (gmodel obj)]
-    (doExec db
-            metas
+    (doExec vendor
             conn
             (str "DELETE FROM "
-                 (fmtSQLIdStr db (dbTablename mcz))
+                 (->> (dbTablename mcz)
+                      (fmtSQLIdStr vendor ))
                  " WHERE "
-                 (fmtUpdateWhere db mcz))
-            [(:rowid obj)])
+                 (fmtUpdateWhere vendor mcz))
+            [(goid obj)])
     (throwDBError (str "Unknown model for " obj))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -544,18 +543,18 @@
 
   ""
 
-  [db metas conn obj]
+  [vendor conn obj]
 
   (if-let [mcz (gmodel obj)]
     (let [[s1 s2 pms]
-          (insertFlds db obj (:fields mcz))]
+          (insertFlds vendor obj (:fields mcz))]
       (when (hgl? s1)
         (let [out (doExecWithOutput
-                    db
-                    metas
+                    vendor
                     conn
                     (str "INSERT INTO "
-                         (fmtSQLIdStr db (dbTablename mcz))
+                         (->> (dbTablename mcz)
+                              (fmtSQLIdStr vendor ))
                          " (" s1 ") VALUES (" s2 ")")
                     pms
                     {:pkey (dbColname :rowid mcz)})]
@@ -574,24 +573,24 @@
 
   ""
 
-  [db metas conn obj]
+  [vendor conn obj]
 
   (if-let [mcz (gmodel obj)]
     (let [[sb1 pms]
-          (updateFlds db
+          (updateFlds vendor
                       obj
                       (:fields mcz))]
       (if (hgl? sb1)
-        (doExec db
-                metas
+        (doExec vendor
                 conn
                 (str "UPDATE "
-                     (fmtSQLIdStr db (dbTablename mcz))
+                     (->> (dbTablename mcz)
+                          (fmtSQLIdStr vendor ))
                      " SET "
                      sb1
                      " WHERE "
-                     (fmtUpdateWhere db mcz))
-                (conj pms (:rowid obj)))
+                     (fmtUpdateWhere vendor mcz))
+                (conj pms (goid obj)))
         0))
     (throwDBError (str "Unknown model for " obj))))
 
@@ -612,13 +611,14 @@
 
   "Create a SQLr"
 
-  ^SQLr
+  {:tag SQLr
+   :no-doc true}
   [^DBAPI db getc runc]
 
   {:pre [(fn? getc) (fn? runc)]}
 
   (let [schema (.getMetas db)
-        metas (.getModels schema)]
+        vendor (.vendor db)]
     (reify
 
       SQLr
@@ -637,61 +637,78 @@
           (when-not (empty? rset) (first rset))))
 
       (findSome [_ model filters extraSQL]
+        {:pre [(keyword? model)]}
         (let
           [func #(let
-                   [mcz (metas model)
+                   [mcz (.get schema model)
                     s (str "SELECT * FROM "
-                           (fmtSQLIdStr db (:table mcz)))
+                           (fmtSQLIdStr vendor (:table mcz)))
                     [wc pms]
-                    (sqlFilterClause db mcz filters) ]
+                    (sqlFilterClause vendor mcz filters) ]
                    (if (hgl? wc)
-                      (doQuery+ db metas %1
+                      (doQuery+ vendor %1
                                 (doExtraSQL (str s " WHERE " wc) extraSQL)
                                 pms model)
-                      (doQuery+ db metas %1
+                      (doQuery+ vendor %1
                                 (doExtraSQL s extraSQL) [] model)))]
           (runc (getc db) func)))
 
-      (escId [_ s] (fmtSQLIdStr db s))
+      (escId [_ s] (fmtSQLIdStr vendor s))
 
       (metas [_] schema)
 
       (update [_ obj]
-        (->> #(doUpdate db metas %1 obj)
-             (runc (getc db) )))
+        (runc (getc db)
+              #(doUpdate vendor %1 obj)))
 
       (delete [_ obj]
-        (->> #(doDelete db metas %1 obj)
-             (runc (getc db) )))
+        (runc (getc db)
+              #(doDelete vendor %1 obj)))
 
       (insert [_ obj]
-        (->> #(doInsert db metas %1 obj)
-             (runc (getc db) )))
+        (runc (getc db)
+              #(doInsert vendor %1 obj)))
 
       (select [_ model sql params]
-        (->> #(doQuery+ db metas %1 sql params model)
-             (runc (getc db) )))
+        {:pre [(keyword? model)]}
+        (if-let [m (.get schema model)]
+          (runc (getc db)
+                #(doQuery+ vendor
+                           %1
+                           sql
+                           params
+                           m))
+          (throwDBError (str "Unknown model " model))))
 
       (select [_ sql params]
-        (->> #(doQuery db metas %1 sql params)
-             (runc (getc db) )))
+        (runc (getc db)
+              #(doQuery vendor %1 sql params)))
 
       (execWithOutput [_ sql pms]
-        (->> #(doExecWithOutput db metas %1
-                                sql pms {:pkey COL_ROWID})
-             (runc (getc db) )))
+        (runc (getc db)
+              #(doExecWithOutput vendor
+                                 %1
+                                 sql
+                                 pms
+                                 {:pkey COL_ROWID})))
 
       (exec [_ sql pms]
-        (->> #(doExec db metas %1 sql pms)
-             (runc (getc db) )))
+        (runc (getc db)
+              #(doExec vendor %1 sql pms)))
 
       (countAll [_ model]
-        (->> #(doCount db metas %1 model)
-             (runc (getc db) )))
+        {:pre [(keyword? model)]}
+        (if-let [m (.get schema model)]
+          (runc (getc db)
+                #(doCount vendor %1 m))
+          (throwDBError (str "Unknown model " model))))
 
       (purge [_ model]
-        (->> #(doPurge db metas %1 model)
-             (runc (getc db) ))))))
+        {:pre [(keyword? model)]}
+        (if-let [m (.get schema model)]
+          (runc (getc db)
+                #(doPurge vendor %1 m))
+          (throwDBError (str "Unknown model " model)))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;EOF

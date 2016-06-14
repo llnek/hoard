@@ -45,7 +45,8 @@
 
   "Add a thread-local db pool"
 
-  ^JDBCPool
+  {:tag JDBCPool
+   :no-doc true}
   [^JDBCInfo jdbc options]
 
   (let [^Map
