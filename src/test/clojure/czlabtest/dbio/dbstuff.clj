@@ -258,14 +258,16 @@
 
   (let [sql (.newCompositeSQLr ^DBAPI @DB)
         h (create-emp "joe" "blog" "joeb")
+        hp (.execWith sql
+                      #(dbioGetO2O {:with %1 :as :person} h))
         w (create-person "mary" "lou" "female")
         [h1 w1]
         (.execWith sql
-                   #(dbioSetO2O {:as :spouse :with %1 } h w))
+                   #(dbioSetO2O {:as :spouse :with %1 } hp w))
+
         w2
         (.execWith sql
                    #(dbioGetO2O {:as :spouse
-                                 :cast ::Person
                                  :with %1 } h1))]
     (and (not (nil? h))
          (not (nil? w))
