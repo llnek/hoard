@@ -257,22 +257,26 @@
   []
 
   (let [sql (.newCompositeSQLr ^DBAPI @DB)
-        h (create-emp "joe" "blog" "joeb")
-        hp (.execWith sql
-                      #(dbioGetO2O {:with %1 :as :person} h))
+        e (create-emp "joe" "blog" "joeb")
+        pm (.execWith sql
+                      #(dbioGetO2O {:with %1 :as :person} e))
         w (create-person "mary" "lou" "female")
-        [h1 w1]
+        [p1 w1]
         (.execWith sql
-                   #(dbioSetO2O {:as :spouse :with %1 } hp w))
-
-        w2
+                   #(dbioSetO2O {:as :spouse :with %1 } pm w))
+        [w2 p2]
+        (.execWith sql
+                   #(dbioSetO2O {:as :spouse :with %1 } w1 p1))
+        w3
         (.execWith sql
                    #(dbioGetO2O {:as :spouse
-                                 :with %1 } h1))]
-    (and (not (nil? h))
-         (not (nil? w))
-         (not (nil? w1))
-         (not (nil? w2)))))
+                                 :with %1 } p2))
+       p3
+        (.execWith sql
+                   #(dbioGetO2O {:as :spouse
+                                 :with %1 } w3)) ]
+    (and (some? w3)(some? p3))))
+
 
 (defn- undo-wedlock
 
@@ -280,26 +284,31 @@
   []
 
   (let [sql (.newCompositeSQLr ^DBAPI @DB)
-        h (fetch-emp "joeb")
+        e (fetch-emp "joeb")
+        pm (.execWith
+             sql
+             #(dbioGetO2O {:with %1 :as :person} e))
         w (.execWith
             sql
             #(dbioGetO2O {:as :spouse
-                          :with %1
-                          :cast ::Person} h))
-        h1 (.execWith
+                          :with %1 } pm))
+        p2 (.execWith
              sql
              #(dbioClrO2O {:as :spouse
-                           :with %1
-                           :cast ::Person } h))
-        w1 (.execWith
+                           :with %1 } pm))
+        w2 (.execWith
+             sql
+             #(dbioClrO2O {:as :spouse
+                           :with %1 } w))
+        w3 (.execWith
              sql
              #(dbioGetO2O {:as :spouse
-                           :with %1
-                           :cast ::Person} h1))]
-    (and (not (nil? h))
-         (not (nil? w))
-         (not (nil? h1))
-         (nil? w1))))
+                           :with %1 } p2))
+        p3 (.execWith
+             sql
+             #(dbioGetO2O {:as :spouse
+                           :with %1 } w2))]
+    (and (nil? w3)(nil? p3)(some? w))))
 
 (defn- test-company
 
@@ -325,9 +334,9 @@
       sql
       #(dbioSetO2M* {:as :emps :with %1 }
                     c
-                    (.insert ^SQLr % (mkEmp "emp1" "ln1" "e1"))
-                    (.insert ^SQLr % (mkEmp "emp2" "ln2" "e2"))
-                    (.insert ^SQLr % (mkEmp "emp3" "ln3" "e3")) ))
+                    (.insert ^SQLr % (mkEmp "e1" ))
+                    (.insert ^SQLr % (mkEmp "e2" ))
+                    (.insert ^SQLr % (mkEmp "e3" )) ))
     (let [ds (.execWith
                sql
                #(dbioGetO2M  {:as :depts :with %1} c))
@@ -356,28 +365,28 @@
     (.execWith
       sql
       #(do
-         (doseq [d ds]
-           (if (= (:dname d) "d2")
-             (doseq [e es]
-               (dbioSetM2M {:joined ::EmpDepts :with %1} d e))))
-         (doseq [e es]
-           (if (= (:login e) "e2")
-             (doseq [d ds
-                     :let [dn (:dname d)]
-                     :when (not= dn "d2")]
-               (dbioSetM2M {:joined ::EmpDepts :with %1} e d))))))
+         (doseq [d ds
+                 :when (= (:dname d) "d2")]
+           (doseq [e es]
+             (dbioSetM2M {:joined ::EmpDepts :with %1} d e)))
+         (doseq [e es
+                 :when (= (:login e) "e2")]
+           (doseq [d ds
+                   :let [dn (:dname d)]
+                   :when (not= dn "d2")]
+             (dbioSetM2M {:joined ::EmpDepts :with %1} e d)))))
     (let [s1 (.execWith
                sql
                (fn [s]
                  (dbioGetM2M
-                   {:as :emps :with s}
-                   (some #(if (= (:dname %) "d2") % nil)) ds)))
+                   {:joined ::EmpDepts :with s}
+                   (some #(if (= (:dname %) "d2") % nil)  ds))))
           s2 (.execWith
                sql
                (fn [s]
                  (dbioGetM2M
-                   {:as :depts :with s}
-                   (some #(if (= (:login %) "e2") % nil)) es)))]
+                   {:joined ::EmpDepts :with s}
+                   (some #(if (= (:login %) "e2") % nil)  es))))]
       (and (== (count s1) 3)
            (== (count s2) 3)) )))
 
@@ -462,23 +471,20 @@
   (is (let [a (fetch-all-emps) ]
         (== (count a) 0)))
 
-(comment
-
   ;; one to one assoc
-  ;;
   (is (wedlock))
   (is (undo-wedlock))
 
   ;; one to many assocs
   (is (test-company))
 
-  ;; m to m assocs
   (is (test-m2m))
+
+  ;; m to m assocs
   (is (undo-m2m))
 
   (is (undo-company))
 
-)
 )
 
 ;;(use-fixtures :each init-test)

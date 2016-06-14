@@ -397,6 +397,11 @@
 
   `(def ~modelname
       (-> (dbioModel ~(name modelname))
+          (declFields
+            {:lhs-typeid {:column COL_LHS_TYPEID }
+             :lhs-rowid {:column COL_LHS_ROWID :domain :Long :null false}
+             :rhs-typeid {:column COL_RHS_TYPEID }
+             :rhs-rowid {:column COL_RHS_ROWID :domain :Long :null false} })
           (withJoined ~lhs ~rhs))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -1189,6 +1194,20 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
+(defn- setMxMFlds*
+
+  ""
+
+  [pojo & fvs]
+
+  (reduce
+    (fn [p [f v]]
+      (assoc p f v))
+    pojo
+    (partition 2 fvs)))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
 (defn dbioClrFld
 
   "Remove a field"
@@ -1238,12 +1257,15 @@
         t (gtype obj)
         rt (:other rhs)
         lf (:other lhs)]
-    (case t
-      rt
+    (cond
+      (= t rt)
       [:rhs-rowid :lhs-rowid lf]
-      lf
+      (= t lf)
       [:lhs-rowid :rhs-rowid rt]
-      (throwDBError (str "Mismatched mxm relation for " t)))))
+      :else
+      (if (some? obj)
+        (throwDBError (str "Mismatched mxm relation for " t))
+        [nil nil nil]))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -1333,7 +1355,8 @@
       #(conj! %1 (last (dbio-set-o2x
                          ctx
                          lhsObj
-                         %2)))
+                         %2
+                         :O2M)))
       (transient [])
       rhsObjs)))
 
@@ -1456,7 +1479,7 @@
       (let [ka (selectSide mm objA)
             kb (selectSide mm objB)]
         (->> (-> (dbioCreateObj mm)
-                 (dbioSetFlds*
+                 (setMxMFlds*
                    ka (goid objA)
                    kb (goid objB)))
              (.insert sqlr )))
@@ -1531,7 +1554,6 @@
             (.escId sqlr (dbTablename mm))
             MM
             MM (.escId sqlr (dbColname (ka fs)))
-            MM
             MM (.escId sqlr (dbColname (kb fs)))
             RS (.escId sqlr COL_ROWID))
           [ (goid obj) ]))
