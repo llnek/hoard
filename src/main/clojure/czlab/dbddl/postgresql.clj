@@ -14,7 +14,7 @@
 
 
 (ns ^{:doc "DDL functions for Postgresql"
-      :author "kenl" }
+      :author "Kenneth Leung" }
 
   czlab.dbddl.postgresql
 

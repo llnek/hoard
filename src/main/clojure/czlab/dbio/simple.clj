@@ -13,7 +13,7 @@
 ;; Copyright (c) 2013-2016, Kenneth Leung. All rights reserved.
 
 (ns ^{:doc "Non transactional SQL client"
-      :author "kenl" }
+      :author "Kenneth Leung" }
 
   czlab.dbio.simple
 

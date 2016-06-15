@@ -14,7 +14,7 @@
 
 
 (ns ^{:doc "DDL functions for SQL Server"
-      :author "kenl" }
+      :author "Kenneth Leung" }
 
   czlab.dbddl.sqlserver
 
