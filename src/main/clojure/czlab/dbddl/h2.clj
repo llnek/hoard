@@ -12,7 +12,7 @@
 ;;
 ;; Copyright (c) 2013-2016, Kenneth Leung. All rights reserved.
 
-(ns ^{:doc ""
+(ns ^{:doc "DDL functions for H2"
       :author "kenl" }
 
   czlab.dbddl.h2
@@ -47,10 +47,10 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; H2
-(defmethod getDateKwd H2 [_] "TIMESTAMP")
-(defmethod getDoubleKwd H2 [_] "DOUBLE")
-(defmethod getBlobKwd H2 [_] "BLOB")
-(defmethod getFloatKwd H2 [_] "FLOAT")
+(defmethod getDateKwd H2 [_] "timestamp")
+(defmethod getDoubleKwd H2 [_] "double")
+(defmethod getBlobKwd H2 [_] "blob")
+(defmethod getFloatKwd H2 [_] "float")
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -65,8 +65,8 @@
        " "
        (getIntKwd dbtype)
        (if (:pkey field)
-         " IDENTITY(1) "
-         " AUTO_INCREMENT(1) ")))
+         " identity(1) "
+         " auto_increment(1) ")))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -81,8 +81,8 @@
        " "
        (getLongKwd dbtype)
        (if (:pkey field)
-         " IDENTITY(1) "
-         " AUTO_INCREMENT(1) ")))
+         " identity(1) "
+         " auto_increment(1) ")))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -92,7 +92,7 @@
 
   [_ model]
 
-  (str "CREATE CACHED TABLE " (gtable model) " (\n" ))
+  (str "create cached table " (gtable model) " (\n" ))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -102,9 +102,9 @@
 
   [dbtype model]
 
-  (str "DROP TABLE "
+  (str "drop table "
        (gtable model)
-       " IF EXISTS CASCADE" (genExec dbtype) "\n\n"))
+       " if exists cascade" (genExec dbtype) "\n\n"))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -130,10 +130,10 @@
     (with-open [c1 (DriverManager/getConnection dbUrl user pwd)]
       (.setAutoCommit c1 true)
       (with-open [s (.createStatement c1)]
-        ;;(.execute s (str "CREATE USER " user " PASSWORD \"" pwd "\" ADMIN"))
-        (.execute s "SET DEFAULT_TABLE_TYPE CACHED"))
+        ;;(.execute s (str "create user " user " password \"" pwd "\" admin"))
+        (.execute s "set default_table_type cached"))
       (with-open [s (.createStatement c1)]
-        (.execute s "SHUTDOWN")))
+        (.execute s "shutdown")))
     dbUrl))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -159,7 +159,7 @@
     (with-open [c1 (DriverManager/getConnection dbUrl user pwd)]
       (.setAutoCommit c1 true)
       (with-open [s (.createStatement c1)]
-        (.execute s "SHUTDOWN")) )))
+        (.execute s "shutdown")) )))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;EOF

@@ -12,7 +12,7 @@
 ;;
 ;; Copyright (c) 2013-2016, Kenneth Leung. All rights reserved.
 
-(ns ^{:doc ""
+(ns ^{:doc "DDL functions for MySQL"
       :author "kenl" }
 
   czlab.dbddl.mysql
@@ -29,10 +29,10 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; MySQL
-(defmethod getBlobKwd MySQL [_] "LONGBLOB")
-(defmethod getTSKwd MySQL [_] "TIMESTAMP")
-(defmethod getDoubleKwd MySQL [_] "DOUBLE")
-(defmethod getFloatKwd MySQL [_]  "DOUBLE")
+(defmethod getBlobKwd MySQL [_] "longblob")
+(defmethod getTSKwd MySQL [_] "timestamp")
+(defmethod getDoubleKwd MySQL [_] "double")
+(defmethod getFloatKwd MySQL [_]  "double")
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -42,7 +42,7 @@
 
   [dbtype model]
 
-  (str "\n) Type=InnoDB" (genExec dbtype) "\n\n"))
+  (str "\n) type=InnoDB" (genExec dbtype) "\n\n"))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -56,7 +56,7 @@
        (genCol field)
        " "
        (getIntKwd dbtype)
-       " NOT NULL AUTO_INCREMENT"))
+       " not null auto_increment"))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -70,7 +70,7 @@
        (genCol field)
        " "
        (getLongKwd dbtype)
-       " NOT NULL AUTO_INCREMENT"))
+       " not null auto_increment"))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -80,7 +80,7 @@
 
   [dbtype model]
 
-  (str "DROP TABLE IF EXISTS "
+  (str "drop table if exists "
        (gtable model)
        (genExec dbtype) "\n\n"))
 

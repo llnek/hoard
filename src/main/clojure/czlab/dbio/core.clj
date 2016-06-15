@@ -12,7 +12,7 @@
 ;;
 ;; Copyright (c) 2013-2016, Kenneth Leung. All rights reserved.
 
-(ns ^{:doc "Database and modeling utilties"
+(ns ^{:doc "Database and modeling functions"
       :author "kenl" }
 
   czlab.dbio.core
@@ -115,12 +115,12 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defmulti fmtSQLIdStr
+(defmulti fmtSQLId
   "Format SQL identifier" ^String (fn [a & xs] (class a)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defmethod fmtSQLIdStr
+(defmethod fmtSQLId
 
   APersistentMap
 
@@ -140,18 +140,18 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defmethod fmtSQLIdStr
+(defmethod fmtSQLId
 
   DBAPI
 
   ^String
   [^DBAPI db idstr & [quote?]]
 
-  (fmtSQLIdStr (.vendor db) idstr quote?))
+  (fmtSQLId (.vendor db) idstr quote?))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defmethod fmtSQLIdStr
+(defmethod fmtSQLId
 
   DatabaseMetaData
 
@@ -171,14 +171,14 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defmethod fmtSQLIdStr
+(defmethod fmtSQLId
 
   Connection
 
   ^String
   [^Connection conn idstr & [quote?]]
 
-  (fmtSQLIdStr (.getMetaData conn) idstr quote?))
+  (fmtSQLId (.getMetaData conn) idstr quote?))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -310,7 +310,7 @@
       "oracle" Oracle
       "mysql" MySQL
       "h2" H2
-      (throwDBError (str "Unknown db product " product)))))
+      (throwDBError (str "Unknown db product: " product)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -828,16 +828,17 @@
   ^APersistentMap
   [conn]
 
-  (let [md (.getMetaData ^Connection conn) ]
-    {:id (maybeGetVendor (.getDatabaseProductName md))
-     :qstr (strim (.getIdentifierQuoteString md))
-     :version (.getDatabaseProductVersion md)
-     :name (.getDatabaseProductName md)
-     :url (.getURL md)
-     :user (.getUserName md)
-     :lcs? (.storesLowerCaseIdentifiers md)
-     :ucs? (.storesUpperCaseIdentifiers md)
-     :mcs? (.storesMixedCaseIdentifiers md)}))
+  (let [md (.getMetaData ^Connection conn)
+        rc {:id (maybeGetVendor (.getDatabaseProductName md))
+            :qstr (strim (.getIdentifierQuoteString md))
+            :version (.getDatabaseProductVersion md)
+            :name (.getDatabaseProductName md)
+            :url (.getURL md)
+            :user (.getUserName md)
+            :lcs? (.storesLowerCaseIdentifiers md)
+            :ucs? (.storesUpperCaseIdentifiers md)
+            :mcs? (.storesMixedCaseIdentifiers md)}]
+    (assoc rc :fmtId (partial fmtSQLId rc))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -883,7 +884,7 @@
       (with-open [res (.getColumns mt
                                    nil
                                    nil
-                                   (fmtSQLIdStr conn table)
+                                   (fmtSQLId conn table)
                                    nil)]
         (when (and (some? res)
                    (.next res))
@@ -919,7 +920,7 @@
     (trylet!
       [sql (str
              "SELECT COUNT(*) FROM  "
-             (fmtSQLIdStr conn table))]
+             (fmtSQLId conn table))]
       (with-open [stmt (.createStatement conn)
                   res (.executeQuery stmt sql)]
         (when (and (some? res)
@@ -987,7 +988,7 @@
         mt (.getMetaData conn)
         catalog nil
         schema (if (= (:id dbv) :oracle) "%" nil)
-        tbl (fmtSQLIdStr conn table false)]
+        tbl (fmtSQLId conn table false)]
     ;; not good, try mixed case... arrrrrrrrrrhhhhhhhhhhhhhh
     ;;rs = m.getTables( catalog, schema, "%", null)
     (load-columns mt catalog schema tbl)))
@@ -1264,7 +1265,7 @@
       [:lhs-rowid :rhs-rowid rt]
       :else
       (if (some? obj)
-        (throwDBError (str "Mismatched mxm relation for " t))
+        (throwDBError (str "Unknown mxm relation for: " t))
         [nil nil nil]))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -1289,7 +1290,7 @@
         mcz (gmodel lhsObj)]
     (if-let [r (dbioGetRelation mcz rid kind)]
       r
-      (throwDBError (str "Unknown relation " rid)))))
+      (throwDBError (str "Unknown relation: " rid)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -1310,7 +1311,7 @@
                   (dbioSetFld fid fv))
             cnt (.update sqlr y)]
         [ lhsObj (merge rhsObj y) ])
-      (throwDBError (str "Unknown assoc " rid)))))
+      (throwDBError (str "Unknown relation: " rid)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -1412,17 +1413,17 @@
           sqlr
           (if-not (:cascade r)
             (format
-              "UPDATE %s SET %s= NULL WHERE %s=?"
+              "update %s set %s= null where %s=?"
               (.escId sqlr tn)
               (.escId sqlr cn)
               (.escId sqlr cn))
             (format
-              "DELETE FROM %s WHERE %s=?"
+              "delete from %s where %s=?"
               (.escId sqlr tn)
               (.escId sqlr cn)))
           [(goid objA)])
         objA)
-      (throwDBError (str "Unknown assoc " rid)))))
+      (throwDBError (str "Unknown relation: " rid)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -1459,7 +1460,7 @@
   (case col
     :rhs-rowid :rhs-typeid
     :lhs-rowid :lhs-typeid
-    (throwDBError (str "Invaid column key " col))))
+    (throwDBError (str "Invaid column key: " col))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -1483,7 +1484,7 @@
                    ka (goid objA)
                    kb (goid objB)))
              (.insert sqlr )))
-      (throwDBError (str "Unkown relation " jon)))))
+      (throwDBError (str "Unkown relation: " jon)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -1505,18 +1506,18 @@
           (if (nil? objB)
             (.exec sqlr
                    (format
-                     "DELETE FROM %s WHERE %s=?"
+                     "delete from %s where %s=?"
                      (.escId sqlr (dbTablename mm))
                      (.escId sqlr (dbColname (fs ka))))
                    [ (goid objA) ])
             (.exec sqlr
                    (format
-                     "DELETE FROM %s WHERE %s=? AND %s=?"
+                     "delete from %s where %s=? and %s=?"
                      (.escId sqlr (dbTablename mm))
                      (.escId sqlr (dbColname (fs ka)))
                      (.escId sqlr (dbColname (fs kb))))
                    [ (goid objA) (goid objB) ])))
-        (throwDBError (str "Unkown assoc " jon))))))
+        (throwDBError (str "Unkown relation: " jon))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -1540,14 +1541,14 @@
             fs (:fields mm)
             tm (.get schema t2)]
         (when (nil? tm)
-          (throwDBError (str "Unknown model " t2)))
+          (throwDBError (str "Unknown model: " t2)))
         (.select
           sqlr
           t2
           (format
-            (str "SELECT DISTINCT %s.* FROM %s %s "
-                 "JOIN %s %s ON "
-                 "%s.%s=? AND %s.%s=%s.%s"),
+            (str "select distinct %s.* from %s %s "
+                 "join %s %s on "
+                 "%s.%s=? and %s.%s=%s.%s"),
             RS
             (.escId sqlr (dbTablename tm))
             RS
@@ -1557,7 +1558,7 @@
             MM (.escId sqlr (dbColname (kb fs)))
             RS (.escId sqlr COL_ROWID))
           [ (goid obj) ]))
-      (throwDBError (str "Unknown joined model " jon)))))
+      (throwDBError (str "Unknown joined model: " jon)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;EOF

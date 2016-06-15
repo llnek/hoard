@@ -95,8 +95,7 @@
               (let
                 [rc (cb (reifySQLr
                           db
-                          #(cb)
-                          (constantly c) runc))]
+                          (fn [a] (a c))))]
                 (commit c)
                 rc)
               (catch Throwable e#

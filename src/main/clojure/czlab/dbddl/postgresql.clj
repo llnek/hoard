@@ -13,7 +13,7 @@
 ;; Copyright (c) 2013-2016, Kenneth Leung. All rights reserved.
 
 
-(ns ^{:doc ""
+(ns ^{:doc "DDL functions for Postgresql"
       :author "kenl" }
 
   czlab.dbddl.postgresql
@@ -35,10 +35,10 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 ;; Postgresql
-(defmethod getTSKwd :postgresql [_] "TIMESTAMP WITH TIME ZONE")
-(defmethod getBlobKwd :postgresql [_] "BYTEA")
-(defmethod getDoubleKwd :postgresql [_] "DOUBLE PRECISION")
-(defmethod getFloatKwd :postgresql [_] "REAL")
+(defmethod getTSKwd :postgresql [_] "timestamp with time zone")
+(defmethod getBlobKwd :postgresql [_] "bytea")
+(defmethod getDoubleKwd :postgresql [_] "double precision")
+(defmethod getFloatKwd :postgresql [_] "real")
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -58,7 +58,7 @@
 
   [dbtype model field]
 
-  (genColDef dbtype (genCol field) "SERIAL" false nil))
+  (genColDef dbtype (genCol field) "serial" false nil))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -68,7 +68,7 @@
 
   [dbtype model field]
 
-  (genColDef dbtype (genCol field) "BIGSERIAL" false nil))
+  (genColDef dbtype (genCol field) "bigserial" false nil))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -78,9 +78,9 @@
 
   [dbtype model]
 
-  (str "DROP TABLE IF EXISTS "
+  (str "drop table if exists "
        (gtable model)
-       " CASCADE "
+       " cascade "
        (genExec dbtype) "\n\n"))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

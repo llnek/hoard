@@ -13,7 +13,7 @@
 ;; Copyright (c) 2013-2016, Kenneth Leung. All rights reserved.
 
 
-(ns ^{:doc ""
+(ns ^{:doc "DDL functions for SQL Server"
       :author "kenl" }
 
   czlab.dbddl.sqlserver
@@ -31,10 +31,10 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 ;; SQLServer
-(defmethod getDoubleKwd SQLServer [_] "FLOAT(53)")
-(defmethod getFloatKwd SQLServer [_] "FLOAT(53)")
-(defmethod getBlobKwd SQLServer [_] "IMAGE")
-(defmethod getTSKwd SQLServer [_] "DATETIME")
+(defmethod getDoubleKwd SQLServer [_] "float(53)")
+(defmethod getFloatKwd SQLServer [_] "float(53)")
+(defmethod getBlobKwd SQLServer [_] "image")
+(defmethod getTSKwd SQLServer [_] "datetime")
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -49,8 +49,8 @@
        " "
        (getIntKwd dbtype)
        (if (:pkey fld)
-         " IDENTITY (1,1) "
-         " AUTOINCREMENT ")))
+         " identity (1,1) "
+         " autoincrement ")))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -65,8 +65,8 @@
        " "
        (getLongKwd dbtype)
        (if (:pkey fld)
-         " IDENTITY (1,1) "
-         " AUTOINCREMENT ")))
+         " identity (1,1) "
+         " autoincrement ")))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -76,9 +76,9 @@
 
   [dbtype model]
 
-  (str "IF EXISTS (SELECT * FROM dbo.sysobjects WHERE id=object_id('"
+  (str "if exists (select * from dbo.sysobjects where id=object_id('"
        (gtable model false)
-       "')) DROP TABLE "
+       "')) drop table "
        (gtable model)
        (genExec dbtype) "\n\n"))
 
