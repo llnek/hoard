@@ -109,23 +109,22 @@
                 :url url
                 :user "sa"
                 :passwd "hello" })]
-    (writeOneFile (File. dir "dbstuff.out") (dbgShowSchema @METAC))
+    ;;(writeOneFile (File. dir "dbstuff.out") (dbgShowSchema @METAC))
     (reset! JDBC jdbc)
     (uploadDdl jdbc (getDDL @METAC :h2))
-    (reset! DB (dbioConnect jdbc @METAC {})))
+    (reset! DB (dbioConnect jdbc @METAC )))
+  ;;(println "\n\n" (dbgShowSchema @METAC))
   (when (fn? f) (f)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defn- mkt "" [t] (keyword (str "czlabtest.dbio.dbstuff/" t)))
-
 (defn- mkEmp
 
   ""
   [login]
 
   (let [emp (-> (.get ^Schema @METAC ::Employee)
-                 dbioCreateObj)]
+                dbioCreateObj)]
     (dbioSetFlds*
       emp
       :salary 1000000.00
@@ -134,27 +133,28 @@
       :desc "idiot"
       :login login)))
 
-(defn- create-company
+(defn- mkCompany
 
   ""
   [cname]
 
   (let [c (-> (.get ^Schema @METAC ::Company)
-              (dbioCreateObj))]
+              dbioCreateObj)]
     (dbioSetFlds*
       c
       :cname cname
       :revenue 100.00
       :logo (.getBytes "hi"))))
 
-(defn- create-dept
+(defn- mkDept
 
   ""
   [dname]
 
   (-> (-> (.get ^Schema @METAC ::Department)
-          (dbioCreateObj))
+          dbioCreateObj)
       (dbioSetFld :dname dname)))
+
 
 (defn- create-emp
 
@@ -165,18 +165,17 @@
         obj (mkEmp login)
         e (.execWith
             sql
-            (fn [^SQLr s] (.insert s obj)))]
+            #(.insert ^SQLr % obj))]
     (first
       (.execWith
         sql
-        (fn [^SQLr s]
-          (dbioSetO2O
-            {:with s :as :person}
+        #(dbioSetO2O
+            {:with %1 :as :person}
             e
-            (.findOne s
+            (.findOne ^SQLr %1
                       ::Person
                       {:first_name fname
-                       :last_name lname})))))))
+                       :last_name lname}))))))
 
 (defn- fetch-all-emps
 
@@ -185,6 +184,7 @@
 
   (let [sql (.newSimpleSQLr ^DBAPI @DB)]
     (.findAll sql ::Employee)))
+
 
 (defn- fetch-person
 
@@ -195,6 +195,7 @@
     (.findOne sql
               ::Person
               {:first_name fname :last_name lname})))
+
 
 (defn- fetch-emp
 
@@ -214,9 +215,9 @@
   (let [sql (.newCompositeSQLr ^DBAPI @DB)]
     (.execWith
       sql
-      #(let [o1 (.findOne ^SQLr %1
+      #(let [o2 (-> (.findOne ^SQLr %1
                           ::Employee {:login login})
-             o2 (dbioSetFlds* o1 :salary 99.9234 :iq 0)]
+                    (dbioSetFlds* :salary 99.9234 :iq 0))]
          (if (> (.update ^SQLr %1 o2) 0) o2 nil)))))
 
 (defn- delete-emp
@@ -234,13 +235,14 @@
       sql
       #(.countAll ^SQLr %1 ::Employee))))
 
+
 (defn- create-person
 
   ""
   [fname lname sex]
 
   (let [p (-> (-> (.get ^Schema @METAC ::Person)
-                  (dbioCreateObj))
+                  dbioCreateObj)
               (dbioSetFlds*
                 :first_name fname
                 :last_name  lname
@@ -271,7 +273,7 @@
         (.execWith sql
                    #(dbioGetO2O {:as :spouse
                                  :with %1 } p2))
-       p3
+        p3
         (.execWith sql
                    #(dbioGetO2O {:as :spouse
                                  :with %1 } w3)) ]
@@ -318,18 +320,18 @@
   (let [sql (.newCompositeSQLr ^DBAPI @DB)
         c (.execWith
             sql
-            #(.insert ^SQLr %1 (create-company "acme")))]
+            #(.insert ^SQLr %1 (mkCompany "acme")))]
     (.execWith
       sql
       #(dbioSetO2M {:as :depts :with %1 }
                    c
-                   (.insert ^SQLr %1 (create-dept "d1"))))
+                   (.insert ^SQLr %1 (mkDept "d1"))))
     (.execWith
       sql
       #(dbioSetO2M* {:as :depts :with %1 }
                     c
-                   (.insert ^SQLr %1 (create-dept "d2"))
-                   (.insert ^SQLr %1 (create-dept "d3"))))
+                   (.insert ^SQLr %1 (mkDept "d2"))
+                   (.insert ^SQLr %1 (mkDept "d3"))))
     (.execWith
       sql
       #(dbioSetO2M* {:as :emps :with %1 }
@@ -440,6 +442,7 @@
                #(dbioGetO2M {:as :emps :with %} c))]
       (and (== (count s1) 0)
            (== (count s2) 0)))))
+
 
 (deftest czlabtestdbio-dbstuff
 

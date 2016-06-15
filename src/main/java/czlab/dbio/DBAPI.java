@@ -20,7 +20,7 @@ import java.sql.Connection;
 /**
  * A sql database interface.
  *
- * @author kenl
+ * @author Kenneth Leung
  */
 public interface DBAPI {
 

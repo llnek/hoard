@@ -17,10 +17,12 @@ package czlab.dbio;
 //
 
 /**
- * @author kenl
+ * @author Kenneth Leung
  */
 public interface Schema {
+
   public Iterable<?> getModels();
+
   public Object get(Object id);
 }
 

@@ -18,7 +18,7 @@ package czlab.dbio;
 import java.sql.Connection;
 
 /**
- * @author kenl
+ * @author Kenneth Leung
  */
 public interface JDBCPool {
 

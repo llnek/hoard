@@ -17,6 +17,14 @@
 
   czlab.dbio.connect
 
+  (:require
+    [czlab.xlib.core :refer [try! test-nonil]]
+    [czlab.xlib.logging :as log])
+
+  (:use [czlab.dbio.composite]
+        [czlab.dbio.core]
+        [czlab.dbio.simple])
+
   (:import
     [czlab.dbio
      DBAPI
@@ -26,27 +34,19 @@
      DBIOLocal
      DBIOError
      OptLockError]
-    [java.util Map])
+    [java.util Map]))
 
-  (:require
-    [czlab.xlib.core :refer [try! test-nonil]]
-    [czlab.xlib.logging :as log])
-
-  (:use [czlab.dbio.composite]
-        [czlab.dbio.core]
-        [czlab.dbio.simple]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;(set! *warn-on-reflection* true)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defn registerJdbcTL
+(defn- registerJdbcTL
 
   "Add a thread-local db pool"
 
-  {:tag JDBCPool
-   :no-doc true}
+  ^JDBCPool
   [^JDBCInfo jdbc options]
 
   (let [^Map
@@ -70,7 +70,7 @@
   "Connect to a datasource"
 
   ^DBAPI
-  [^JDBCInfo jdbc schema options]
+  [^JDBCInfo jdbc schema & [options]]
 
   (let [v (resolveVendor jdbc)]
     (test-nonil "database-vendor" v)
@@ -95,7 +95,7 @@
   "Connect to a datasource"
 
   ^DBAPI
-  [^JDBCPool pool schema options]
+  [^JDBCPool pool schema & [options]]
 
   (let [v (.vendor pool)]
     (test-nonil "database-vendor" v)

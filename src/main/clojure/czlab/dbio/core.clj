@@ -83,21 +83,19 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;(set! *warn-on-reflection* true)
 
-(defonce ^String COL_LASTCHANGED "DBIO_LASTCHANGED")
-(defonce ^String COL_CREATED_ON "DBIO_CREATED_ON")
-(defonce ^String COL_CREATED_BY "DBIO_CREATED_BY")
+;;(defonce ^String COL_LASTCHANGED "DBIO_LASTCHANGED")
+;;(defonce ^String COL_CREATED_ON "DBIO_CREATED_ON")
+;;(defonce ^String COL_CREATED_BY "DBIO_CREATED_BY")
 (defonce ^String COL_LHS_TYPEID "DBIO_LHS_TYPEID")
-(defonce ^String COL_LHS_ROWID "DBIO_LHS_ROWID")
 (defonce ^String COL_RHS_TYPEID "DBIO_RHS_TYPEID")
+(defonce ^String COL_LHS_ROWID "DBIO_LHS_ROWID")
 (defonce ^String COL_RHS_ROWID "DBIO_RHS_ROWID")
 (defonce ^String COL_ROWID "DBIO_ROWID")
-(defonce ^String COL_VERID "DBIO_VERID")
+;;(defonce ^String COL_VERID "DBIO_VERID")
 (defonce DDL_SEP #"-- :")
 
 (def ^:dynamic *DDL_CFG* nil)
 (def ^:dynamic *DDL_BVS* nil)
-
-(def ^:private ^String _NSP "czc.dbio.core" )
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -107,11 +105,40 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defmacro set-oid "" ^:private [pojo oid] `(assoc ~pojo :rowid ~oid))
-(defmacro gtype "" ^:no-doc [obj]  `(:id (:model (meta ~obj))))
-(defn gschema "" ^Schema ^:no-doc [obj]  (:schema (meta obj)))
-(defmacro gmodel "" ^:no-doc [obj]  `(:model (meta ~obj)))
-(defmacro goid "" ^:no-doc [obj]  `(:rowid ~obj))
+(defmacro set-oid
+  ""
+  {:no-doc true}
+  [pojo oid]
+  `(assoc ~pojo :rowid ~oid))
+
+(defmacro gtype
+  ""
+  {:no-doc true}
+  [obj]
+  `(:id (:model (meta ~obj))))
+
+(defmacro gmodel
+  ""
+  {:no-doc true}
+  [obj]
+  `(:model (meta ~obj)))
+
+(defmacro goid
+  ""
+  {:no-doc true}
+  [obj]
+  `(:rowid ~obj))
+
+(defn gschema
+
+  ""
+  {:no-doc true
+   :tag Schema}
+
+  [obj]
+
+  (:schema (meta obj)))
+
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -124,7 +151,6 @@
 
   APersistentMap
 
-  ^String
   [info idstr & [quote?]]
 
   (let [ch (strim (:qstr info))
@@ -144,7 +170,6 @@
 
   DBAPI
 
-  ^String
   [^DBAPI db idstr & [quote?]]
 
   (fmtSQLId (.vendor db) idstr quote?))
@@ -155,7 +180,6 @@
 
   DatabaseMetaData
 
-  ^String
   [^DatabaseMetaData mt idstr & [quote?]]
 
   (let [ch (strim (.getIdentifierQuoteString mt))
@@ -175,28 +199,9 @@
 
   Connection
 
-  ^String
   [^Connection conn idstr & [quote?]]
 
   (fmtSQLId (.getMetaData conn) idstr quote?))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;
-(defn canAssignFrom?
-
-  "Check if cur type is a subclass of the root type"
-
-  [root model]
-
-  {:pre [(keyword? root) ]}
-
-  (if (= root (:id model))
-    true
-    (let [^Schema s (gschema model)
-          p (:parent model)]
-      (if (some? p)
-        (canAssignFrom? root (.get s p))
-        false))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; have to be function , not macro as this is passed into another higher
@@ -220,9 +225,9 @@
 
   (^String [model] (:table model))
 
-  (^String [model-id ^Schema schema]
+  (^String [typeid schema]
    {:pre [(some? schema)]}
-   (dbTablename (.get schema model-id))))
+   (dbTablename (.get ^Schema schema typeid))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -232,10 +237,10 @@
 
   (^String [fdef] (:column fdef))
 
-  (^String [fld-id model]
+  (^String [fid model]
    {:pre [(map? model)]}
    (-> (:fields model)
-       (get fld-id)
+       (get fid)
        (dbColname ))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -249,7 +254,6 @@
 
   {:pre [(map? cfg)]}
 
-  ;;(log/debug "JDBC id= %s, cfg = %s" id cfg)
   (let [id (juid)]
     (reify
 
@@ -279,10 +283,10 @@
 ;;
 (defonce DBTYPES
   {SQLServer {:test-string "select count(*) from sysusers" }
-   Postgresql { :test-string "select 1" }
-   MySQL { :test-string "select version()" }
-   H2 { :test-string "select 1" }
-   Oracle { :test-string "select 1 from DUAL" } })
+   Postgresql {:test-string "select 1" }
+   MySQL {:test-string "select version()" }
+   H2 {:test-string "select 1" }
+   Oracle {:test-string "select 1 from DUAL" } })
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -318,7 +322,6 @@
 
   "For o2o & o2m relations"
 
-  ^Keyword
   [tn rn]
 
   (keyword (str "fk_" (name tn) "_" (name rn))))
@@ -326,8 +329,8 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; DATA MODELING
 ;;
-(defonce JOINED-MODEL-MONIKER ::DBIOJoinedModel)
-(defonce BASEMODEL-MONIKER ::DBIOBaseModel)
+;;(defonce JOINED-MODEL-MONIKER ::DBIOJoinedModel)
+;;(defonce BASEMODEL-MONIKER ::DBIOBaseModel)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -340,7 +343,6 @@
 
   {:table (cleanName nm)
    :id (asFQKeyword nm)
-   :parent nil
    :abstract false
    :system false
    :mxm false
@@ -348,8 +350,13 @@
    :uniques {}
    :rels {}
    :fields
-   {:rowid {:id :rowid :column COL_ROWID :pkey true :domain :Long
-            :auto true :system true :updatable false}}})
+   {:rowid {:id :rowid
+            :column COL_ROWID
+            :pkey true
+            :domain :Long
+            :auto true
+            :system true
+            :updatable false}}})
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -370,8 +377,9 @@
   "A special model with 2 relations,
    left hand side and right hand side"
 
-  ^APersistentMap
-  ^:no-doc
+  {:tag APersistentMap
+   :no-doc true}
+
   [pojo lhs rhs]
 
   {:pre [(map? pojo)
@@ -398,10 +406,12 @@
   `(def ~modelname
       (-> (dbioModel ~(name modelname))
           (declFields
-            {:lhs-typeid {:column COL_LHS_TYPEID }
-             :lhs-rowid {:column COL_LHS_ROWID :domain :Long :null false}
-             :rhs-typeid {:column COL_RHS_TYPEID }
-             :rhs-rowid {:column COL_RHS_ROWID :domain :Long :null false} })
+            {:lhs-rowid {:column COL_LHS_ROWID
+                         :domain :Long
+                         :null false}
+             :rhs-rowid {:column COL_RHS_ROWID
+                         :domain :Long
+                         :null false} })
           (withJoined ~lhs ~rhs))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -429,8 +439,8 @@
             (reduce
               (fn [out [k v]]
                 (assoc! out
-                       k
-                       (into (ordered-set) v)))
+                        k
+                        (into (ordered-set) v)))
               (transient {})
               kvs))]
     ;;merge new stuff onto old stuff
@@ -443,12 +453,12 @@
   "Set indexes to the model"
 
   ^APersistentMap
-  [pojo indices]
+  [pojo indexes]
 
-  {:pre [(map? pojo) (map? indices)]}
+  {:pre [(map? pojo) (map? indexes)]}
 
   ;;indices = { :a #{ :f1 :f2} ] :b #{:f3 :f4} }
-  (with-xxx-sets pojo indices :indexes))
+  (with-xxx-sets pojo indexes :indexes))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -474,17 +484,16 @@
   [fid]
 
   {:column (cleanName fid)
+   :id (keyword fid)
    :domain :String
    :size 255
-   :id (keyword fid)
    :rel-key false
    :pkey false
    :null true
    :auto false
    :dft nil
    :updatable true
-   :system false
-   :index "" })
+   :system false })
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -529,7 +538,7 @@
         r2 (case (:kind rd)
              (:O2O :O2M)
              (merge rd {:fkey (fmtfkey (:id pojo) rid) })
-             (throwDBError (str "Invalid relation " rid)))]
+             (throwDBError (str "Invalid relation: " rid)))]
     (interject pojo :rels #(assoc (%2 %1) rid r2))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -569,12 +578,17 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Defining the base model here
+(comment
 (declModel DBIOBaseModel
   (with-abstract true)
   (with-db-system)
   (declFields
-    {:rowid {:column COL_ROWID :pkey true :domain :Long
-             :auto true :system true :updatable false} }))
+    {:rowid {:column COL_ROWID
+             :pkey true
+             :domain :Long
+             :auto true
+             :system true
+             :updatable false} })))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -593,14 +607,17 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
+(comment
 (declModel DBIOJoinedModel
   (with-abstract true)
   (with-db-system)
   (declFields
-    {:lhs-typeid {:column COL_LHS_TYPEID }
-     :lhs-rowid {:column COL_LHS_ROWID :domain :Long :null false}
-     :rhs-typeid {:column COL_RHS_TYPEID }
-     :rhs-rowid {:column COL_RHS_ROWID :domain :Long :null false} }))
+    {:lhs-rowid {:column COL_LHS_ROWID
+                 :domain :Long
+                 :null false}
+     :rhs-rowid {:column COL_RHS_ROWID
+                 :domain :Long
+                 :null false} })))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -608,7 +625,7 @@
 
   ""
 
-  ^:private
+  {:private true}
   [fid]
 
   `(merge (getDftFldObj ~fid)
@@ -704,9 +721,9 @@
   [& models]
 
   (let [data (atom {})
-        schema (reify Schema
-                 (get [_ id] (get @data id))
-                 (getModels [_] @data))
+        sch (reify Schema
+              (get [_ id] (get @data id))
+              (getModels [_] @data))
         ms (if (empty? models)
              {}
              (persistent!
@@ -715,12 +732,10 @@
                        models)))
         m2 (if (empty? ms)
              {}
-             (-> (assoc ms JOINED-MODEL-MONIKER DBIOJoinedModel)
-                 (resolve-rels)
-                 (assoc BASEMODEL-MONIKER DBIOBaseModel)
-                 (meta-models schema)))]
+             (-> (resolve-rels ms)
+                 (meta-models sch)))]
     (reset! data m2)
-    schema))
+    sch))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -733,13 +748,14 @@
 
   {:pre [(some? mc)]}
 
-  (reduce #(addDelim! %1
-                      "\n"
-                      (writeEdnString {:TABLE (:table %2)
-                                       :DEFN %2
-                                       :META (meta %2)}))
-          (StringBuilder.)
-          (vals (.getModels mc))))
+  (str
+    (reduce #(addDelim! %1
+                        "\n"
+                        (writeEdnString {:TABLE (:table %2)
+                                         :DEFN %2
+                                         :META (meta %2)}))
+            (StringBuilder.)
+            (vals (.getModels mc)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -761,10 +777,11 @@
                 (.put "user" user)
                 (.put "username" user)))
             pps)]
-    (when (nil? d) (throwDBError (str "Can't load Jdbc Url: " url)))
+    (when (nil? d)
+      (throwDBError (str "Can't load Jdbc Url: " url)))
     (when (and (hgl? dv)
                (not= (-> d (.getClass) (.getName)) dv))
-      (log/warn "expected %s, loaded with driver: %s" dv (.getClass d)))
+      (log/warn "expected %s, loaded with %s" dv (.getClass d)))
     (.connect d url p)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -784,9 +801,10 @@
                (safeGetConn jdbc)
                (DriverManager/getConnection url))]
     (when (nil? conn)
-      (throwDBError (str "Failed to create db connection: " url)))
+      (throwDBError (str "Failed to connect: " url)))
     (doto conn
-      (.setTransactionIsolation Connection/TRANSACTION_SERIALIZABLE))))
+      (.setTransactionIsolation
+        Connection/TRANSACTION_SERIALIZABLE))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -812,7 +830,6 @@
 
   JDBCInfo
 
-  ^APersistentMap
   [jdbc]
 
   (with-open
@@ -825,7 +842,6 @@
 
   Connection
 
-  ^APersistentMap
   [conn]
 
   (let [md (.getMetaData ^Connection conn)
@@ -1009,7 +1025,7 @@
       JDBCPool
 
       (shutdown [_]
-        (log/debug "About to shut down the pool impl: %s" impl)
+        (log/debug "shutting down pool impl: %s" impl)
         (.shutdown impl))
 
       (dbUrl [_] (.getUrl jdbc))
@@ -1056,11 +1072,14 @@
           (.setJdbcUrl (.getUrl jdbc))
           (.setUsername (.getUser jdbc))
           (.setIdleMaxAgeInSeconds (* 60 60 2)) ;; 2 hrs
-          (.setMaxConnectionsPerPartition (Math/max 1 (nnz (:max-conns options))))
-          (.setMinConnectionsPerPartition (Math/max 1 (nnz (:min-conns options))))
+          (.setMaxConnectionsPerPartition
+            (Math/max 1 (nnz (:max-conns options))))
+          (.setMinConnectionsPerPartition
+            (Math/max 1 (nnz (:min-conns options))))
           (.setPoolName (juid))
           (.setAcquireRetryDelayInMs 5000)
-          (.setConnectionTimeoutInMs  (Math/max 5000 (nnz (:max-conn-wait options))))
+          (.setConnectionTimeoutInMs
+            (Math/max 5000 (nnz (:max-conn-wait options))))
           (.setDefaultAutoCommit false)
           ;;(.setConnectionHook (BoneCPHook.))
           (.setAcquireRetryAttempts 1))
@@ -1154,11 +1173,11 @@
 
   {:pre [(some? model)]}
 
-  (with-meta {} { :model model } ))
+  (with-meta {} {:model model} ))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defmacro mockObj "" ^:private [obj]
+(defmacro mockObj "" [obj]
   `(with-meta {:rowid (goid ~obj)} (meta ~obj)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -1235,7 +1254,7 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defn dbioGetRelation
+(defn- dbioGetRelation
 
   "Get the relation definition"
 
@@ -1271,9 +1290,13 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defmacro selectSide
+
   ""
-  ^:private
+
+  {:private true}
+
   [mxm obj]
+
   `(first (selectSide+ ~mxm  ~obj)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -1304,7 +1327,7 @@
         schema (.metas sqlr)
         mcz (gmodel lhsObj)
         rid (:as ctx)]
-    (if-let [r (dbioGetRelation mcz (:as ctx) kind)]
+    (if-let [r (dbioGetRelation mcz rid kind)]
       (let [fv (goid lhsObj)
             fid (:fkey r)
             y (-> (mockObj rhsObj)

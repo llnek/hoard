@@ -19,7 +19,7 @@ package czlab.dbio;
 import java.sql.Driver;
 
 /**
- * @author kenl
+ * @author Kenneth Leung
  */
 public interface JDBCInfo {
 

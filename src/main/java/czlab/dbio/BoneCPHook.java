@@ -24,7 +24,7 @@ import static org.slf4j.LoggerFactory.*;
 /**
  * To debug BoneCP if necessary.
  *
- * @author kenl
+ * @author Kenneth Leung
  */
 public class BoneCPHook extends AbstractConnectionHook {
 

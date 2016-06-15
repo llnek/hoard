@@ -17,6 +17,11 @@
 
   czlab.dbio.composite
 
+  (:require
+    [czlab.xlib.core :refer [test-nonil try!]]
+    [czlab.xlib.str :refer [hgl?]]
+    [czlab.xlib.logging :as log])
+
   (:import
     [czlab.dbio
      SQLr
@@ -26,12 +31,8 @@
     [java.sql Connection])
 
   (:use [czlab.dbio.core]
-        [czlab.dbio.sql])
+        [czlab.dbio.sql]))
 
-  (:require
-    [czlab.xlib.core :refer [test-nonil try!]]
-    [czlab.xlib.str :refer [hgl?]]
-    [czlab.xlib.logging :as log]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;(set! *warn-on-reflection* true)
@@ -66,15 +67,6 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defn- runc
-
-  ""
-  [^Connection conn func]
-
-  (func conn))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;
 (defn compositeSQLr
 
   "A composite supports transactions"
@@ -93,9 +85,7 @@
           [c (begin db how)]
             (try
               (let
-                [rc (cb (reifySQLr
-                          db
-                          (fn [a] (a c))))]
+                [rc (cb (reifySQLr db #(% c)))]
                 (commit c)
                 rc)
               (catch Throwable e#

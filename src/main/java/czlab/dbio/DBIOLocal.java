@@ -20,7 +20,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 /**
- * @author kenl
+ * @author Kenneth Leung
  */
 public enum DBIOLocal {
 ;

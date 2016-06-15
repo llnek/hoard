@@ -17,7 +17,7 @@ package czlab.dbio;
 //
 
 /**
- * @author kenl
+ * @author Kenneth Leung
  */
 public interface SQLr {
 

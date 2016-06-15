@@ -18,7 +18,7 @@ package czlab.dbio;
 import java.sql.SQLException;
 
 /**
- * @author kenl
+ * @author Kenneth Leung
  */
 public class DBIOError extends SQLException {
 

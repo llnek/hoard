@@ -12,7 +12,7 @@
 ;;
 ;; Copyright (c) 2013-2016, Kenneth Leung. All rights reserved.
 
-(ns ^{:doc ""
+(ns ^{:doc "Low level SQL JDBC functions"
       :author "Kenneth Leung" }
 
   czlab.dbio.sql
@@ -78,7 +78,6 @@
 
   ""
 
-  ^String
   [vendor model]
 
   (str (fmtSQLId vendor (dbColname :rowid model)) "=?"))
@@ -98,28 +97,27 @@
 ;;
 (defn- sqlFilterClause
 
-  "[sql-filter-string, values]"
+  "returns [sql-filter-string, values]"
 
   [vendor model filters]
 
-  (let
-    [flds (:fields model)
-     wc (reduce
-          (fn [sum [k v]]
-            (let [fld (flds k)
-                  c (if (nil? fld)
-                      (sname k)
-                      (:column fld))]
-              (addDelim!
-                sum
-                " and "
-                (str (fmtSQLId vendor c)
-                     (if (nil? v)
-                       " is null "
-                       " =? ")))))
-          (StringBuilder.)
-          filters)]
-    [(str wc) (flattenNil (vals filters))]))
+  (let [flds (:fields model)
+        wc (str
+             (reduce
+               (fn [sum [k v]]
+                 (let [fld (flds k)
+                       c (if (nil? fld)
+                           (sname k)
+                           (:column fld))]
+                   (addDelim!
+                     sum
+                     " and "
+                     (str (fmtSQLId vendor c)
+                          (if (nil? v)
+                            " is null " " =? ")))))
+               (StringBuilder.)
+               filters))]
+    [wc (flattenNil (vals filters))]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;

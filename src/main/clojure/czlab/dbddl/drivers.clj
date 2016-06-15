@@ -264,7 +264,7 @@
          (genCol field)
          (str " " typedef " ")
          (nullClause dbtype (:null field))
-         (if (hgl? dft) (str " DEFAULT " dft) ""))))
+         (if (hgl? dft) (str " default " dft) ""))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
