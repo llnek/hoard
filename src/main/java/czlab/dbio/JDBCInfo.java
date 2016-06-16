@@ -25,15 +25,15 @@ public interface JDBCInfo {
 
   public Driver loadDriver();
 
-  public String getDriver();
+  public String driver();
 
-  public String getUrl();
+  public String url();
 
-  public String getUser();
+  public String user();
 
-  public String getPwd();
+  public String passwd();
 
-  public String getId();
+  public String id();
 
 }
 

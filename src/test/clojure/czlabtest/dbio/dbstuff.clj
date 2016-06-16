@@ -17,7 +17,6 @@
   czlabtest.dbio.dbstuff
 
   (:use [czlab.xlib.files :only [writeOneFile]]
-        [czlab.crypto.codec]
         [czlab.xlib.core]
         [czlab.dbddl.drivers]
         [czlab.dbio.connect]
@@ -26,7 +25,6 @@
         [clojure.test])
 
   (:import
-    [czlab.crypto PasswordAPI]
     [java.io File]
     [java.util GregorianCalendar Calendar]
     [czlab.dbio Transactable SQLr Schema DBAPI]))
@@ -98,12 +96,12 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defn init-test [f]
+(defn init-test "" [f]
   (reset! METAC
     (mkDbSchema Address Person EmpDepts Employee Department Company))
   (let [dir (File. (System/getProperty "java.io.tmpdir"))
         db (str "" (System/currentTimeMillis))
-        url (H2Db dir db "sa" (pwdify "hello"))
+        url (H2Db dir db "sa" "hello")
         jdbc (mkJdbc
                {:driver H2-DRIVER
                 :url url
@@ -112,9 +110,11 @@
     ;;(writeOneFile (File. dir "dbstuff.out") (dbgShowSchema @METAC))
     (reset! JDBC jdbc)
     (uploadDdl jdbc (getDDL @METAC :h2))
-    (reset! DB (dbioConnect jdbc @METAC )))
+    (reset! DB (dbioConnectViaPool jdbc @METAC )))
   ;;(println "\n\n" (dbgShowSchema @METAC))
   (when (fn? f) (f)))
+
+(defn finz-test "" [] (.finz @DB) true)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -488,6 +488,7 @@
 
   (is (undo-company))
 
+  (is (finz-test))
 )
 
 ;;(use-fixtures :each init-test)

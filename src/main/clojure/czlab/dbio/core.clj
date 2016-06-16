@@ -30,7 +30,6 @@
     [czlab.dbio
      DBAPI
      Schema
-     BoneCPHook
      DBIOError
      SQLr
      JDBCPool
@@ -42,8 +41,9 @@
      DriverManager
      DatabaseMetaData]
     [java.lang Math]
-    [czlab.crypto PasswordAPI]
-    [com.jolbox.bonecp BoneCP BoneCPConfig])
+    [com.zaxxer.hikari
+     HikariConfig
+     HikariDataSource])
 
   (:require
     [czlab.xlib.format :refer [writeEdnString]]
@@ -75,7 +75,6 @@
     [czlab.xlib.logging :as log]
     [clojure.string :as cs]
     [clojure.set :as cset]
-    [czlab.crypto.codec :as codec]
     [czlab.xlib.meta :refer [forname]])
 
   (:use [flatland.ordered.set]))
@@ -86,8 +85,8 @@
 ;;(defonce ^String COL_LASTCHANGED "DBIO_LASTCHANGED")
 ;;(defonce ^String COL_CREATED_ON "DBIO_CREATED_ON")
 ;;(defonce ^String COL_CREATED_BY "DBIO_CREATED_BY")
-(defonce ^String COL_LHS_TYPEID "DBIO_LHS_TYPEID")
-(defonce ^String COL_RHS_TYPEID "DBIO_RHS_TYPEID")
+;;(defonce ^String COL_LHS_TYPEID "DBIO_LHS_TYPEID")
+;;(defonce ^String COL_RHS_TYPEID "DBIO_RHS_TYPEID")
 (defonce ^String COL_LHS_ROWID "DBIO_LHS_ROWID")
 (defonce ^String COL_RHS_ROWID "DBIO_RHS_ROWID")
 (defonce ^String COL_ROWID "DBIO_ROWID")
@@ -259,17 +258,17 @@
 
       JDBCInfo
 
-      (getUrl [_] (or (:server cfg) (:url cfg)))
-      (getId [_]  (or (:id cfg) id))
+      (url [_] (or (:server cfg) (:url cfg)))
+      (id [_]  (or (:id cfg) id))
 
       (loadDriver [this]
-        (when-let [s (.getUrl this)]
+        (when-let [s (.url this)]
           (when (hgl? s)
             (DriverManager/getDriver s))))
 
-      (getDriver [_] (:driver cfg))
-      (getUser [_] (:user cfg))
-      (getPwd [_] (str (:passwd cfg))))))
+      (driver [_] (:driver cfg))
+      (user [_] (:user cfg))
+      (passwd [_] (str (:passwd cfg))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -412,6 +411,8 @@
              :rhs-rowid {:column COL_RHS_ROWID
                          :domain :Long
                          :null false} })
+          (declUniques
+            {:i1 #{ :lhs-rowid :rhs-rowid }})
           (withJoined ~lhs ~rhs))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -471,7 +472,7 @@
 
   {:pre [(map? pojo) (map? uniqs)]}
 
-  ;;uniques = { :a #{ :f1 :f2 } :b #{ f3 f4 } }
+  ;;uniques = { :a #{ :f1 :f2 } :b #{ :f3 :f4 } }
   (with-xxx-sets pojo uniqs :uniques))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -766,14 +767,14 @@
   ^Connection
   [^JDBCInfo jdbc]
 
-  (let [user (.getUser jdbc)
-        dv (.getDriver jdbc)
-        url (.getUrl jdbc)
+  (let [user (.user jdbc)
+        dv (.driver jdbc)
+        url (.url jdbc)
         d (.loadDriver jdbc)
         p (let [pps (Properties.)]
             (if (hgl? user)
               (doto pps
-                (.put "password" (str (.getPwd jdbc)))
+                (.put "password" (str (.passwd jdbc)))
                 (.put "user" user)
                 (.put "username" user)))
             pps)]
@@ -795,9 +796,9 @@
 
   {:pre [(some? jdbc)]}
 
-  (let [url (.getUrl jdbc)
+  (let [url (.url jdbc)
         ^Connection
-        conn (if (hgl? (.getUser jdbc))
+        conn (if (hgl? (.user jdbc))
                (safeGetConn jdbc)
                (DriverManager/getConnection url))]
     (when (nil? conn)
@@ -1016,7 +1017,7 @@
   ""
 
   ^JDBCPool
-  [^JDBCInfo jdbc ^BoneCP impl]
+  [^JDBCInfo jdbc ^HikariDataSource impl]
 
   (let [dbv (resolveVendor jdbc)]
     (test-nonil "database-vendor" dbv)
@@ -1026,9 +1027,9 @@
 
       (shutdown [_]
         (log/debug "shutting down pool impl: %s" impl)
-        (.shutdown impl))
+        (.close impl))
 
-      (dbUrl [_] (.getUrl jdbc))
+      (dbUrl [_] (.url jdbc))
       (vendor [_] dbv)
 
       (nextFree [_]
@@ -1057,34 +1058,20 @@
   [^JDBCInfo jdbc options]
 
   (let [options (or options {})
-        dv (.getDriver jdbc)
-        bcf (BoneCPConfig.) ]
+        dv (.driver jdbc)
+        hc (HikariConfig.) ]
 
-    ;;(log/debug "URL: %s"  (.getUrl jdbc))
+    ;;(log/debug "URL: %s"  (.url jdbc))
     ;;(log/debug "Driver: %s" dv)
     ;;(log/debug "Options: %s" options)
 
     (when (hgl? dv) (forname dv))
-    (doto bcf
-          (.setPartitionCount (Math/max 1 (nnz (:partitions options))))
-          (.setLogStatementsEnabled (nbf (:debug options)))
-          (.setPassword (str (.getPwd jdbc)))
-          (.setJdbcUrl (.getUrl jdbc))
-          (.setUsername (.getUser jdbc))
-          (.setIdleMaxAgeInSeconds (* 60 60 2)) ;; 2 hrs
-          (.setMaxConnectionsPerPartition
-            (Math/max 1 (nnz (:max-conns options))))
-          (.setMinConnectionsPerPartition
-            (Math/max 1 (nnz (:min-conns options))))
-          (.setPoolName (juid))
-          (.setAcquireRetryDelayInMs 5000)
-          (.setConnectionTimeoutInMs
-            (Math/max 5000 (nnz (:max-conn-wait options))))
-          (.setDefaultAutoCommit false)
-          ;;(.setConnectionHook (BoneCPHook.))
-          (.setAcquireRetryAttempts 1))
-    (log/debug "[bonecp]\n%s" (.toString bcf))
-    (makePool jdbc (BoneCP. bcf))))
+    (doto hc
+          (.setPassword (str (.passwd jdbc)))
+          (.setUsername (.user jdbc))
+          (.setJdbcUrl (.url jdbc)))
+    (log/debug "[hikari]\n%s" (.toString hc))
+    (makePool jdbc (HikariDataSource. hc))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -1437,13 +1424,13 @@
           (if-not (:cascade r)
             (format
               "update %s set %s= null where %s=?"
-              (.escId sqlr tn)
-              (.escId sqlr cn)
-              (.escId sqlr cn))
+              (.fmtId sqlr tn)
+              (.fmtId sqlr cn)
+              (.fmtId sqlr cn))
             (format
               "delete from %s where %s=?"
-              (.escId sqlr tn)
-              (.escId sqlr cn)))
+              (.fmtId sqlr tn)
+              (.fmtId sqlr cn)))
           [(goid objA)])
         objA)
       (throwDBError (str "Unknown relation: " rid)))))
@@ -1530,15 +1517,15 @@
             (.exec sqlr
                    (format
                      "delete from %s where %s=?"
-                     (.escId sqlr (dbTablename mm))
-                     (.escId sqlr (dbColname (fs ka))))
+                     (.fmtId sqlr (dbTablename mm))
+                     (.fmtId sqlr (dbColname (fs ka))))
                    [ (goid objA) ])
             (.exec sqlr
                    (format
                      "delete from %s where %s=? and %s=?"
-                     (.escId sqlr (dbTablename mm))
-                     (.escId sqlr (dbColname (fs ka)))
-                     (.escId sqlr (dbColname (fs kb))))
+                     (.fmtId sqlr (dbTablename mm))
+                     (.fmtId sqlr (dbColname (fs ka)))
+                     (.fmtId sqlr (dbColname (fs kb))))
                    [ (goid objA) (goid objB) ])))
         (throwDBError (str "Unkown relation: " jon))))))
 
@@ -1553,8 +1540,8 @@
   {:pre [(map? ctx)(map? obj)]}
 
   (let [^SQLr sqlr (:with ctx)
-        RS (.escId sqlr "RES")
-        MM (.escId sqlr "MM")
+        RS (.fmtId sqlr "RES")
+        MM (.fmtId sqlr "MM")
         schema (.metas sqlr)
         jon (:joined ctx)]
     (if-let [mm (.get schema jon)]
@@ -1573,13 +1560,13 @@
                  "join %s %s on "
                  "%s.%s=? and %s.%s=%s.%s"),
             RS
-            (.escId sqlr (dbTablename tm))
+            (.fmtId sqlr (dbTablename tm))
             RS
-            (.escId sqlr (dbTablename mm))
+            (.fmtId sqlr (dbTablename mm))
             MM
-            MM (.escId sqlr (dbColname (ka fs)))
-            MM (.escId sqlr (dbColname (kb fs)))
-            RS (.escId sqlr COL_ROWID))
+            MM (.fmtId sqlr (dbColname (ka fs)))
+            MM (.fmtId sqlr (dbColname (kb fs)))
+            RS (.fmtId sqlr COL_ROWID))
           [ (goid obj) ]))
       (throwDBError (str "Unknown joined model: " jon)))))
 

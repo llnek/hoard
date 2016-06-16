@@ -7,6 +7,11 @@
 
   :dependencies '[
 
+    ;;[czlab/czlab-crypto "1.0.0" ]
+    [czlab/czlab-xlib "1.0.0" ]
+
+    [com.zaxxer/HikariCP "2.4.6"]
+
     [org.postgresql/postgresql "9.4.1208.jre7" ]
     [com.h2database/h2 "1.4.191" ]
 
@@ -15,9 +20,6 @@
     [com.google.guava/guava "19.0" ]
 
     [org.clojure/clojure "1.8.0" ]
-
-    [czlab/czlab-crypto "1.0.0" ]
-    [czlab/czlab-xlib "1.0.0" ]
 
     [codox/codox "0.9.5" :scope "provided"]
   ]

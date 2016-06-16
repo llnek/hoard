@@ -656,7 +656,7 @@
                  pms mcz)))
           (throwDBError (str "Unknown model: " typeid))))
 
-      (escId [_ s] (fmtSQLId vendor s))
+      (fmtId [_ s] (fmtSQLId vendor s))
 
       (metas [_] schema)
 

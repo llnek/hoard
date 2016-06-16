@@ -47,7 +47,7 @@ public interface SQLr {
 
   public Schema  metas();
 
-  public String escId(String s);
+  public String fmtId(String s);
 
 }
 

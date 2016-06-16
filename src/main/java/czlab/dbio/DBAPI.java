@@ -49,6 +49,7 @@ public interface DBAPI {
    */
   public Connection open();
 
+  public void finz();
 }
 
 

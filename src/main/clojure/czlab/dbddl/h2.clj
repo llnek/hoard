@@ -18,7 +18,6 @@
   czlab.dbddl.h2
 
   (:import
-    [czlab.crypto PasswordAPI]
     [czlab.dbio DBIOError]
     [java.io File]
     [java.sql DriverManager Connection Statement])
@@ -115,7 +114,7 @@
   [^File dbFileDir
    ^String dbid
    ^String user
-   ^PasswordAPI pwdObj]
+   ^String pwd]
 
   (test-nonil "file-dir" dbFileDir)
   (test-nestr "db-id" dbid)
@@ -123,7 +122,6 @@
 
   (let [url (io/file dbFileDir dbid)
         u (.getCanonicalPath url)
-        pwd (str pwdObj)
         dbUrl (cs/replace H2-FILE-URL "{{path}}" u)]
     (log/debug "Creating H2: %s" dbUrl)
     (.mkdir dbFileDir)
@@ -145,7 +143,7 @@
   [^File dbFileDir
    ^String dbid
    ^String user
-   ^PasswordAPI pwdObj]
+   ^String pwd]
 
   (test-nonil "file-dir" dbFileDir)
   (test-nestr "db-id" dbid)
@@ -153,7 +151,6 @@
 
   (let [url (io/file dbFileDir dbid)
         u (.getCanonicalPath url)
-        pwd (str pwdObj)
         dbUrl (cs/replace H2-FILE-URL "{{path}}" u)]
     (log/debug "Closing H2: %s" dbUrl)
     (with-open [c1 (DriverManager/getConnection dbUrl user pwd)]

@@ -21,19 +21,19 @@
     [czlab.xlib.core :refer [try! test-nonil]]
     [czlab.xlib.logging :as log])
 
-  (:use [czlab.dbio.composite]
-        [czlab.dbio.core]
-        [czlab.dbio.simple])
+  (:use [czlab.dbio.core]
+        [czlab.dbio.sql])
 
   (:import
+    [java.sql Connection]
     [czlab.dbio
      DBAPI
+     SQLr
      Schema
      JDBCPool
      JDBCInfo
      DBIOLocal
-     DBIOError
-     OptLockError]
+     Transactable]
     [java.util Map]))
 
 
@@ -52,7 +52,7 @@
   (let [^Map
         c (-> (DBIOLocal/getCache)
               (.get))
-        hc (.getId jdbc)]
+        hc (.id jdbc)]
     (when-not (.containsKey c hc)
       (log/debug "No db-pool in DBIO-thread-local, creating one")
       (->> {:max-conns 1
@@ -64,6 +64,78 @@
     (.get c hc)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(defn- openDB
+
+  "Connect to a database"
+
+  ^Connection
+  [^DBAPI db how auto?]
+
+  (doto (.open db)
+    (.setTransactionIsolation how)
+    (.setAutoCommit auto?)))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
+(defn- simSQLr
+
+  "Non transactional SQL object"
+
+  ^SQLr
+  [^DBAPI db & [affinity]]
+
+  (let [how (or affinity
+                Connection/TRANSACTION_SERIALIZABLE)]
+    (reifySQLr
+      db
+      #(with-open [c2 (openDB db how true)] (% c2)))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(defn- undo
+
+  ""
+  [^Connection conn]
+
+  (try! (.rollback conn)))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(defn- commit
+
+  ""
+  [^Connection conn]
+
+  (.commit conn))
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
+(defn- txSQLr
+
+  "A composite supports transactions"
+
+  ^Transactable
+  [^DBAPI db & [affinity]]
+
+  (let [how (or affinity
+                Connection/TRANSACTION_SERIALIZABLE)]
+    (reify
+
+      Transactable
+
+      (execWith [_ cb]
+        (with-open
+          [c (openDB db how false)]
+            (try
+              (let
+                [rc (cb (reifySQLr db #(% c)))]
+                (commit c)
+                rc)
+              (catch Throwable e#
+                (undo c)
+                (log/warn e# "")
+                (throw e#))))))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defn dbioConnect
 
@@ -72,17 +144,21 @@
   ^DBAPI
   [^JDBCInfo jdbc schema & [options]]
 
-  (let [v (resolveVendor jdbc)]
+  (let [options (or options {})
+        how (:affinity options)
+        v (resolveVendor jdbc)]
     (test-nonil "database-vendor" v)
     (reify
 
       DBAPI
 
-      (newCompositeSQLr [this] (compositeSQLr this))
+      (newCompositeSQLr [this] (txSQLr this how))
 
-      (newSimpleSQLr [this] (simpleSQLr this))
+      (newSimpleSQLr [this] (simSQLr this how))
 
       (getMetas [_] schema)
+
+      (finz [_])
 
       (vendor [_] v)
 
@@ -95,21 +171,26 @@
   "Connect to a datasource"
 
   ^DBAPI
-  [^JDBCPool pool schema & [options]]
+  [^JDBCInfo jdbc schema & [options]]
 
-  (let [v (.vendor pool)]
+  (let [options (or options {})
+        how (:affinity options)
+        pool (mkDbPool jdbc options)
+        v (.vendor pool)]
     (test-nonil "database-vendor" v)
     (reify
 
       DBAPI
 
-      (newCompositeSQLr [this] (compositeSQLr this))
+      (newCompositeSQLr [this] (txSQLr this how))
 
-      (newSimpleSQLr [this] (simpleSQLr this))
+      (newSimpleSQLr [this] (simSQLr this how))
 
       (getMetas [_] schema)
 
       (vendor [_] v)
+
+      (finz [_] (.shutdown pool))
 
       (open [_] (.nextFree pool)))))
 
