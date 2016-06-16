@@ -20,7 +20,7 @@ import java.sql.Connection;
 /**
  * @author Kenneth Leung
  */
-@FunctionalInterface public interface  Transactable {
+public interface  Transactable {
 
   /**
    * The fn is executed within the context of a transaction.
@@ -28,7 +28,9 @@ import java.sql.Connection;
    * param fn Acts like a closure
    *
    */
-  public Object execWith(Object fn) ;
+  public Object execWith(Object fn, Object cfg);
+
+  public Object execWith(Object fn);
 
 }
 

@@ -45,8 +45,7 @@
     [czlab.dbio
      Schema
      SQLr
-     DBIOError
-     OptLockError]
+     DBIOError ]
     [java.math
      BigDecimal
      BigInteger]
@@ -81,17 +80,6 @@
   [vendor model]
 
   (str (fmtSQLId vendor (dbColname :rowid model)) "=?"))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;
-(defn- lockError?
-
-  ""
-
-  [^String opcode cnt ^String table rowID]
-
-  (when (== cnt 0)
-    (trap! OptLockError opcode table rowID)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -626,18 +614,18 @@
 
       SQLr
 
-      (findSome [this typeid filters]
-        (.findSome this typeid filters {} ))
+      (findSome [me typeid filters]
+        (.findSome me typeid filters {} ))
 
-      (findAll [this typeid extra]
-        (.findSome this typeid {} extra))
+      (findAll [me typeid extra]
+        (.findSome me typeid {} extra))
 
-      (findAll [this typeid]
-        (.findAll this typeid {}))
+      (findAll [me typeid]
+        (.findAll me typeid {}))
 
-      (findOne [this typeid filters]
-        (when-some [rset (.findSome this typeid filters {})]
-          (when-not (empty? rset) (first rset))))
+      (findOne [me typeid filters]
+        (let [rs (.findSome me typeid filters)]
+          (when-not (empty? rs) (first rs))))
 
       (findSome [_ typeid filters extraSQL]
         (if-let [mcz (.get schema typeid)]

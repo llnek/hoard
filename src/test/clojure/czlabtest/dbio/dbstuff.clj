@@ -161,7 +161,7 @@
   ""
   [fname lname login]
 
-  (let [sql (.newCompositeSQLr ^DBAPI @DB)
+  (let [sql (.compositeSQLr ^DBAPI @DB)
         obj (mkEmp login)
         e (.execWith
             sql
@@ -182,7 +182,7 @@
   ""
   []
 
-  (let [sql (.newSimpleSQLr ^DBAPI @DB)]
+  (let [sql (.simpleSQLr ^DBAPI @DB)]
     (.findAll sql ::Employee)))
 
 
@@ -191,7 +191,7 @@
   ""
   [fname lname]
 
-  (let [sql (.newSimpleSQLr ^DBAPI @DB)]
+  (let [sql (.simpleSQLr ^DBAPI @DB)]
     (.findOne sql
               ::Person
               {:first_name fname :last_name lname})))
@@ -202,7 +202,7 @@
   ""
   [login]
 
-  (let [sql (.newSimpleSQLr ^DBAPI @DB)]
+  (let [sql (.simpleSQLr ^DBAPI @DB)]
     (.findOne sql
               ::Employee
               {:login login})))
@@ -212,7 +212,7 @@
   ""
   [login]
 
-  (let [sql (.newCompositeSQLr ^DBAPI @DB)]
+  (let [sql (.compositeSQLr ^DBAPI @DB)]
     (.execWith
       sql
       #(let [o2 (-> (.findOne ^SQLr %1
@@ -225,7 +225,7 @@
   ""
   [login]
 
-  (let [sql (.newCompositeSQLr ^DBAPI @DB)]
+  (let [sql (.compositeSQLr ^DBAPI @DB)]
     (.execWith
       sql
       #(let [o1 (.findOne ^SQLr %1
@@ -249,7 +249,7 @@
                 :iq 100
                 :bday (GregorianCalendar.)
                 :sex sex))
-        sql (.newCompositeSQLr ^DBAPI @DB)]
+        sql (.compositeSQLr ^DBAPI @DB)]
     (.execWith sql
                #(.insert ^SQLr %1 p))))
 
@@ -258,7 +258,7 @@
   ""
   []
 
-  (let [sql (.newCompositeSQLr ^DBAPI @DB)
+  (let [sql (.compositeSQLr ^DBAPI @DB)
         e (create-emp "joe" "blog" "joeb")
         pm (.execWith sql
                       #(dbioGetO2O {:with %1 :as :person} e))
@@ -285,7 +285,7 @@
   ""
   []
 
-  (let [sql (.newCompositeSQLr ^DBAPI @DB)
+  (let [sql (.compositeSQLr ^DBAPI @DB)
         e (fetch-emp "joeb")
         pm (.execWith
              sql
@@ -317,7 +317,7 @@
   ""
   []
 
-  (let [sql (.newCompositeSQLr ^DBAPI @DB)
+  (let [sql (.compositeSQLr ^DBAPI @DB)
         c (.execWith
             sql
             #(.insert ^SQLr %1 (mkCompany "acme")))]
@@ -353,7 +353,7 @@
   ""
   []
 
-  (let [sql (.newCompositeSQLr ^DBAPI @DB)
+  (let [sql (.compositeSQLr ^DBAPI @DB)
         c (.execWith
             sql
             #(.findOne ^SQLr %1
@@ -397,7 +397,7 @@
   ""
   []
 
-  (let [sql (.newCompositeSQLr ^DBAPI @DB)
+  (let [sql (.compositeSQLr ^DBAPI @DB)
         d2 (.execWith
              sql
              #(.findOne ^SQLr % ::Department {:dname "d2"} ))
@@ -424,7 +424,7 @@
   ""
   []
 
-  (let [sql (.newCompositeSQLr ^DBAPI @DB)
+  (let [sql (.compositeSQLr ^DBAPI @DB)
         c (.execWith
             sql
             #(.findOne ^SQLr % ::Company {:cname "acme"} ))]

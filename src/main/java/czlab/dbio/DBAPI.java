@@ -27,12 +27,12 @@ public interface DBAPI {
   /**
    * All operations are done within a transaction.
    */
-  public Transactable newCompositeSQLr();
+  public Transactable compositeSQLr();
 
   /**
    * Auto commits on each operation.
    */
-  public SQLr newSimpleSQLr();
+  public SQLr simpleSQLr();
 
   /**
    * Metadata related to the database.
@@ -49,6 +49,9 @@ public interface DBAPI {
    */
   public Connection open();
 
+  /**
+   * Clean up
+   */
   public void finz();
 }
 

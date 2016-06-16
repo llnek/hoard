@@ -69,11 +69,14 @@
   "Connect to a database"
 
   ^Connection
-  [^DBAPI db how auto?]
+  [^DBAPI db cfg]
 
+  (let [how (or (:isolation cfg)
+                Connection/TRANSACTION_SERIALIZABLE)
+        auto? (not (false? (:auto? cfg)))]
   (doto (.open db)
-    (.setTransactionIsolation how)
-    (.setAutoCommit auto?)))
+    (.setTransactionIsolation (int how))
+    (.setAutoCommit auto?))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -82,13 +85,12 @@
   "Non transactional SQL object"
 
   ^SQLr
-  [^DBAPI db & [affinity]]
+  [^DBAPI db]
 
-  (let [how (or affinity
-                Connection/TRANSACTION_SERIALIZABLE)]
+  (let [how Connection/TRANSACTION_SERIALIZABLE]
     (reifySQLr
       db
-      #(with-open [c2 (openDB db how true)] (% c2)))))
+      #(with-open [c2 (openDB db {})] (% c2)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defn- undo
@@ -106,7 +108,6 @@
 
   (.commit conn))
 
-
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defn- txSQLr
@@ -114,26 +115,31 @@
   "A composite supports transactions"
 
   ^Transactable
-  [^DBAPI db & [affinity]]
+  [^DBAPI db]
 
-  (let [how (or affinity
-                Connection/TRANSACTION_SERIALIZABLE)]
-    (reify
+  (reify
 
-      Transactable
+    Transactable
 
-      (execWith [_ cb]
-        (with-open
-          [c (openDB db how false)]
-            (try
-              (let
-                [rc (cb (reifySQLr db #(% c)))]
-                (commit c)
-                rc)
-              (catch Throwable e#
-                (undo c)
-                (log/warn e# "")
-                (throw e#))))))))
+    (execWith [_ cb cfg]
+      (with-open
+        [c (openDB db
+                   (->> {:auto? false}
+                        (merge cfg)))]
+          (try
+            (let
+              [rc (cb (reifySQLr
+                        db
+                        #(% c)))]
+              (commit c)
+              rc)
+            (catch Throwable e#
+              (undo c)
+              (log/warn e# "")
+              (throw e#)))))
+
+    (execWith [this cb]
+      (.execWith this cb {}))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -145,24 +151,22 @@
   [^JDBCInfo jdbc schema & [options]]
 
   (let [options (or options {})
-        how (:affinity options)
-        v (resolveVendor jdbc)]
+        v (resolveVendor jdbc)
+        s (atom nil)
+        t (atom nil)
+        db
+        (reify
+          DBAPI
+          (compositeSQLr [this] @t)
+          (simpleSQLr [this] @s)
+          (getMetas [_] schema)
+          (vendor [_] v)
+          (finz [_] )
+          (open [_] (mkDbConnection jdbc)))]
     (test-nonil "database-vendor" v)
-    (reify
-
-      DBAPI
-
-      (newCompositeSQLr [this] (txSQLr this how))
-
-      (newSimpleSQLr [this] (simSQLr this how))
-
-      (getMetas [_] schema)
-
-      (finz [_])
-
-      (vendor [_] v)
-
-      (open [_] (mkDbConnection jdbc)))))
+    (reset! s (simSQLr db))
+    (reset! t (txSQLr db))
+    db))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -173,26 +177,23 @@
   ^DBAPI
   [^JDBCInfo jdbc schema & [options]]
 
-  (let [options (or options {})
-        how (:affinity options)
-        pool (mkDbPool jdbc options)
-        v (.vendor pool)]
+  (let [pool (mkDbPool jdbc options)
+        v (.vendor pool)
+        s (atom nil)
+        t (atom nil)
+        db
+        (reify
+          DBAPI
+          (compositeSQLr [this] @t)
+          (simpleSQLr [this] @s)
+          (getMetas [_] schema)
+          (vendor [_] v)
+          (finz [_] (.shutdown pool))
+          (open [_] (.nextFree pool)))]
     (test-nonil "database-vendor" v)
-    (reify
-
-      DBAPI
-
-      (newCompositeSQLr [this] (txSQLr this how))
-
-      (newSimpleSQLr [this] (simSQLr this how))
-
-      (getMetas [_] schema)
-
-      (vendor [_] v)
-
-      (finz [_] (.shutdown pool))
-
-      (open [_] (.nextFree pool)))))
+    (reset! s (simSQLr db))
+    (reset! t (txSQLr db))
+    db))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;EOF
