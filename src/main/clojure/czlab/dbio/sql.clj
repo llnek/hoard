@@ -227,7 +227,7 @@
     Calendar (.setTimestamp ps pos
                             (Timestamp. (.getTimeInMillis ^Calendar p))
                             (gmtCal))
-    (throwDBError (str "Unsupported param type: " (type p)))))
+    (dberr "Unsupported param-type: %s" (type p))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -524,7 +524,7 @@
                  " where "
                  (fmtUpdateWhere vendor mcz))
             [(goid obj)])
-    (throwDBError (str "Unknown model for: " obj))))
+    (dberr "Unknown model for: %s" obj)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -550,13 +550,13 @@
                     pms
                     {:pkey (dbColname :rowid mcz)})]
           (if (empty? out)
-            (throwDBError "row-id must be returned")
+            (dberr "rowid must be returned")
             (log/debug "Exec-with-out %s" out))
           (let [n (:1 out)]
             (when-not (number? n)
-              (throwDBError "RowID must be a Long"))
+              (dberr "rowid must be a Long"))
             (merge obj {:rowid n})))))
-    (throwDBError (str "Unknown model for: " obj))))
+    (dberr "Unknown model for: %s" obj)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -583,7 +583,7 @@
                      (fmtUpdateWhere vendor mcz))
                 (conj pms (goid obj)))
         0))
-    (throwDBError (str "Unknown model for: " obj))))
+    (dberr "Unknown model for: %s" obj)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -642,7 +642,7 @@
                      (str s " where " wc) s)
                    extraSQL)
                  pms mcz)))
-          (throwDBError (str "Unknown model: " typeid))))
+          (dberr "Unknown model: %s" typeid)))
 
       (fmtId [_ s] (fmtSQLId vendor s))
 
@@ -664,7 +664,7 @@
                            sql
                            params
                            m))
-          (throwDBError (str "Unknown model: " typeid))))
+          (dberr "Unknown model: %s" typeid)))
 
       (select [_ sql params]
         (runc #(doQuery vendor %1 sql params)))
@@ -682,12 +682,12 @@
       (countAll [_ typeid]
         (if-let [m (.get schema typeid)]
           (runc #(doCount vendor %1 m))
-          (throwDBError (str "Unknown model " typeid))))
+          (dberr "Unknown model: %s" typeid)))
 
       (purge [_ typeid]
         (if-let [m (.get schema typeid)]
           (runc #(doPurge vendor %1 m))
-          (throwDBError (str "Unknown model: " typeid)))))))
+          (dberr "Unknown model: %s" typeid))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;EOF
