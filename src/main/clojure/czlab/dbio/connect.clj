@@ -37,8 +37,24 @@
     [java.util Map]))
 
 
+
+;;The calculation of pool size in order to avoid deadlock is a
+;;fairly simple resource allocation formula:
+;;pool size = Tn x (Cm - 1) + 1
+;;Where Tn is the maximum number of threads,
+;;and Cm is the maximum number of simultaneous connections
+;;held by a single thread.
+
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;(set! *warn-on-reflection* true)
+
+(def ^:private POOL_CFG
+  {:connectionTimeout 30000 ;; how long in millis caller will wait
+   :idleTimeout 600000 ;; idle time in pool
+   :maximumPoolSize 10
+   :minimumIdle 10
+   :poolName "" })
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -55,10 +71,7 @@
         hc (.id jdbc)]
     (when-not (.containsKey c hc)
       (log/debug "No db-pool in DBIO-thread-local, creating one")
-      (->> {:max-conns 1
-            :min-conns 1
-            :partitions 1}
-           (merge options )
+      (->> (merge POOL_CFG options)
            (mkDbPool jdbc )
            (.put c hc )))
     (.get c hc)))
@@ -177,7 +190,8 @@
   ^DBAPI
   [^JDBCInfo jdbc schema & [options]]
 
-  (let [pool (mkDbPool jdbc options)
+  (let [pool (->> (merge POOL_CFG options)
+                  (mkDbPool jdbc ))
         v (.vendor pool)
         s (atom nil)
         t (atom nil)
