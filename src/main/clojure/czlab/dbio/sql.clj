@@ -79,7 +79,8 @@
 
   [vendor model]
 
-  (str (fmtSQLId vendor (dbColname :rowid model)) "=?"))
+  (let [pk (:pkey model)]
+    (str (fmtSQLId vendor (dbColname pk model)) "=?")))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -535,7 +536,8 @@
   [vendor conn obj]
 
   (if-let [mcz (gmodel obj)]
-    (let [[s1 s2 pms]
+    (let [pke (:pkey mcz)
+          [s1 s2 pms]
           (insertFlds vendor obj (:fields mcz))]
       (when (hgl? s1)
         (let [out (doExec+
@@ -548,14 +550,14 @@
                          s1
                          ") values (" s2 ")")
                     pms
-                    {:pkey (dbColname :rowid mcz)})]
+                    {:pkey (dbColname pke mcz)})]
           (if (empty? out)
             (dberr "rowid must be returned")
             (log/debug "Exec-with-out %s" out))
           (let [n (:1 out)]
             (when-not (number? n)
               (dberr "rowid must be a Long"))
-            (merge obj {:rowid n})))))
+            (merge obj {pke  n})))))
     (dberr "Unknown model for: %s" obj)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

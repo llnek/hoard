@@ -107,8 +107,9 @@
 (defmacro set-oid
   ""
   {:no-doc true}
-  [pojo oid]
-  `(assoc ~pojo :rowid ~oid))
+  [obj pkeyValue]
+  `(let [pk# (:pkey (gmodel ~obj))]
+     (assoc ~obj pk# ~pkeyValue)))
 
 (defmacro gtype
   ""
@@ -126,7 +127,8 @@
   ""
   {:no-doc true}
   [obj]
-  `(:rowid ~obj))
+  `(let [pk# (:pkey (gmodel ~obj))]
+     (pk# ~obj)))
 
 (defn gschema
 
@@ -331,6 +333,14 @@
 ;;(defonce JOINED-MODEL-MONIKER ::DBIOJoinedModel)
 ;;(defonce BASEMODEL-MONIKER ::DBIOBaseModel)
 
+(defonce ^:private PKEY-DEF
+  {:column COL_ROWID
+   :domain :Long
+   :id :rowid
+   :auto true
+   :system true
+   :updatable false})
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defn dbioModel
@@ -345,17 +355,12 @@
    :abstract false
    :system false
    :mxm false
+   :pkey :rowid
    :indexes {}
    :uniques {}
    :rels {}
    :fields
-   {:rowid {:id :rowid
-            :column COL_ROWID
-            :pkey true
-            :domain :Long
-            :auto true
-            :system true
-            :updatable false}}})
+   {:rowid PKEY-DEF} })
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -463,6 +468,30 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
+(defn declPKey
+
+  ""
+
+  [pojo pke]
+
+  {:pre [(map? pojo)(map? pke)]}
+
+  (let [m (select-keys pke [:domain :column :size :auto])
+        fs (:fields pojo)
+        pk (:pkey pojo)
+        p (pk fs)]
+    (assert (some? (:column m)))
+    (assert (some? (:domain m)))
+    (assert (some? p))
+    (let [p2 (-> (if-not (:auto m) (dissoc p :auto) (assoc p :auto true))
+                 (assoc :size (or (:size m) 255))
+                 (assoc :domain (:domain m))
+                 (assoc :column (:column m)))
+          fs2 (assoc fs pk p2)]
+      (assoc pojo :fields fs2))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
 (defn declUniques
 
   "Set uniques to the model"
@@ -489,7 +518,6 @@
    :domain :String
    :size 255
    :rel-key false
-   :pkey false
    :null true
    :auto false
    :dft nil
@@ -584,27 +612,21 @@
   (with-abstract true)
   (with-db-system)
   (declFields
-    {:rowid {:column COL_ROWID
-             :pkey true
-             :domain :Long
-             :auto true
-             :system true
-             :updatable false} })))
+    {:rowid PKEY-DEF })))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defn- checkField?
 
   ""
-  [fld]
+  [pojo fld]
 
-  (not
-    (clojure.core/contains?
-      #{:lhs-rowid
-        :rhs-rowid
-        :rowid
-        :lhs-typeid
-        :rhs-typeid} fld)))
+  (if-let [fs (:fields (gmodel pojo))]
+    (if-let [f (get fs fld)]
+      (not (or (:auto f)
+               (not (:updatable f))))
+      false)
+    false))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -627,10 +649,10 @@
   ""
 
   {:private true}
-  [fid]
+  [fid ktype]
 
   `(merge (getDftFldObj ~fid)
-          {:rel-key true :domain :Long }))
+          {:rel-key true :domain ~ktype }))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -651,7 +673,9 @@
     ;; as we find new relation fields,
     ;; add them to the placeholders
     (doseq [[_ m] metas
-            :let [rs (:rels m)]
+            :let [pkey (:pkey m)
+                  kt (:domain (pkey (:fields m)))
+                  rs (:rels m)]
             :when (and (not (:abstract m))
                        (not (empty? rs)))]
       (doseq [[_ r] rs
@@ -663,7 +687,7 @@
         (var-set phd
                  (assoc! @phd
                          rid
-                         (->> (mkfkdef fid)
+                         (->> (mkfkdef fid kt)
                               (assoc (@phd rid) fid ))))))
     ;; now walk through all the placeholder maps and merge those new
     ;; fields to the actual models
@@ -675,6 +699,39 @@
                               (merge (:fields mcz) v)))
            (var-set xs )))
     (persistent! @xs)))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
+(defn- resolve-mxms
+
+  ""
+  [metas]
+
+  (with-local-vars [mms (transient {})]
+    (doseq [[k m] metas
+            :let [fs (:fields m)
+                  rs (:rels m)]
+            :when (:mxm m)]
+      (->>
+        (persistent!
+          (reduce
+            (fn [sum [side kee]]
+              (let [other (get-in rs [side :other])
+                    mz (metas other)
+                    pke ((:fields mz) (:pkey mz))
+                    d (merge
+                        (kee fs)
+                        (select-keys pke
+                                     [:domain :size]))]
+                (assoc! sum kee d)))
+            (transient {})
+            [[:lhs :lhs-rowid]
+             [:rhs :rhs-rowid]]))
+        (merge fs)
+        (assoc m :fields )
+        (assoc! @mms k )
+        (var-set mms )))
+    (merge metas (persistent! @mms))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -734,6 +791,7 @@
         m2 (if (empty? ms)
              {}
              (-> (resolve-rels ms)
+                 (resolve-mxms )
                  (meta-models sch)))]
     (reset! data m2)
     sch))
@@ -1165,7 +1223,8 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defmacro mockObj "" [obj]
-  `(with-meta {:rowid (goid ~obj)} (meta ~obj)))
+  `(let [pk# (:pkey (gmodel ~obj))]
+     (with-meta {pk# (goid ~obj)} (meta ~obj))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -1177,7 +1236,7 @@
 
   {:pre [(map? pojo) (keyword? fld)]}
 
-  (if (checkField? fld)
+  (if (checkField? pojo fld)
     (assoc pojo fld value)
     pojo))
 
@@ -1223,7 +1282,7 @@
 
   {:pre [(map? pojo) (:keyword? fld)]}
 
-  (if (checkField? fld)
+  (if (checkField? pojo fld)
     (dissoc pojo fld)
     pojo))
 

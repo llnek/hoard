@@ -467,6 +467,7 @@
 
   (let
     [fields (:fields model)
+     pke (:pkey model)
      bf (StringBuilder.)
      pkeys
      (persistent!
@@ -489,7 +490,7 @@
                   :Bytes (genBytes dbtype fld)
                   (dberr "Unsupported field: %s" fld))
                 (addDelim! bf ",\n" ))
-           (if (:pkey fld)
+           (if (= pke (:id fld))
              (conj! p fld)
              p))
          (transient [])
