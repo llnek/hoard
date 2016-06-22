@@ -7,7 +7,6 @@
 
   :dependencies '[
 
-    ;;[czlab/czlab-crypto "1.0.0" ]
     [czlab/czlab-xlib "1.0.0" ]
 
     [com.zaxxer/HikariCP "2.4.6"]
@@ -15,11 +14,15 @@
     [org.postgresql/postgresql "9.4.1208.jre7" ]
     [com.h2database/h2 "1.4.191" ]
 
-    [commons-dbutils/commons-dbutils "1.6" ]
-    [com.jolbox/bonecp "0.8.0.RELEASE" ]
-    [com.google.guava/guava "19.0" ]
+    ;;[commons-dbutils/commons-dbutils "1.6" ]
+    ;;[com.jolbox/bonecp "0.8.0.RELEASE" ]
+    ;;[com.google.guava/guava "19.0" ]
 
     [org.clojure/clojure "1.8.0" ]
+
+    [com.cemerick/pomegranate "0.3.1" :scope "provided"]
+    [net.mikera/cljunit "0.4.1" :scope "provided"]
+    [junit/junit "4.12"  :scope "provided"]
 
     [codox/codox "0.9.5" :scope "provided"]
   ]

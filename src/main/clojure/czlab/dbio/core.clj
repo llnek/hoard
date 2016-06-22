@@ -297,7 +297,7 @@
 
   [fmt & more]
 
-  (trap! DBIOError (apply format fmt more)))
+  (trap! DBIOError (str (apply format fmt more))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
