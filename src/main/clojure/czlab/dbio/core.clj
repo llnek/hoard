@@ -63,13 +63,11 @@
      :refer [asFQKeyword
              test-nonil
              cast?
-             tryc
              try!
              trylet!
              trap!
              interject
              nnz
-             nbf
              juid
              rootCause]]
     [czlab.xlib.logging :as log]
@@ -264,7 +262,7 @@
       (id [_]  (or (:id cfg) id))
 
       (loadDriver [this]
-        (when-let [s (.url this)]
+        (when-some [s (.url this)]
           (when (hgl? s)
             (DriverManager/getDriver s))))
 
@@ -621,8 +619,8 @@
   ""
   [pojo fld]
 
-  (if-let [fs (:fields (gmodel pojo))]
-    (if-let [f (get fs fld)]
+  (if-some [fs (:fields (gmodel pojo))]
+    (if-some [f (get fs fld)]
       (not (or (:auto f)
                (not (:updatable f))))
       false)
@@ -1139,7 +1137,7 @@
 
   [^String dbn ^Throwable e]
 
-  (if-let [ee (->> (rootCause e)
+  (if-some [ee (->> (rootCause e)
                    (cast? SQLException ))]
     (let [ec (.getErrorCode
                ^SQLException ee)]
@@ -1306,7 +1304,7 @@
 
   [model rid kind]
 
-  (if-let [r (get (:rels model) rid)]
+  (if-some [r (get (:rels model) rid)]
     (when (= (:kind r) kind)
       r)))
 
@@ -1357,7 +1355,7 @@
         schema (.metas sqlr)
         rid (:as ctx)
         mcz (gmodel lhsObj)]
-    (if-let [r (dbioGetRelation mcz rid kind)]
+    (if-some [r (dbioGetRelation mcz rid kind)]
       r
       (dberr "Unknown relation: %s" rid))))
 
@@ -1373,7 +1371,7 @@
         schema (.metas sqlr)
         mcz (gmodel lhsObj)
         rid (:as ctx)]
-    (if-let [r (dbioGetRelation mcz rid kind)]
+    (if-some [r (dbioGetRelation mcz rid kind)]
       (let [fv (goid lhsObj)
             fid (:fkey r)
             y (-> (mockObj rhsObj)
@@ -1392,7 +1390,7 @@
 
   {:pre [(map? ctx)(map? lhsObj)]}
 
-  (when-let [r (dbio-get-o2x ctx lhsObj :O2M)]
+  (when-some [r (dbio-get-o2x ctx lhsObj :O2M)]
     (-> ^SQLr
         (:with ctx)
         (.findSome (or (:cast ctx)
@@ -1441,7 +1439,7 @@
 
   {:pre [(map? ctx) (map? lhsObj)]}
 
-  (when-let [r (dbio-get-o2x ctx lhsObj :O2O)]
+  (when-some [r (dbio-get-o2x ctx lhsObj :O2O)]
     (-> ^SQLr
         (:with ctx)
         (.findOne (or (:cast ctx)
@@ -1472,7 +1470,7 @@
         schema (.metas sqlr)
         rid (:as ctx)
         mA (gmodel objA)]
-    (if-let [r (dbioGetRelation mA rid kind)]
+    (if-some [r (dbioGetRelation mA rid kind)]
       (let [rt (or (:cast ctx)
                    (:other r))
             mB (.get schema rt)
@@ -1545,7 +1543,7 @@
   (let [^SQLr sqlr (:with ctx)
         schema (.metas sqlr)
         jon (:joined ctx)]
-    (if-let [mm (.get schema jon)]
+    (if-some [mm (.get schema jon)]
       (let [ka (selectSide mm objA)
             kb (selectSide mm objB)]
         (->> (-> (dbioCreateObj mm)
@@ -1568,7 +1566,7 @@
     (let [^SQLr sqlr (:with ctx)
           schema (.metas sqlr)
           jon (:joined ctx)]
-      (if-let [mm (.get schema jon)]
+      (if-some [mm (.get schema jon)]
         (let [fs (:fields mm)
               ka (selectSide mm objA)
               kb (selectSide mm objB)]
@@ -1603,7 +1601,7 @@
         MM (.fmtId sqlr "MM")
         schema (.metas sqlr)
         jon (:joined ctx)]
-    (if-let [mm (.get schema jon)]
+    (if-some [mm (.get schema jon)]
       (let [[ka kb t]
             (selectSide+ mm obj)
             t2 (or (:cast ctx) t)

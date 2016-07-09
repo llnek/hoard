@@ -516,7 +516,7 @@
 
   [vendor conn obj]
 
-  (if-let [mcz (gmodel obj)]
+  (if-some [mcz (gmodel obj)]
     (doExec vendor
             conn
             (str "delete from "
@@ -535,7 +535,7 @@
 
   [vendor conn obj]
 
-  (if-let [mcz (gmodel obj)]
+  (if-some [mcz (gmodel obj)]
     (let [pke (:pkey mcz)
           [s1 s2 pms]
           (insertFlds vendor obj (:fields mcz))]
@@ -568,7 +568,7 @@
 
   [vendor conn obj]
 
-  (if-let [mcz (gmodel obj)]
+  (if-some [mcz (gmodel obj)]
     (let [[sb1 pms]
           (updateFlds vendor
                       obj
@@ -630,7 +630,7 @@
           (when-not (empty? rs) (first rs))))
 
       (findSome [_ typeid filters extraSQL]
-        (if-let [mcz (.get schema typeid)]
+        (if-some [mcz (.get schema typeid)]
           (runc
             #(let [s (str "select * from "
                           (fmtSQLId vendor (:table mcz)))
@@ -660,7 +660,7 @@
         (runc #(doInsert vendor %1 obj)))
 
       (select [_ typeid sql params]
-        (if-let [m (.get schema typeid)]
+        (if-some [m (.get schema typeid)]
           (runc #(doQuery+ vendor
                            %1
                            sql
@@ -682,12 +682,12 @@
         (runc #(doExec vendor %1 sql pms)))
 
       (countAll [_ typeid]
-        (if-let [m (.get schema typeid)]
+        (if-some [m (.get schema typeid)]
           (runc #(doCount vendor %1 m))
           (dberr "Unknown model: %s" typeid)))
 
       (purge [_ typeid]
-        (if-let [m (.get schema typeid)]
+        (if-some [m (.get schema typeid)]
           (runc #(doPurge vendor %1 m))
           (dberr "Unknown model: %s" typeid))))))
 
