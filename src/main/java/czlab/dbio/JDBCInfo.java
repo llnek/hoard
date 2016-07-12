@@ -23,17 +23,24 @@ import java.sql.Driver;
  */
 public interface JDBCInfo {
 
+  /**/
   public Driver loadDriver();
 
+  /**/
   public String driver();
 
+  /**/
   public String url();
 
+  /**/
   public String user();
 
+  /**/
   public String passwd();
 
+  /**/
   public String id();
 
 }
+
 

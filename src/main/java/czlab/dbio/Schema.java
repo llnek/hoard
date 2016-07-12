@@ -21,9 +21,12 @@ package czlab.dbio;
  */
 public interface Schema {
 
+  /**/
   public Iterable<?> getModels();
 
+  /**/
   public Object get(Object id);
+
 }
 
 

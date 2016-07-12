@@ -12,7 +12,7 @@
 ;;
 ;; Copyright (c) 2013-2016, Kenneth Leung. All rights reserved.
 
-(ns ^{:doc "Database connections"
+(ns ^{:doc "Database connections."
       :author "Kenneth Leung" }
 
   czlab.dbio.connect
@@ -35,7 +35,6 @@
      DBIOLocal
      Transactable]
     [java.util Map]))
-
 
 
 ;;The calculation of pool size in order to avoid deadlock is a
@@ -61,7 +60,6 @@
 (defn- registerJdbcTL
 
   "Add a thread-local db pool"
-
   ^JDBCPool
   [^JDBCInfo jdbc options]
 
@@ -77,10 +75,10 @@
     (.get c hc)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
 (defn- openDB
 
   "Connect to a database"
-
   ^Connection
   [^DBAPI db cfg]
 
@@ -96,7 +94,6 @@
 (defn- simSQLr
 
   "Non transactional SQL object"
-
   ^SQLr
   [^DBAPI db]
 
@@ -106,6 +103,7 @@
       #(with-open [c2 (openDB db {})] (% c2)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
 (defn- undo
 
   ""
@@ -114,6 +112,7 @@
   (try! (.rollback conn)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
 (defn- commit
 
   ""
@@ -126,7 +125,6 @@
 (defn- txSQLr
 
   "A composite supports transactions"
-
   ^Transactable
   [^DBAPI db]
 
@@ -159,7 +157,6 @@
 (defn dbioConnect
 
   "Connect to a datasource"
-
   ^DBAPI
   [^JDBCInfo jdbc schema & [options]]
 
@@ -186,7 +183,6 @@
 (defn dbioConnectViaPool
 
   "Connect to a datasource"
-
   ^DBAPI
   [^JDBCInfo jdbc schema & [options]]
 

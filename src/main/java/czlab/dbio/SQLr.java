@@ -21,32 +21,52 @@ package czlab.dbio;
  */
 public interface SQLr {
 
-  public Iterable<?> findSome(Object modeldef, Object  filters, Object  extras);
+  /**/
+  public Iterable<?> findSome(Object modeldef, Object filters, Object extras);
 
-  public Iterable<?> findSome(Object modeldef, Object  filters);
+  /**/
+  public Iterable<?> findSome(Object modeldef, Object filters);
 
+  /**/
   public Iterable<?> findAll(Object modeldef, Object extras);
 
+  /**/
   public Iterable<?> findAll(Object modeldef);
 
-  public Object findOne(Object modeldef, Object  filters);
+  /**/
+  public Object findOne(Object modeldef, Object filters);
 
+  /**/
   public Object update(Object obj);
+
+  /**/
   public Object delete(Object obj);
+
+  /**/
   public Object insert(Object obj);
 
+  /**/
   public Iterable<?> select(Object modeldef, String sql, Iterable<?> params);
+
+  /**/
   public Iterable<?> select(String sql, Iterable<?> params);
 
+  /**/
   public Object execWithOutput(String sql, Iterable<?> params);
+
+  /**/
   public Object exec(String sql, Iterable<?> params);
 
+  /**/
   public int countAll(Object modeldef);
 
+  /**/
   public void purge(Object modeldef);
 
+  /**/
   public Schema  metas();
 
+  /**/
   public String fmtId(String s);
 
 }

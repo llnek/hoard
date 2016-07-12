@@ -12,7 +12,7 @@
 ;;
 ;; Copyright (c) 2013-2016, Kenneth Leung. All rights reserved.
 
-(ns ^{:doc "DDL functions for H2"
+(ns ^{:doc "DDL functions for H2."
       :author "Kenneth Leung" }
 
   czlab.dbddl.h2
@@ -36,13 +36,13 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defonce H2-SERVER-URL "jdbc:h2:tcp://host/path/db" )
-(defonce H2-DRIVER "org.h2.Driver" )
+(def H2-SERVER-URL "jdbc:h2:tcp://host/path/db" )
+(def H2-DRIVER "org.h2.Driver" )
 
-(defonce H2-MEM-URL "jdbc:h2:mem:{{dbid}};DB_CLOSE_DELAY=-1" )
-(defonce H2-FILE-URL "jdbc:h2:{{path}};MVCC=TRUE" )
+(def H2-MEM-URL "jdbc:h2:mem:{{dbid}};DB_CLOSE_DELAY=-1" )
+(def H2-FILE-URL "jdbc:h2:{{path}};MVCC=TRUE" )
 
-(defonce H2_MVCC ";MVCC=TRUE" )
+(def H2_MVCC ";MVCC=TRUE" )
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; H2

@@ -12,7 +12,7 @@
 ;;
 ;; Copyright (c) 2013-2016, Kenneth Leung. All rights reserved.
 
-(ns ^{:doc "DDL functions for MySQL"
+(ns ^{:doc "DDL functions for MySQL."
       :author "Kenneth Leung" }
 
   czlab.dbddl.mysql
@@ -25,7 +25,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;(set! *warn-on-reflection* true)
 
-(defonce MYSQL-DRIVER "com.mysql.jdbc.Driver")
+(def MYSQL-DRIVER "com.mysql.jdbc.Driver")
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; MySQL

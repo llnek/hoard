@@ -30,6 +30,7 @@ public interface  Transactable {
    */
   public Object execWith(Object fn, Object cfg);
 
+  /**/
   public Object execWith(Object fn);
 
 }

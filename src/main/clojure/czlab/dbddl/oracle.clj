@@ -12,7 +12,7 @@
 ;;
 ;; Copyright (c) 2013-2016, Kenneth Leung. All rights reserved.
 
-(ns ^{:doc "DDL functions for Oracle"
+(ns ^{:doc "DDL functions for Oracle."
       :author "Kenneth Leung" }
 
   czlab.dbddl.oracle

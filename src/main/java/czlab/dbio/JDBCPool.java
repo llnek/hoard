@@ -22,13 +22,18 @@ import java.sql.Connection;
  */
 public interface JDBCPool {
 
+  /**/
   public Connection nextFree();
 
+  /**/
   public void shutdown();
 
+  /**/
   public Object vendor();
 
+  /**/
   public String dbUrl();
+
 }
 
 

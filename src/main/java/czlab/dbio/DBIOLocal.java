@@ -34,6 +34,7 @@ public enum DBIOLocal {
     }
   };
 
+  /**/
   public static ThreadLocal<Map<Object,JDBCPool>> getCache() {
     return _cache;
   }

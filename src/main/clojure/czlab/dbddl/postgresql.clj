@@ -12,8 +12,7 @@
 ;;
 ;; Copyright (c) 2013-2016, Kenneth Leung. All rights reserved.
 
-
-(ns ^{:doc "DDL functions for Postgresql"
+(ns ^{:doc "DDL functions for Postgresql."
       :author "Kenneth Leung" }
 
   czlab.dbddl.postgresql
@@ -28,8 +27,8 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defonce POSTGRESQL-URL "jdbc:postgresql://{{host}}:{{port}}/{{db}}" )
-(defonce POSTGRESQL-DRIVER "org.postgresql.Driver")
+(def POSTGRESQL-URL "jdbc:postgresql://{{host}}:{{port}}/{{db}}" )
+(def POSTGRESQL-DRIVER "org.postgresql.Driver")
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

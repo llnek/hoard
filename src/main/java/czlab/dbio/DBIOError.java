@@ -24,6 +24,7 @@ public class DBIOError extends SQLException {
 
   private static final long serialVersionUID = 113241635256073760L;
 
+  /**/
   public DBIOError(String msg, Throwable t) {
     super(msg,t);
   }
@@ -42,6 +43,7 @@ public class DBIOError extends SQLException {
     this("",t);
   }
 
+  /**/
   public DBIOError() {
     this("");
   }

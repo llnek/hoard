@@ -12,7 +12,7 @@
 ;;
 ;; Copyright (c) 2013-2016, Kenneth Leung. All rights reserved.
 
-(ns ^{:doc "Database and modeling functions"
+(ns ^{:doc "Database and modeling functions."
       :author "Kenneth Leung" }
 
   czlab.dbio.core
@@ -80,23 +80,27 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;(set! *warn-on-reflection* true)
 
-;;(defonce ^String COL_LASTCHANGED "DBIO_LASTCHANGED")
-;;(defonce ^String COL_CREATED_ON "DBIO_CREATED_ON")
-;;(defonce ^String COL_CREATED_BY "DBIO_CREATED_BY")
-;;(defonce ^String COL_LHS_TYPEID "DBIO_LHS_TYPEID")
-;;(defonce ^String COL_RHS_TYPEID "DBIO_RHS_TYPEID")
-(defonce ^String COL_LHS_ROWID "DBIO_LHS_ROWID")
-(defonce ^String COL_RHS_ROWID "DBIO_RHS_ROWID")
-(defonce ^String COL_ROWID "DBIO_ROWID")
-;;(defonce ^String COL_VERID "DBIO_VERID")
-(defonce DDL_SEP #"-- :")
+;;(def ^String COL_LASTCHANGED "DBIO_LASTCHANGED")
+;;(def ^String COL_CREATED_ON "DBIO_CREATED_ON")
+;;(def ^String COL_CREATED_BY "DBIO_CREATED_BY")
+;;(def ^String COL_LHS_TYPEID "DBIO_LHS_TYPEID")
+;;(def ^String COL_RHS_TYPEID "DBIO_RHS_TYPEID")
+(def ^String COL_LHS_ROWID "DBIO_LHS_ROWID")
+(def ^String COL_RHS_ROWID "DBIO_RHS_ROWID")
+(def ^String COL_ROWID "DBIO_ROWID")
+;;(def ^String COL_VERID "DBIO_VERID")
+(def DDL_SEP #"-- :")
 
 (def ^:dynamic *DDL_CFG* nil)
 (def ^:dynamic *DDL_BVS* nil)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defn- cleanName "" [s]
+(defn- cleanName
+
+  ""
+  [s]
+
   (-> (cs/replace (name s) #"[^a-zA-Z0-9_-]" "")
       (cs/replace  #"-" "_")))
 
@@ -135,7 +139,6 @@
    :tag Schema}
 
   [obj]
-
   (:schema (meta obj)))
 
 
@@ -211,7 +214,6 @@
 
   ^APersistentMap
   [m1 m2]
-
   {:pre [(map? m1) (or (nil? m2)(map? m2))]}
 
   (merge m1 m2))
@@ -238,19 +240,15 @@
 
   (^String [fid model]
    {:pre [(map? model)]}
-   (-> (:fields model)
-       (get fid)
-       (dbColname ))))
+   (-> (:fields model) (get fid) (dbColname ))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defn mkJdbc
 
   "Basic jdbc parameters"
-
   ^JDBCInfo
   [cfg]
-
   {:pre [(map? cfg)]}
 
   (let [id (juid)]
@@ -292,7 +290,6 @@
 (defn dberr
 
   "Throw a DBIOError execption"
-
   [fmt & more]
 
   (trap! DBIOError (str (apply format fmt more))))
@@ -302,7 +299,6 @@
 (defn- maybeGetVendor
 
   "Try to detect the database vendor"
-
   [product]
 
   (let [fc #(embeds? %2 %1)
@@ -320,7 +316,6 @@
 (defn- fmtfkey
 
   "For o2o & o2m relations"
-
   [tn rn]
 
   (keyword (str "fk_" (name tn) "_" (name rn))))
@@ -328,10 +323,10 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; DATA MODELING
 ;;
-;;(defonce JOINED-MODEL-MONIKER ::DBIOJoinedModel)
-;;(defonce BASEMODEL-MONIKER ::DBIOBaseModel)
+;;(def JOINED-MODEL-MONIKER ::DBIOJoinedModel)
+;;(def BASEMODEL-MONIKER ::DBIOBaseModel)
 
-(defonce ^:private PKEY-DEF
+(def ^:private PKEY-DEF
   {:column COL_ROWID
    :domain :Long
    :id :rowid
@@ -344,7 +339,6 @@
 (defn dbioModel
 
   "Define a generic model"
-
   ^APersistentMap
   [^String nm]
 
@@ -365,7 +359,6 @@
 (defmacro declModel
 
   "Define a data model"
-
   [modelname & body]
 
   `(def ~modelname
@@ -378,10 +371,8 @@
 
   "A special model with 2 relations,
    left hand side and right hand side"
-
   {:tag APersistentMap
    :no-doc true}
-
   [pojo lhs rhs]
 
   {:pre [(map? pojo)
@@ -402,7 +393,6 @@
 (defmacro declJoined
 
   "Define a joined data model"
-
   [modelname lhs rhs]
 
   `(def ~modelname
@@ -423,10 +413,8 @@
 (defn declTablename
 
   "Set the table name"
-
   ^APersistentMap
   [pojo table]
-
   {:pre [(map? pojo)]}
 
   (assoc pojo :table (cleanName table)))
@@ -436,7 +424,6 @@
 (defn- with-xxx-sets
 
   ""
-
   [pojo kvs fld]
 
   (let [m (persistent!
@@ -455,10 +442,8 @@
 (defn declIndexes
 
   "Set indexes to the model"
-
   ^APersistentMap
   [pojo indexes]
-
   {:pre [(map? pojo) (map? indexes)]}
 
   ;;indices = { :a #{ :f1 :f2} ] :b #{:f3 :f4} }
@@ -468,10 +453,8 @@
 ;;
 (defn declPKey
 
-  ""
-
+  "Declare your own primary key"
   [pojo pke]
-
   {:pre [(map? pojo)(map? pke)]}
 
   (let [m (select-keys pke [:domain :column :size :auto])
@@ -493,10 +476,8 @@
 (defn declUniques
 
   "Set uniques to the model"
-
   ^APersistentMap
   [pojo uniqs]
-
   {:pre [(map? pojo) (map? uniqs)]}
 
   ;;uniques = { :a #{ :f1 :f2 } :b #{ :f3 :f4 } }
@@ -507,7 +488,6 @@
 (defn- getDftFldObj
 
   "The base field structure"
-
   ^APersistentMap
   [fid]
 
@@ -527,10 +507,8 @@
 (defn declField
 
   "Add a new field"
-
   ^APersistentMap
   [pojo fid fdef]
-
   {:pre [(map? pojo) (map? fdef)]}
 
   (let [fd (merge (getDftFldObj fid) fdef)
@@ -542,10 +520,8 @@
 (defn declFields
 
   "Add a bunch of fields"
-
   ^APersistentMap
   [pojo flddefs]
-
   {:pre [(map? pojo) (map? flddefs)]}
 
   (with-local-vars [rcmap pojo]
@@ -558,7 +534,7 @@
 ;;
 (defn declRelation
 
-  ""
+  "Declare an association between 2 types"
   [pojo rid rel]
 
   (let [rd (merge {:fkey nil :cascade false } rel)
@@ -572,9 +548,8 @@
 ;;
 (defn declRelations
 
-  ""
+  "Declare a set of associations"
   [pojo reldefs]
-
   {:pre [(map? pojo) (map? reldefs)]}
 
   (with-local-vars [rcmap pojo]
@@ -588,7 +563,6 @@
 (defn- with-abstract
 
   ""
-
   [pojo flag]
 
   (assoc pojo :abstract flag))
@@ -598,7 +572,6 @@
 (defn- with-db-system
 
   ""
-
   [pojo]
 
   (assoc pojo :system true))
@@ -645,7 +618,6 @@
 (defmacro mkfkdef
 
   ""
-
   {:private true}
   [fid ktype]
 
@@ -659,7 +631,6 @@
   "Walk through all models, for each model, study its relations.
   For o2o or o2m assocs, we need to artificially inject a new
   field/column into the (other/rhs) model (foreign key)"
-
   [metas]
 
   ;; 1st, create placeholder maps for each model,
@@ -736,7 +707,6 @@
 (defn- colmap-fields
 
   "Create a map of fields keyed by the column name"
-
   [flds]
 
   (persistent!
@@ -752,7 +722,6 @@
 
   "Inject extra meta-data properties into each model.  Each model will have
    its (complete) set of fields keyed by column nam or field id"
-
   [metas schema]
 
   (with-local-vars [sum (transient {})]
@@ -772,7 +741,6 @@
 (defn mkDbSchema
 
   "A cache storing meta-data for all models"
-
   ^Schema
   [& models]
 
@@ -799,10 +767,8 @@
 (defn dbgShowSchema
 
   ""
-
   ^String
   [^Schema mc]
-
   {:pre [(some? mc)]}
 
   (str
@@ -819,7 +785,6 @@
 (defn- safeGetConn
 
   "Safely connect to database referred by this jdbc"
-
   ^Connection
   [^JDBCInfo jdbc]
 
@@ -846,10 +811,8 @@
 (defn mkDbConnection
 
   "Connect to database referred by this jdbc"
-
   ^Connection
   [^JDBCInfo jdbc]
-
   {:pre [(some? jdbc)]}
 
   (let [url (.url jdbc)
@@ -868,7 +831,6 @@
 (defn testConnection?
 
   "true if able to connect to the database, as a test"
-
   [jdbc]
 
   (try
@@ -1006,7 +968,6 @@
 (defn- load-columns
 
   "Read each column's metadata"
-
   [^DatabaseMetaData mt
    ^String catalog
    ^String schema ^String table]
@@ -1052,9 +1013,7 @@
 (defn loadTableMeta
 
   "Fetch metadata of this table from db"
-
   [^Connection conn ^String table]
-
   {:pre [(some? conn)]}
 
   (let [dbv (resolveVendor conn)
@@ -1071,7 +1030,6 @@
 (defn- makePool
 
   ""
-
   ^JDBCPool
   [^JDBCInfo jdbc ^HikariDataSource impl]
 
@@ -1109,7 +1067,6 @@
 (defn mkDbPool
 
   "Create a db connection pool"
-
   ^JDBCPool
   [^JDBCInfo jdbc options]
 
@@ -1134,7 +1091,6 @@
 (defn- maybeOK?
 
   ""
-
   [^String dbn ^Throwable e]
 
   (if-some [ee (->> (rootCause e)
@@ -1186,7 +1142,6 @@
   Connection
 
   [^Connection conn ^String ddl]
-
   {:pre [(some? conn)] }
 
   (let [lines (map #(strim %) (cs/split ddl DDL_SEP))
@@ -1210,17 +1165,19 @@
 (defn dbioCreateObj
 
   "Creates a blank object of the given type"
-
   ^APersistentMap
   [model]
-
   {:pre [(some? model)]}
 
   (with-meta {} {:model model} ))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defmacro mockObj "" [obj]
+(defmacro mockObj
+
+  ""
+  [obj]
+
   `(let [pk# (:pkey (gmodel ~obj))]
      (with-meta {pk# (goid ~obj)} (meta ~obj))))
 
@@ -1229,9 +1186,7 @@
 (defn dbioSetFld
 
   "Set value to a field"
-
   [pojo fld value]
-
   {:pre [(map? pojo) (keyword? fld)]}
 
   (if (checkField? pojo fld)
@@ -1243,10 +1198,8 @@
 (defn dbioSetFlds*
 
   "Set many field values such as f1 v1 f2 v2 ... fn vn"
-
   ^APersistentMap
   [pojo fld value & fvs]
-
   {:pre [(or (empty? fvs)
              (even? (count fvs)))]}
 
@@ -1261,7 +1214,6 @@
 (defn- setMxMFlds*
 
   ""
-
   [pojo & fvs]
 
   (reduce
@@ -1275,9 +1227,7 @@
 (defn dbioClrFld
 
   "Remove a field"
-
   [pojo fld]
-
   {:pre [(map? pojo) (:keyword? fld)]}
 
   (if (checkField? pojo fld)
@@ -1289,9 +1239,7 @@
 (defn dbioGetFld
 
   "Get value of a field"
-
   [pojo fld]
-
   {:pre [(map? pojo) (:keyword? fld)]}
 
   (get pojo fld))
@@ -1301,7 +1249,6 @@
 (defn- dbioGetRelation
 
   "Get the relation definition"
-
   [model rid kind]
 
   (if-some [r (get (:rels model) rid)]
@@ -1313,7 +1260,6 @@
 (defn- selectSide+
 
   ""
-
   [mxm obj]
 
   (let [rhs (get-in mxm [:rels :rhs])
@@ -1336,9 +1282,7 @@
 (defmacro selectSide
 
   ""
-
   {:private true}
-
   [mxm obj]
 
   `(first (selectSide+ ~mxm  ~obj)))
@@ -1348,7 +1292,6 @@
 (defn- dbio-get-o2x
 
   ""
-
   [ctx lhsObj kind]
 
   (let [^SQLr sqlr (:with ctx)
@@ -1364,7 +1307,6 @@
 (defn- dbio-set-o2x
 
   ""
-
   [ctx lhsObj rhsObj kind]
 
   (let [^SQLr sqlr (:with ctx)
@@ -1385,9 +1327,7 @@
 (defn dbioGetO2M
 
   "One to many assocs"
-
   [ctx lhsObj]
-
   {:pre [(map? ctx)(map? lhsObj)]}
 
   (when-some [r (dbio-get-o2x ctx lhsObj :O2M)]
@@ -1402,9 +1342,7 @@
 (defn dbioSetO2M
 
   ""
-
   [ctx lhsObj rhsObj]
-
   {:pre [(map? ctx)(map? lhsObj)(map? rhsObj)]}
 
   (dbio-set-o2x ctx lhsObj rhsObj :O2M))
@@ -1414,7 +1352,6 @@
 (defn dbioSetO2M*
 
   ""
-
   ^APersistentVector
   [ctx lhsObj & rhsObjs]
 
@@ -1433,10 +1370,8 @@
 (defn dbioGetO2O
 
   "One to one relation"
-
   ^APersistentMap
   [ctx lhsObj]
-
   {:pre [(map? ctx) (map? lhsObj)]}
 
   (when-some [r (dbio-get-o2x ctx lhsObj :O2O)]
@@ -1451,9 +1386,7 @@
 (defn dbioSetO2O
 
   ""
-
   [ctx lhsObj rhsObj]
-
   {:pre [(map? ctx) (map? lhsObj) (map? rhsObj)]}
 
   (dbio-set-o2x ctx lhsObj rhsObj :O2O))
@@ -1463,7 +1396,6 @@
 (defn- dbio-clr-o2x
 
   ""
-
   [ctx objA kind]
 
   (let [^SQLr sqlr (:with ctx)
@@ -1497,9 +1429,7 @@
 (defn dbioClrO2M
 
   ""
-
   [ctx lhsObj]
-
   {:pre [(map? ctx) (map? lhsObj)]}
 
   (dbio-clr-o2x ctx lhsObj :O2M))
@@ -1509,9 +1439,7 @@
 (defn dbioClrO2O
 
   ""
-
   [ctx lhsObj]
-
   {:pre [(map? ctx) (map? lhsObj)]}
 
   (dbio-clr-o2x ctx lhsObj :O2O))
@@ -1521,7 +1449,6 @@
 (defn- xrefColType
 
   ""
-
   [col]
 
   (case col
@@ -1534,10 +1461,8 @@
 (defn dbioSetM2M
 
   "Many to many relations"
-
   ^APersistentMap
   [ctx objA objB]
-
   {:pre [(map? ctx) (map? objA) (map? objB)]}
 
   (let [^SQLr sqlr (:with ctx)
@@ -1591,9 +1516,7 @@
 (defn dbioGetM2M
 
   ""
-
   [ctx obj]
-
   {:pre [(map? ctx)(map? obj)]}
 
   (let [^SQLr sqlr (:with ctx)

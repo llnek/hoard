@@ -12,7 +12,7 @@
 ;;
 ;; Copyright (c) 2013-2016, Kenneth Leung. All rights reserved.
 
-(ns ^{:doc "Utility functions for DDL generation"
+(ns ^{:doc "Utility functions for DDL generation."
       :author "Kenneth Leung" }
 
   czlab.dbddl.drivers
@@ -98,7 +98,7 @@
   ^String
   [idstr & [quote?]]
 
-  (let [f (:case-fn *DDL_CFG*)
+  (let [f  (:case-fn *DDL_CFG*)
         ch (:qstr *DDL_CFG*)
         id (f idstr)]
     (if (false? quote?)
@@ -113,7 +113,6 @@
 
   ^String
   [model & [quote?]]
-
   {:pre [(map? model)]}
 
   (gSQLId (:table model) quote?))
@@ -123,10 +122,8 @@
 (defn gcolumn
 
   "Get the column name (quoted) of this field"
-
   ^String
   [field & [quote?]]
-
   {:pre [(map? field)]}
 
   (gSQLId (:column field) quote?))
@@ -136,7 +133,6 @@
 (defn- gcn
 
   "Get column name"
-
   [fields fid]
 
   (genCol (get fields fid)))
@@ -154,7 +150,6 @@
 (defn getPad
 
   ""
-
   {:no-doc true
    :tag String}
 
@@ -165,7 +160,6 @@
 (defmacro nullClause
 
   ""
-
   ^String
   [dbtype opt?]
 
@@ -177,7 +171,6 @@
 (defmacro genSep
 
   ""
-
   ^String
   [_]
 
@@ -255,7 +248,6 @@
 (defn genColDef
 
   ""
-
   ^String
   [dbtype typedef field]
 
@@ -393,7 +385,6 @@
 (defn- genExIndexes
 
   "Generate external index definitions"
-
   ^String
   [dbtype schema fields model]
 
@@ -422,7 +413,6 @@
 (defn- genUniques
 
   ""
-
   ^String
   [dbtype schema fields model]
 
@@ -447,7 +437,6 @@
 (defn- genPKey
 
   ""
-
   ^String
   [dbtype model pks]
 
@@ -461,7 +450,6 @@
 (defn- genBody
 
   ""
-
   ^String
   [dbtype schema model]
 
@@ -510,7 +498,6 @@
 (defn- genOneTable
 
   ""
-
   ^String
   [dbtype schema model]
 
@@ -528,7 +515,6 @@
 (defn getDDL
 
   "Generate database DDL for this schema"
-
   ^String
   [^Schema schema dbID & [dbver]]
 
