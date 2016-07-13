@@ -16,7 +16,7 @@
 
   czlabtest.dbio.dbstuff
 
-  (:use [czlab.xlib.files :only [writeOneFile]]
+  (:use [czlab.xlib.files :only [writeFile]]
         [czlab.xlib.core]
         [czlab.dbddl.drivers]
         [czlab.dbio.connect]
@@ -107,7 +107,7 @@
                 :url url
                 :user "sa"
                 :passwd "hello" })]
-    ;;(writeOneFile (File. dir "dbstuff.out") (dbgShowSchema @METAC))
+    ;;(writeFile (File. dir "dbstuff.out") (dbgShowSchema @METAC))
     (reset! JDBC jdbc)
     (uploadDdl jdbc (getDDL @METAC :h2))
     (reset! DB (dbioConnectViaPool jdbc @METAC )))

@@ -12,7 +12,7 @@
 ;;
 ;; Copyright (c) 2013-2016, Kenneth Leung. All rights reserved.
 
-(ns ^{:doc "Low level SQL JDBC functions"
+(ns ^{:doc "Low level SQL JDBC functions."
       :author "Kenneth Leung" }
 
   czlab.dbio.sql
@@ -24,10 +24,12 @@
      :refer [sname
              ucase
              lcase
+             strbf
              hgl?
              addDelim!
              strim]]
     [czlab.xlib.logging :as log]
+    [clojure.string :as cs]
     [czlab.xlib.core
      :refer [flattenNil
              trap!
@@ -76,7 +78,6 @@
 (defn- fmtUpdateWhere
 
   ""
-
   [vendor model]
 
   (let [pk (:pkey model)]
@@ -87,35 +88,31 @@
 (defn- sqlFilterClause
 
   "returns [sql-filter-string, values]"
-
   [vendor model filters]
 
   (let [flds (:fields model)
-        wc (str
-             (reduce
-               (fn [sum [k v]]
-                 (let [fld (flds k)
-                       c (if (nil? fld)
-                           (sname k)
-                           (:column fld))]
-                   (addDelim!
-                     sum
-                     " and "
-                     (str (fmtSQLId vendor c)
-                          (if (nil? v)
-                            " is null " " =? ")))))
-               (StringBuilder.)
-               filters))]
-    [wc (flattenNil (vals filters))]))
+        wc (reduce
+             #(let [[k v] %2
+                    fd (flds k)
+                    c (if (nil? fd)
+                        (sname k)
+                        (:column fd))]
+                (addDelim!
+                  %1
+                  " and "
+                  (str (fmtSQLId vendor c)
+                       (if (nil? v)
+                         " is null " " =? "))))
+             (strbf) filters)]
+    [(str wc) (flattenNil (vals filters))]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defn- readCol
 
   "Read column value, handling blobs"
-
   ^Object
-  [sqlType pos ^ResultSet rset]
+  [pos ^ResultSet rset]
 
   (let [obj (.getObject rset (int pos))
         ^InputStream
@@ -127,7 +124,7 @@
         rdr (condp instance? obj
               Clob (.getCharacterStream ^Clob obj)
               Reader obj
-              nil) ]
+              nil)]
     (cond
       (some? rdr) (with-open [r rdr] (readChars r))
       (some? inp) (with-open [p inp] (readBytes p))
@@ -137,23 +134,22 @@
 ;;
 (defn- readOneCol
 
-  ""
-
+  "Read column"
   [sqlType pos ^ResultSet rset]
 
   (condp == (int sqlType)
     Types/TIMESTAMP (.getTimestamp rset (int pos) (gmtCal))
     Types/DATE (.getDate rset (int pos) (gmtCal))
-    (readCol sqlType pos rset)))
+    (readCol pos rset)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defn- modelInjtor
 
   "Row is a transient object"
-
   [model row cn ct cv]
 
+  ;;if column is not defined in the model, ignore it
   (let [fdef (-> (:columns (meta model))
                  (get (ucase cn)))]
     (if (nil? fdef)
@@ -166,7 +162,6 @@
 
   "Generic resultset, no model defined
    Row is a transient object"
-
   [row cn ct cv]
 
   (assoc! row (keyword cn) cv))
@@ -176,23 +171,23 @@
 (defn- row2Obj
 
   "Convert a jdbc row into object"
-
   [finj ^ResultSet rs ^ResultSetMetaData rsmeta]
 
-  (with-local-vars [row (transient {})]
-    (doseq [pos (range 1 (inc (.getColumnCount rsmeta)))
-            :let [cn (.getColumnName rsmeta (int pos))
-                  ct (.getColumnType rsmeta (int pos))
-                  cv (readOneCol ct (int pos) rs)]]
-      (var-set row (finj @row cn ct cv)))
-    (persistent! @row)))
+  (persistent!
+    (reduce
+      #(let [ct (.getColumnType rsmeta (int %2))]
+         (finj %1
+               (.getColumnName rsmeta (int %2))
+               ct
+               (readOneCol ct (int %2) rs)))
+      (transient {})
+      (range 1 (inc (.getColumnCount rsmeta))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defn- insert?
 
   ""
-
   [^String sql]
 
   (.startsWith (lcase (strim sql)) "insert"))
@@ -202,7 +197,6 @@
 (defn- setBindVar
 
   ""
-
   [^PreparedStatement ps pos p]
 
   (condp instance? p
@@ -235,32 +229,34 @@
 (defn- mssqlTweakSqlstr
 
   ""
-
   [^String sqlstr token cmd]
 
-  (loop [stop false
+  (loop [target (sname token)
+         start 0
+         stop false
          sql sqlstr]
     (if stop
       sql
-      (let [pos (.indexOf (lcase sql)
-                          (sname token))
+      (let [pos (.indexOf (lcase sql) target start)
             rc (if (< pos 0)
-                 []
+                 nil
                  [(.substring sql 0 pos)
+                  " with ("
+                  cmd
+                  ") "
                   (.substring sql pos)])]
         (if (empty? rc)
-          (recur true sql)
-          (recur false (str (first rc)
-                            " with ("
-                            cmd
-                            ") " (last rc)) ))))))
+          (recur target 0 true sql)
+          (recur target
+                 (+ pos (.length target))
+                 false
+                 (cs/join "" rc)))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defn- jiggleSQL
 
   ""
-
   ^String
   [vendor ^String sqlstr]
 
@@ -279,10 +275,9 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defn- buildStmt
+(defn- fmtStmt
 
   ""
-
   ^PreparedStatement
   [vendor ^Connection conn sqlstr params]
 
@@ -292,8 +287,8 @@
                                 sql
                                 Statement/RETURN_GENERATED_KEYS)
              (.prepareStatement conn sql))]
-    (log/debug "building SQLStmt: %s" sql)
-    (doseq [n (range 0 (count params)) ]
+    (log/debug "SQLStmt: %s" sql)
+    (doseq [n (range 0 (count params))]
       (setBindVar ps (inc n) (nth params n)))
     ps))
 
@@ -302,7 +297,6 @@
 (defn- handleGKeys
 
   ""
-
   [^ResultSet rs cnt options]
 
   (let [rc (if (== cnt 1)
@@ -315,16 +309,15 @@
 (defn- sqlExecWithOutput
 
   ""
-
   [vendor conn sql pms options]
 
-  (with-open [stmt (buildStmt vendor conn sql pms) ]
-    (when (> (.executeUpdate stmt) 0)
-      (with-open [rs (.getGeneratedKeys stmt) ]
+  (with-open [s (fmtStmt vendor conn sql pms)]
+    (when (> (.executeUpdate s) 0)
+      (with-open [rs (.getGeneratedKeys s)]
         (let [cnt (if (nil? rs)
                     0
                     (-> (.getMetaData rs)
-                        (.getColumnCount))) ]
+                        (.getColumnCount)))]
           (if (and (> cnt 0)
                    (.next rs))
             (handleGKeys rs cnt options)
@@ -336,15 +329,14 @@
 (defn- sqlSelect+
 
   ""
-
   [vendor conn sql pms func post]
 
   (with-open
-    [stmt (buildStmt vendor conn sql pms)
-     rs (.executeQuery stmt) ]
-    (let [rsmeta (.getMetaData rs) ]
+    [s (fmtStmt vendor conn sql pms)
+     rs (.executeQuery s)]
+    (let [rsmeta (.getMetaData rs)]
       (loop [sum (transient [])
-             ok (.next rs) ]
+             ok (.next rs)]
         (if-not ok
           (persistent! sum)
           (recur (->> (post (func rs rsmeta))
@@ -356,7 +348,6 @@
 (defn- sqlSelect
 
   ""
-
   [vendor conn sql pms]
 
   (sqlSelect+ vendor
@@ -370,63 +361,68 @@
 (defn- sqlExec
 
   ""
-
   [vendor conn sql pms]
 
-  (with-open [stmt (buildStmt vendor conn sql pms) ]
-    (.executeUpdate stmt)))
+  (with-open [s (fmtStmt vendor conn sql pms)]
+    (.executeUpdate s)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defn- insertFlds
 
   "Format sql string for insert"
-
   [vendor obj flds]
 
-  (with-local-vars [ps (transient []) ]
-    (let [sb2 (StringBuilder.)
-          sb1 (StringBuilder.)]
-      (doseq [[k v] obj
-              :let [fdef (get flds k)]]
-        (when (and (some? fdef)
-                   (not (:auto fdef))
-                   (not (:system fdef)))
-          (addDelim! sb1 "," (fmtSQLId vendor (dbColname fdef)))
-          (addDelim! sb2 "," (if (nil? v) "null" "?"))
-          (when (some? v)
-            (var-set ps (conj! @ps v)))))
-      [(str sb1) (str sb2) (persistent! @ps)] )))
+  (let
+    [sb2 (strbf)
+     sb1 (strbf)
+     ps
+     (reduce
+       #(let [[k v] %2
+              fd (get flds k)]
+          (if (and (some? fd)
+                   (not (:auto fd))
+                   (not (:system fd)))
+            (do
+              (addDelim! sb1 "," (fmtSQLId vendor (dbColname fd)))
+              (addDelim! sb2 "," (if (nil? v) "null" "?"))
+              (if (some? v) (conj! %1 v) %1))
+            %1))
+       (transient [])
+       obj)]
+    [(str sb1) (str sb2) (persistent! ps)]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defn- updateFlds
 
   "Format sql string for update"
-
   [vendor obj flds]
 
-  (with-local-vars [ps (transient []) ]
-    (let [sb1 (StringBuilder.)]
-      (doseq [[k v]  obj
-              :let [fdef (get flds k)]]
-        (when (and (some? fdef)
-                   (:updatable fdef)
-                   (not (:auto fdef))
-                   (not (:system fdef)))
-          (doto sb1
-            (addDelim! "," (fmtSQLId vendor (dbColname fdef)))
-            (.append (if (nil? v) "=null" "=?")))
-          (when (some? v)
-            (var-set ps (conj! @ps v)))))
-      [(str sb1) (persistent! @ps)])))
+  (let
+    [sb1 (strbf)
+     ps
+     (reduce
+       #(let [[k v] %2
+              fd (get flds k)]
+          (if (and (some? fd)
+                   (:updatable fd)
+                   (not (:auto fd))
+                   (not (:system fd)))
+            (do
+              (addDelim! sb1 "," (fmtSQLId vendor (dbColname fd)))
+              (.append sb1 (if (nil? v) "=null" "=?"))
+              (if (some? v) (conj! %1 v) %1))
+            %1))
+       (transient [])
+       obj)]
+    [(str sb1) (persistent! ps)]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defn- postFmtModelRow
 
   ""
-
   [model obj]
 
   (with-meta obj {:model model}))
@@ -436,7 +432,6 @@
 (defn- doExec+
 
   ""
-
   [vendor conn sql pms options]
 
   (sqlExecWithOutput vendor conn sql pms options))
@@ -446,7 +441,6 @@
 (defn- doExec
 
   ""
-
   [vendor conn sql pms]
 
   (sqlExec vendor conn sql pms))
@@ -456,7 +450,6 @@
 (defn- doQuery+
 
   ""
-
   [vendor conn sql pms model]
 
   (sqlSelect+ vendor
@@ -472,7 +465,6 @@
 (defn- doQuery
 
   ""
-
   [vendor conn sql pms]
 
   (sqlSelect vendor conn sql pms))
@@ -482,7 +474,6 @@
 (defn- doCount
 
   ""
-
   [vendor conn model]
 
   (let
@@ -500,7 +491,6 @@
 (defn- doPurge
 
   ""
-
   [vendor conn model]
 
   (let [sql (str "delete from "
@@ -513,7 +503,6 @@
 (defn- doDelete
 
   ""
-
   [vendor conn obj]
 
   (if-some [mcz (gmodel obj)]
@@ -532,7 +521,6 @@
 (defn- doInsert
 
   ""
-
   [vendor conn obj]
 
   (if-some [mcz (gmodel obj)]
@@ -565,7 +553,6 @@
 (defn- doUpdate
 
   ""
-
   [vendor conn obj]
 
   (if-some [mcz (gmodel obj)]
@@ -592,7 +579,6 @@
 (defn- doExtraSQL
 
   ""
-
   ^String
   [^String sql extra]
 
@@ -603,11 +589,8 @@
 (defn reifySQLr
 
   "Create a SQLr"
-
-  {:tag SQLr
-   :no-doc true}
+  {:tag SQLr :no-doc true}
   [^DBAPI db runc]
-
   {:pre [(fn? runc)]}
 
   (let [schema (.getMetas db)
