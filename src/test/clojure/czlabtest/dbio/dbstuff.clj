@@ -86,7 +86,7 @@
            :hq {:kind :O2O :other ::Address :cascade true}})
         (dbuniques
           {:u1 #{ :cname } } ))
-      (dbjoined EmpDepts ::Department ::Employee))))
+      (dbjoined EmpDepts Department Employee))))
 (def JDBC (atom nil))
 (def DB (atom nil))
 

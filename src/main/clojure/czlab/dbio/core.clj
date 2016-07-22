@@ -434,6 +434,7 @@
 
   "Define a joined data model"
   [modelname lhs rhs]
+  {:pre [(symbol? lhs)(symbol? rhs)]}
 
   `(-> (dbobject ~(name modelname))
        (dbfields
@@ -445,7 +446,9 @@
                       :null false} })
        (dbuniques
          {:i1 #{ :lhs-rowid :rhs-rowid }})
-       (withJoined ~lhs ~rhs)))
+       (withJoined
+         (asFQKeyword ~(name lhs))
+         (asFQKeyword ~(name rhs)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
