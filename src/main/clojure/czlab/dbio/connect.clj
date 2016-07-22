@@ -160,8 +160,7 @@
   ^DBAPI
   [^JDBCInfo jdbc schema & [options]]
 
-  (let [options (or options {})
-        v (resolveVendor jdbc)
+  (let [v (resolveVendor jdbc)
         s (atom nil)
         t (atom nil)
         db

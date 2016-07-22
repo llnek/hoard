@@ -220,6 +220,18 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
+(defn dbtag
+
+  "The id for this model"
+
+  (^Keyword [model] (:id model))
+
+  (^Keyword [typeid schema]
+   {:pre [(some? schema)]}
+   (dbtag (.get ^Schema schema typeid))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
 (defn dbtable
 
   "The table-name defined for this model"
@@ -240,7 +252,8 @@
 
   (^String [fid model]
    {:pre [(map? model)]}
-   (-> (:fields model) (get fid) (dbcol ))))
+   (dbcol (-> (:fields model)
+              (get fid)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -321,6 +334,32 @@
   [tn rn]
 
   (keyword (str "fk_" (name tn) "_" (name rn))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
+(defn matchSpec
+
+  "Ensure the database type is supported"
+  ^Keyword
+  [^String spec]
+
+  (let [kw (keyword (lcase spec))]
+    (if (contains? *DBTYPES* kw)
+      kw
+      nil)))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
+(defn matchUrl
+
+  "From the jdbc url, get the database type"
+  ^Keyword
+  [^String url]
+
+  (let [ss (.split url ":")]
+    (when
+      (> (alength ss) 1)
+      (matchSpec (aget ss 1)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; DATA MODELING
