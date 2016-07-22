@@ -271,6 +271,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (def Postgresql :postgresql)
+(def Postgres :postgres)
 (def SQLServer :sqlserver)
 (def Oracle :oracle)
 (def MySQL :mysql)
@@ -278,16 +279,17 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(def DBTYPES
+(def ^:dynamic *DBTYPES*
   {SQLServer {:test-string "select count(*) from sysusers" }
    Postgresql {:test-string "select 1" }
+   Postgres {:test-string "select 1" }
    MySQL {:test-string "select version()" }
    H2 {:test-string "select 1" }
    Oracle {:test-string "select 1 from DUAL" } })
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defn dberr
+(defn dberr!
 
   "Throw a DBIOError execption"
   [fmt & more]
@@ -309,7 +311,7 @@
       "oracle" Oracle
       "mysql" MySQL
       "h2" H2
-      (dberr "Unknown db product: %s" product))))
+      (dberr! "Unknown db product: %s" product))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -541,7 +543,7 @@
         r2 (case (:kind rd)
              (:O2O :O2M)
              (merge rd {:fkey (fmtfkey (:id pojo) rid) })
-             (dberr "Invalid relation: %s" rid))]
+             (dberr! "Invalid relation: %s" rid))]
     (interject pojo :rels #(assoc (%2 %1) rid r2))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -800,7 +802,7 @@
                 (.put "username" user)))
             pps)]
     (when (nil? d)
-      (dberr "Can't load Jdbc Url: %s" url))
+      (dberr! "Can't load Jdbc Url: %s" url))
     (when (and (hgl? dv)
                (not= (-> d (.getClass) (.getName)) dv))
       (log/warn "expected %s, loaded with %s" dv (.getClass d)))
@@ -821,7 +823,7 @@
                (safeGetConn jdbc)
                (DriverManager/getConnection url))]
     (when (nil? conn)
-      (dberr "Failed to connect: %s" url))
+      (dberr! "Failed to connect: %s" url))
     (doto conn
       (.setTransactionIsolation
         Connection/TRANSACTION_SERIALIZABLE))))
@@ -1051,7 +1053,7 @@
             (.getConnection impl)
           (catch Throwable e#
             (log/error e# "")
-            (dberr "No free connection")))))))
+            (dberr! "No free connection")))))))
 
       ;;Object
       ;;Clojure CLJ-1347
@@ -1274,7 +1276,7 @@
       [:lhs-rowid :rhs-rowid rt]
       :else
       (if (some? obj)
-        (dberr "Unknown mxm relation for: %s" t)
+        (dberr! "Unknown mxm relation for: %s" t)
         [nil nil nil]))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -1300,7 +1302,7 @@
         mcz (gmodel lhsObj)]
     (if-some [r (dbioGetRelation mcz rid kind)]
       r
-      (dberr "Unknown relation: %s" rid))))
+      (dberr! "Unknown relation: %s" rid))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -1320,7 +1322,7 @@
                   (dbSetFld fid fv))
             cnt (.update sqlr y)]
         [ lhsObj (merge rhsObj y) ])
-      (dberr "Unknown relation: %s" rid))))
+      (dberr! "Unknown relation: %s" rid))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -1422,7 +1424,7 @@
               (.fmtId sqlr cn)))
           [(goid objA)])
         objA)
-      (dberr "Unknown relation: %s" rid))))
+      (dberr! "Unknown relation: %s" rid))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -1454,7 +1456,7 @@
   (case col
     :rhs-rowid :rhs-typeid
     :lhs-rowid :lhs-typeid
-    (dberr "Invaid column key: %s" col)))
+    (dberr! "Invaid column key: %s" col)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -1476,7 +1478,7 @@
                    ka (goid objA)
                    kb (goid objB)))
              (.insert sqlr )))
-      (dberr "Unkown relation: %s" jon))))
+      (dberr! "Unkown relation: %s" jon))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -1509,7 +1511,7 @@
                      (.fmtId sqlr (dbcol (fs ka)))
                      (.fmtId sqlr (dbcol (fs kb))))
                    [ (goid objA) (goid objB) ])))
-        (dberr "Unkown relation: %s" jon)))))
+        (dberr! "Unkown relation: %s" jon)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -1531,7 +1533,7 @@
             fs (:fields mm)
             tm (.get schema t2)]
         (when (nil? tm)
-          (dberr "Unknown model: %s" t2))
+          (dberr! "Unknown model: %s" t2))
         (.select
           sqlr
           t2
@@ -1548,7 +1550,7 @@
             MM (.fmtId sqlr (dbcol (kb fs)))
             RS (.fmtId sqlr COL_ROWID))
           [ (goid obj) ]))
-      (dberr "Unknown joined model: %s" jon))))
+      (dberr! "Unknown joined model: %s" jon))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;EOF

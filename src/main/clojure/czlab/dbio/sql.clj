@@ -222,7 +222,7 @@
     Calendar (.setTimestamp ps pos
                             (Timestamp. (.getTimeInMillis ^Calendar p))
                             (gmtCal))
-    (dberr "Unsupported param-type: %s" (type p))))
+    (dberr! "Unsupported param-type: %s" (type p))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -514,7 +514,7 @@
                  " where "
                  (fmtUpdateWhere vendor mcz))
             [(goid obj)])
-    (dberr "Unknown model for: %s" obj)))
+    (dberr! "Unknown model for: %s" obj)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -540,13 +540,13 @@
                     pms
                     {:pkey (dbcol pke mcz)})]
           (if (empty? out)
-            (dberr "rowid must be returned")
+            (dberr! "rowid must be returned")
             (log/debug "Exec-with-out %s" out))
           (let [n (:1 out)]
             (when-not (number? n)
-              (dberr "rowid must be a Long"))
+              (dberr! "rowid must be a Long"))
             (merge obj {pke  n})))))
-    (dberr "Unknown model for: %s" obj)))
+    (dberr! "Unknown model for: %s" obj)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -572,7 +572,7 @@
                      (fmtUpdateWhere vendor mcz))
                 (conj pms (goid obj)))
         0))
-    (dberr "Unknown model for: %s" obj)))
+    (dberr! "Unknown model for: %s" obj)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -627,7 +627,7 @@
                      (str s " where " wc) s)
                    extraSQL)
                  pms mcz)))
-          (dberr "Unknown model: %s" typeid)))
+          (dberr! "Unknown model: %s" typeid)))
 
       (fmtId [_ s] (fmtSQLId vendor s))
 
@@ -649,7 +649,7 @@
                            sql
                            params
                            m))
-          (dberr "Unknown model: %s" typeid)))
+          (dberr! "Unknown model: %s" typeid)))
 
       (select [_ sql params]
         (runc #(doQuery vendor %1 sql params)))
@@ -667,12 +667,12 @@
       (countAll [_ typeid]
         (if-some [m (.get schema typeid)]
           (runc #(doCount vendor %1 m))
-          (dberr "Unknown model: %s" typeid)))
+          (dberr! "Unknown model: %s" typeid)))
 
       (purge [_ typeid]
         (if-some [m (.get schema typeid)]
           (runc #(doPurge vendor %1 m))
-          (dberr "Unknown model: %s" typeid))))))
+          (dberr! "Unknown model: %s" typeid))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;EOF

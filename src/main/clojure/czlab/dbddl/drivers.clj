@@ -478,7 +478,7 @@
                   :Float (genFloat dbtype fld)
                   (:Password :String) (genString dbtype fld)
                   :Bytes (genBytes dbtype fld)
-                  (dberr "Unsupported field: %s" fld))
+                  (dberr! "Unsupported field: %s" fld))
                 (addDelim! bf ",\n" ))
            (if (= pke (:id fld))
              (conj! p fld)
