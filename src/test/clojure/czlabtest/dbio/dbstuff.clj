@@ -31,74 +31,68 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(dbmodel Address
-  (dbfields
-    {:addr1 { :size 200 :null false }
-     :addr2 { :size 64}
-     :city { :null false}
-     :state {:null false}
-     :zip {:null false}
-     :country {:null false} })
-  (dbindexes
-    {:i1 #{ :city :state :country }
-     :i2 #{ :zip :country }
-     :i3 #{ :state }
-     :i4 #{ :zip } } ))
-
-(dbmodel Person
-  (dbfields
-    {:first_name { :null false }
-     :last_name { :null false }
-     :iq { :domain :Int }
-     :bday {:domain :Calendar :null false }
-     :sex {:null false} })
-  (dbindexes
-    {:i1 #{ :first_name :last_name }
-     :i2 #{ :bday } } )
-  (dbassocs
-    {:addrs {:kind :O2M :other ::Address :cascade true}
-     :spouse {:kind :O2O :other ::Person } }))
-
-(dbmodel Employee
-  (dbfields
-    {:salary { :domain :Float :null false }
-     :passcode { :domain :Password }
-     :pic { :domain :Bytes }
-     :descr {}
-     :login {:null false} })
-  (dbindexes {:i1 #{ :login } } )
-  (dbassocs
-    {:person {:kind :O2O :other ::Person } }))
-
-(dbmodel Department
-  (dbfields
-    {:dname { :null false } })
-  (dbuniques
-    {:u1 #{ :dname }} ))
-
-(dbmodel Company
-  (dbfields
-    {:revenue { :domain :Double :null false }
-     :cname { :null false }
-     :logo { :domain :Bytes } })
-  (dbassocs
-    {:depts {:kind :O2M :other ::Department :cascade true}
-     :emps {:kind :O2M :other ::Employee :cascade true}
-     :hq {:kind :O2O :other ::Address :cascade true}})
-  (dbuniques
-    {:u1 #{ :cname } } ))
-
-(dbjoined EmpDepts ::Department ::Employee)
-
-(def METAC (atom nil))
+(def METAC
+  (atom
+    (dbschema
+      (dbmodel Address
+        (dbfields
+          {:addr1 { :size 200 :null false }
+           :addr2 { :size 64}
+           :city { :null false}
+           :state {:null false}
+           :zip {:null false}
+           :country {:null false} })
+        (dbindexes
+          {:i1 #{ :city :state :country }
+           :i2 #{ :zip :country }
+           :i3 #{ :state }
+           :i4 #{ :zip } } ))
+      (dbmodel Person
+        (dbfields
+          {:first_name { :null false }
+           :last_name { :null false }
+           :iq { :domain :Int }
+           :bday {:domain :Calendar :null false }
+           :sex {:null false} })
+        (dbindexes
+          {:i1 #{ :first_name :last_name }
+           :i2 #{ :bday } } )
+        (dbassocs
+          {:addrs {:kind :O2M :other ::Address :cascade true}
+           :spouse {:kind :O2O :other ::Person } }))
+      (dbmodel Employee
+        (dbfields
+          {:salary { :domain :Float :null false }
+           :passcode { :domain :Password }
+           :pic { :domain :Bytes }
+           :descr {}
+           :login {:null false} })
+        (dbindexes {:i1 #{ :login } } )
+        (dbassocs
+          {:person {:kind :O2O :other ::Person } }))
+      (dbmodel Department
+        (dbfields
+          {:dname { :null false } })
+        (dbuniques
+          {:u1 #{ :dname }} ))
+      (dbmodel Company
+        (dbfields
+          {:revenue { :domain :Double :null false }
+           :cname { :null false }
+           :logo { :domain :Bytes } })
+        (dbassocs
+          {:depts {:kind :O2M :other ::Department :cascade true}
+           :emps {:kind :O2M :other ::Employee :cascade true}
+           :hq {:kind :O2O :other ::Address :cascade true}})
+        (dbuniques
+          {:u1 #{ :cname } } ))
+      (dbjoined EmpDepts ::Department ::Employee))))
 (def JDBC (atom nil))
 (def DB (atom nil))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defn init-test "" [f]
-  (reset! METAC
-    (dbschema Address Person EmpDepts Employee Department Company))
   (let [dir (File. (System/getProperty "java.io.tmpdir"))
         db (str "" (System/currentTimeMillis))
         url (H2Db dir db "sa" "hello")

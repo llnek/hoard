@@ -402,9 +402,8 @@
   "Define a data model"
   [modelname & body]
 
-  `(def ~modelname
-     (-> (dbobject ~(name modelname))
-         ~@body)))
+  `(-> (dbobject ~(name modelname))
+       ~@body))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -436,18 +435,17 @@
   "Define a joined data model"
   [modelname lhs rhs]
 
-  `(def ~modelname
-      (-> (dbobject ~(name modelname))
-          (dbfields
-            {:lhs-rowid {:column COL_LHS_ROWID
-                         :domain :Long
-                         :null false}
-             :rhs-rowid {:column COL_RHS_ROWID
-                         :domain :Long
-                         :null false} })
-          (dbuniques
-            {:i1 #{ :lhs-rowid :rhs-rowid }})
-          (withJoined ~lhs ~rhs))))
+  `(-> (dbobject ~(name modelname))
+       (dbfields
+         {:lhs-rowid {:column COL_LHS_ROWID
+                      :domain :Long
+                      :null false}
+          :rhs-rowid {:column COL_RHS_ROWID
+                      :domain :Long
+                      :null false} })
+       (dbuniques
+         {:i1 #{ :lhs-rowid :rhs-rowid }})
+       (withJoined ~lhs ~rhs)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
