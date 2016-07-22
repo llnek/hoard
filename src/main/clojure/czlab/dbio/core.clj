@@ -1240,15 +1240,15 @@
 
   "Set many field values such as f1 v1 f2 v2 ... fn vn"
   ^APersistentMap
-  [pojo fld value & fvs]
-  {:pre [(or (empty? fvs)
-             (even? (count fvs)))]}
+  [pojo fvs]
+  {:pre [(map? fvs)]}
 
   (reduce
-    (fn [p [f v]]
-      (dbSetFld p f v))
-    (dbSetFld pojo fld value)
-    (partition 2 fvs)))
+    #(dbSetFld %1
+               (first %2)
+               (last %2))
+    pojo
+    fvs))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;

@@ -114,7 +114,7 @@
   ;;(println "\n\n" (dbgShowSchema @METAC))
   (when (fn? f) (f)))
 
-(defn finz-test "" [] (.finz @DB) true)
+(defn finz-test "" [] (.finz ^DBAPI @DB) true)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -127,11 +127,11 @@
                 dbpojo)]
     (dbSetFlds*
       emp
-      :salary 1000000.00
-      :pic (.getBytes "poo")
-      :passcode "secret"
-      :desc "idiot"
-      :login login)))
+      {:salary 1000000.00
+       :pic (.getBytes "poo")
+       :passcode "secret"
+       :desc "idiot"
+       :login login})))
 
 (defn- mkCompany
 
@@ -142,9 +142,9 @@
               dbpojo)]
     (dbSetFlds*
       c
-      :cname cname
-      :revenue 100.00
-      :logo (.getBytes "hi"))))
+      {:cname cname
+       :revenue 100.00
+       :logo (.getBytes "hi")})))
 
 (defn- mkDept
 
@@ -217,7 +217,7 @@
       sql
       #(let [o2 (-> (.findOne ^SQLr %1
                           ::Employee {:login login})
-                    (dbSetFlds* :salary 99.9234 :iq 0))]
+                    (dbSetFlds* {:salary 99.9234 :iq 0}))]
          (if (> (.update ^SQLr %1 o2) 0) o2 nil)))))
 
 (defn- delete-emp
@@ -244,11 +244,11 @@
   (let [p (-> (-> (.get ^Schema @METAC ::Person)
                   dbpojo)
               (dbSetFlds*
-                :first_name fname
-                :last_name  lname
-                :iq 100
-                :bday (GregorianCalendar.)
-                :sex sex))
+                {:first_name fname
+                 :last_name  lname
+                 :iq 100
+                 :bday (GregorianCalendar.)
+                 :sex sex}))
         sql (.compositeSQLr ^DBAPI @DB)]
     (.execWith sql
                #(.insert ^SQLr %1 p))))
