@@ -70,7 +70,7 @@
     (when-not (.containsKey c hc)
       (log/debug "No db-pool in DBIO-thread-local, creating one")
       (->> (merge POOL_CFG options)
-           (mkDbPool jdbc )
+           (dbpool jdbc )
            (.put c hc )))
     (.get c hc)))
 
@@ -154,9 +154,9 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defn dbioConnect
+(defn dbopen
 
-  "Connect to a datasource"
+  "Open/access to a datasource"
   ^DBAPI
   [^JDBCInfo jdbc schema & [options]]
 
@@ -172,7 +172,7 @@
           (getMetas [_] schema)
           (vendor [_] v)
           (finz [_] )
-          (open [_] (mkDbConnection jdbc)))]
+          (open [_] (dbconnect jdbc)))]
     (test-nonil "database-vendor" v)
     (reset! s (simSQLr db))
     (reset! t (txSQLr db))
@@ -180,14 +180,14 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defn dbioConnectViaPool
+(defn dbopen+
 
-  "Connect to a datasource"
+  "Open/access to a datasource using pooled connections"
   ^DBAPI
   [^JDBCInfo jdbc schema & [options]]
 
   (let [pool (->> (merge POOL_CFG options)
-                  (mkDbPool jdbc ))
+                  (dbpool jdbc ))
         v (.vendor pool)
         s (atom nil)
         t (atom nil)

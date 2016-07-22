@@ -208,7 +208,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; have to be function , not macro as this is passed into another higher
 ;; function - merge.
-(defn mergeMeta
+(defn- mergeMeta
 
   "Merge 2 meta maps"
 
@@ -220,7 +220,7 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defn dbTablename
+(defn dbtable
 
   "The table-name defined for this model"
 
@@ -228,11 +228,11 @@
 
   (^String [typeid schema]
    {:pre [(some? schema)]}
-   (dbTablename (.get ^Schema schema typeid))))
+   (dbtable (.get ^Schema schema typeid))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defn dbColname
+(defn dbcol
 
   "The column-name defined for this field"
 
@@ -240,11 +240,11 @@
 
   (^String [fid model]
    {:pre [(map? model)]}
-   (-> (:fields model) (get fid) (dbColname ))))
+   (-> (:fields model) (get fid) (dbcol ))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defn mkJdbc
+(defn dbspec
 
   "Basic jdbc parameters"
   ^JDBCInfo
@@ -270,15 +270,15 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defonce Postgresql :postgresql)
-(defonce SQLServer :sqlserver)
-(defonce Oracle :oracle)
-(defonce MySQL :mysql)
-(defonce H2 :h2)
+(def Postgresql :postgresql)
+(def SQLServer :sqlserver)
+(def Oracle :oracle)
+(def MySQL :mysql)
+(def H2 :h2)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defonce DBTYPES
+(def DBTYPES
   {SQLServer {:test-string "select count(*) from sysusers" }
    Postgresql {:test-string "select 1" }
    MySQL {:test-string "select version()" }
@@ -336,7 +336,7 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defn dbioModel
+(defn dbobject
 
   "Define a generic model"
   ^APersistentMap
@@ -356,13 +356,13 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defmacro declModel
+(defmacro dbmodel
 
   "Define a data model"
   [modelname & body]
 
   `(def ~modelname
-     (-> (dbioModel ~(name modelname))
+     (-> (dbobject ~(name modelname))
          ~@body)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -370,7 +370,7 @@
 (defn withJoined
 
   "A special model with 2 relations,
-   left hand side and right hand side"
+   left hand side and right hand side. *internal only*"
   {:tag APersistentMap
    :no-doc true}
   [pojo lhs rhs]
@@ -390,27 +390,27 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defmacro declJoined
+(defmacro dbjoined
 
   "Define a joined data model"
   [modelname lhs rhs]
 
   `(def ~modelname
-      (-> (dbioModel ~(name modelname))
-          (declFields
+      (-> (dbobject ~(name modelname))
+          (dbfields
             {:lhs-rowid {:column COL_LHS_ROWID
                          :domain :Long
                          :null false}
              :rhs-rowid {:column COL_RHS_ROWID
                          :domain :Long
                          :null false} })
-          (declUniques
+          (dbuniques
             {:i1 #{ :lhs-rowid :rhs-rowid }})
           (withJoined ~lhs ~rhs))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defn declTablename
+(defn withTable
 
   "Set the table name"
   ^APersistentMap
@@ -439,7 +439,7 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defn declIndexes
+(defn dbindexes
 
   "Set indexes to the model"
   ^APersistentMap
@@ -451,7 +451,7 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defn declPKey
+(defn dbkey
 
   "Declare your own primary key"
   [pojo pke]
@@ -473,7 +473,7 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defn declUniques
+(defn dbuniques
 
   "Set uniques to the model"
   ^APersistentMap
@@ -504,7 +504,7 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defn declField
+(defn dbfield
 
   "Add a new field"
   ^APersistentMap
@@ -517,7 +517,7 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defn declFields
+(defn dbfields
 
   "Add a bunch of fields"
   ^APersistentMap
@@ -526,13 +526,13 @@
 
   (with-local-vars [rcmap pojo]
     (doseq [[k v] flddefs]
-      (->> (declField @rcmap k v)
+      (->> (dbfield @rcmap k v)
            (var-set rcmap)))
     @rcmap))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defn declRelation
+(defn dbassoc
 
   "Declare an association between 2 types"
   [pojo rid rel]
@@ -546,7 +546,7 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defn declRelations
+(defn dbassocs
 
   "Declare a set of associations"
   [pojo reldefs]
@@ -554,7 +554,7 @@
 
   (with-local-vars [rcmap pojo]
     (doseq [[k v] reldefs]
-      (->> (declRelation @rcmap k v)
+      (->> (dbassoc @rcmap k v)
            (var-set rcmap)))
     @rcmap))
 
@@ -579,10 +579,10 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Defining the base model here
 (comment
-(declModel DBIOBaseModel
+(dbmodel DBIOBaseModel
   (with-abstract true)
   (with-db-system)
-  (declFields
+  (dbfields
     {:rowid PKEY-DEF })))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -602,10 +602,10 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (comment
-(declModel DBIOJoinedModel
+(dbmodel DBIOJoinedModel
   (with-abstract true)
   (with-db-system)
-  (declFields
+  (dbfields
     {:lhs-rowid {:column COL_LHS_ROWID
                  :domain :Long
                  :null false}
@@ -738,7 +738,7 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defn mkDbSchema
+(defn dbschema
 
   "A cache storing meta-data for all models"
   ^Schema
@@ -747,7 +747,7 @@
   (let [data (atom {})
         sch (reify Schema
               (get [_ id] (get @data id))
-              (getModels [_] @data))
+              (models [_] @data))
         ms (if (empty? models)
              {}
              (persistent!
@@ -778,7 +778,7 @@
                                          :DEFN %2
                                          :META (meta %2)}))
             (StringBuilder.)
-            (vals (.getModels mc)))))
+            (vals (.models mc)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -808,7 +808,7 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defn mkDbConnection
+(defn dbconnect
 
   "Connect to database referred by this jdbc"
   ^Connection
@@ -828,13 +828,13 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defn testConnection?
+(defn testConnect?
 
   "true if able to connect to the database, as a test"
   [jdbc]
 
   (try
-    (.close (mkDbConnection jdbc))
+    (.close (dbconnect jdbc))
     true
     (catch SQLException _# false)))
 
@@ -852,7 +852,7 @@
   [jdbc]
 
   (with-open
-    [conn (mkDbConnection jdbc)]
+    [conn (dbconnect jdbc)]
     (resolveVendor conn)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -901,7 +901,7 @@
   [jdbc ^String table]
 
   (with-open
-    [conn (mkDbConnection jdbc)]
+    [conn (dbconnect jdbc)]
     (tableExist? conn table)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -940,7 +940,7 @@
   [^JDBCInfo jdbc ^String table]
 
   (with-open
-    [conn (mkDbConnection jdbc)]
+    [conn (dbconnect jdbc)]
     (rowExist? conn table)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -1064,7 +1064,7 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defn mkDbPool
+(defn dbpool
 
   "Create a db connection pool"
   ^JDBCPool
@@ -1132,7 +1132,7 @@
   [^JDBCInfo jdbc ^String ddl]
 
   (with-open
-    [conn (mkDbConnection jdbc)]
+    [conn (dbconnect jdbc)]
      (uploadDdl conn ddl)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -1162,7 +1162,7 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defn dbioCreateObj
+(defn dbpojo
 
   "Creates a blank object of the given type"
   ^APersistentMap
@@ -1173,7 +1173,7 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defmacro mockObj
+(defmacro mockPojo
 
   ""
   [obj]
@@ -1183,7 +1183,7 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defn dbioSetFld
+(defn dbSetFld
 
   "Set value to a field"
   [pojo fld value]
@@ -1195,7 +1195,7 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defn dbioSetFlds*
+(defn dbSetFlds*
 
   "Set many field values such as f1 v1 f2 v2 ... fn vn"
   ^APersistentMap
@@ -1205,8 +1205,8 @@
 
   (reduce
     (fn [p [f v]]
-      (dbioSetFld p f v))
-    (dbioSetFld pojo fld value)
+      (dbSetFld p f v))
+    (dbSetFld pojo fld value)
     (partition 2 fvs)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -1224,7 +1224,7 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defn dbioClrFld
+(defn dbClrFld
 
   "Remove a field"
   [pojo fld]
@@ -1236,7 +1236,7 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defn dbioGetFld
+(defn dbGetFld
 
   "Get value of a field"
   [pojo fld]
@@ -1316,15 +1316,15 @@
     (if-some [r (dbioGetRelation mcz rid kind)]
       (let [fv (goid lhsObj)
             fid (:fkey r)
-            y (-> (mockObj rhsObj)
-                  (dbioSetFld fid fv))
+            y (-> (mockPojo rhsObj)
+                  (dbSetFld fid fv))
             cnt (.update sqlr y)]
         [ lhsObj (merge rhsObj y) ])
       (dberr "Unknown relation: %s" rid))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defn dbioGetO2M
+(defn dbGetO2M
 
   "One to many assocs"
   [ctx lhsObj]
@@ -1339,7 +1339,7 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defn dbioSetO2M
+(defn dbSetO2M
 
   ""
   [ctx lhsObj rhsObj]
@@ -1349,7 +1349,7 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defn dbioSetO2M*
+(defn dbSetO2M*
 
   ""
   ^APersistentVector
@@ -1367,7 +1367,7 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defn dbioGetO2O
+(defn dbGetO2O
 
   "One to one relation"
   ^APersistentMap
@@ -1383,7 +1383,7 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defn dbioSetO2O
+(defn dbSetO2O
 
   ""
   [ctx lhsObj rhsObj]
@@ -1406,8 +1406,8 @@
       (let [rt (or (:cast ctx)
                    (:other r))
             mB (.get schema rt)
-            tn (dbTablename mB)
-            cn (dbColname (:fkey r) mB)]
+            tn (dbtable mB)
+            cn (dbcol (:fkey r) mB)]
         (.exec
           sqlr
           (if-not (:cascade r)
@@ -1426,7 +1426,7 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defn dbioClrO2M
+(defn dbClrO2M
 
   ""
   [ctx lhsObj]
@@ -1436,7 +1436,7 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defn dbioClrO2O
+(defn dbClrO2O
 
   ""
   [ctx lhsObj]
@@ -1458,7 +1458,7 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defn dbioSetM2M
+(defn dbSetM2M
 
   "Many to many relations"
   ^APersistentMap
@@ -1471,7 +1471,7 @@
     (if-some [mm (.get schema jon)]
       (let [ka (selectSide mm objA)
             kb (selectSide mm objB)]
-        (->> (-> (dbioCreateObj mm)
+        (->> (-> (dbpojo mm)
                  (setMxMFlds*
                    ka (goid objA)
                    kb (goid objB)))
@@ -1480,11 +1480,11 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defn dbioClrM2M
+(defn dbClrM2M
 
   ""
 
-  ([ctx obj] (dbioClrM2M ctx obj nil))
+  ([ctx obj] (dbClrM2M ctx obj nil))
 
   ([ctx objA objB]
    {:pre [(some? objA)]}
@@ -1499,21 +1499,21 @@
             (.exec sqlr
                    (format
                      "delete from %s where %s=?"
-                     (.fmtId sqlr (dbTablename mm))
-                     (.fmtId sqlr (dbColname (fs ka))))
+                     (.fmtId sqlr (dbtable mm))
+                     (.fmtId sqlr (dbcol (fs ka))))
                    [ (goid objA) ])
             (.exec sqlr
                    (format
                      "delete from %s where %s=? and %s=?"
-                     (.fmtId sqlr (dbTablename mm))
-                     (.fmtId sqlr (dbColname (fs ka)))
-                     (.fmtId sqlr (dbColname (fs kb))))
+                     (.fmtId sqlr (dbtable mm))
+                     (.fmtId sqlr (dbcol (fs ka)))
+                     (.fmtId sqlr (dbcol (fs kb))))
                    [ (goid objA) (goid objB) ])))
         (dberr "Unkown relation: %s" jon)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defn dbioGetM2M
+(defn dbGetM2M
 
   ""
   [ctx obj]
@@ -1540,12 +1540,12 @@
                  "join %s %s on "
                  "%s.%s=? and %s.%s=%s.%s"),
             RS
-            (.fmtId sqlr (dbTablename tm))
+            (.fmtId sqlr (dbtable tm))
             RS
-            (.fmtId sqlr (dbTablename mm))
+            (.fmtId sqlr (dbtable mm))
             MM
-            MM (.fmtId sqlr (dbColname (ka fs)))
-            MM (.fmtId sqlr (dbColname (kb fs)))
+            MM (.fmtId sqlr (dbcol (ka fs)))
+            MM (.fmtId sqlr (dbcol (kb fs)))
             RS (.fmtId sqlr COL_ROWID))
           [ (goid obj) ]))
       (dberr "Unknown joined model: %s" jon))))

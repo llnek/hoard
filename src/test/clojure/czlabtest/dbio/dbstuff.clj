@@ -31,64 +31,64 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(declModel Address
-  (declFields
+(dbmodel Address
+  (dbfields
     {:addr1 { :size 200 :null false }
      :addr2 { :size 64}
      :city { :null false}
      :state {:null false}
      :zip {:null false}
      :country {:null false} })
-  (declIndexes
+  (dbindexes
     {:i1 #{ :city :state :country }
      :i2 #{ :zip :country }
      :i3 #{ :state }
      :i4 #{ :zip } } ))
 
-(declModel Person
-  (declFields
+(dbmodel Person
+  (dbfields
     {:first_name { :null false }
      :last_name { :null false }
      :iq { :domain :Int }
      :bday {:domain :Calendar :null false }
      :sex {:null false} })
-  (declIndexes
+  (dbindexes
     {:i1 #{ :first_name :last_name }
      :i2 #{ :bday } } )
-  (declRelations
+  (dbassocs
     {:addrs {:kind :O2M :other ::Address :cascade true}
      :spouse {:kind :O2O :other ::Person } }))
 
-(declModel Employee
-  (declFields
+(dbmodel Employee
+  (dbfields
     {:salary { :domain :Float :null false }
      :passcode { :domain :Password }
      :pic { :domain :Bytes }
      :descr {}
      :login {:null false} })
-  (declIndexes {:i1 #{ :login } } )
-  (declRelations
+  (dbindexes {:i1 #{ :login } } )
+  (dbassocs
     {:person {:kind :O2O :other ::Person } }))
 
-(declModel Department
-  (declFields
+(dbmodel Department
+  (dbfields
     {:dname { :null false } })
-  (declUniques
+  (dbuniques
     {:u1 #{ :dname }} ))
 
-(declModel Company
-  (declFields
+(dbmodel Company
+  (dbfields
     {:revenue { :domain :Double :null false }
      :cname { :null false }
      :logo { :domain :Bytes } })
-  (declRelations
+  (dbassocs
     {:depts {:kind :O2M :other ::Department :cascade true}
      :emps {:kind :O2M :other ::Employee :cascade true}
      :hq {:kind :O2O :other ::Address :cascade true}})
-  (declUniques
+  (dbuniques
     {:u1 #{ :cname } } ))
 
-(declJoined EmpDepts ::Department ::Employee)
+(dbjoined EmpDepts ::Department ::Employee)
 
 (def METAC (atom nil))
 (def JDBC (atom nil))
@@ -98,11 +98,11 @@
 ;;
 (defn init-test "" [f]
   (reset! METAC
-    (mkDbSchema Address Person EmpDepts Employee Department Company))
+    (dbschema Address Person EmpDepts Employee Department Company))
   (let [dir (File. (System/getProperty "java.io.tmpdir"))
         db (str "" (System/currentTimeMillis))
         url (H2Db dir db "sa" "hello")
-        jdbc (mkJdbc
+        jdbc (dbspec
                {:driver H2-DRIVER
                 :url url
                 :user "sa"
@@ -110,7 +110,7 @@
     ;;(writeFile (File. dir "dbstuff.out") (dbgShowSchema @METAC))
     (reset! JDBC jdbc)
     (uploadDdl jdbc (getDDL @METAC :h2))
-    (reset! DB (dbioConnectViaPool jdbc @METAC )))
+    (reset! DB (dbopen+ jdbc @METAC )))
   ;;(println "\n\n" (dbgShowSchema @METAC))
   (when (fn? f) (f)))
 
@@ -124,8 +124,8 @@
   [login]
 
   (let [emp (-> (.get ^Schema @METAC ::Employee)
-                dbioCreateObj)]
-    (dbioSetFlds*
+                dbpojo)]
+    (dbSetFlds*
       emp
       :salary 1000000.00
       :pic (.getBytes "poo")
@@ -139,8 +139,8 @@
   [cname]
 
   (let [c (-> (.get ^Schema @METAC ::Company)
-              dbioCreateObj)]
-    (dbioSetFlds*
+              dbpojo)]
+    (dbSetFlds*
       c
       :cname cname
       :revenue 100.00
@@ -152,8 +152,8 @@
   [dname]
 
   (-> (-> (.get ^Schema @METAC ::Department)
-          dbioCreateObj)
-      (dbioSetFld :dname dname)))
+          dbpojo)
+      (dbSetFld :dname dname)))
 
 
 (defn- create-emp
@@ -169,7 +169,7 @@
     (first
       (.execWith
         sql
-        #(dbioSetO2O
+        #(dbSetO2O
             {:with %1 :as :person}
             e
             (.findOne ^SQLr %1
@@ -217,7 +217,7 @@
       sql
       #(let [o2 (-> (.findOne ^SQLr %1
                           ::Employee {:login login})
-                    (dbioSetFlds* :salary 99.9234 :iq 0))]
+                    (dbSetFlds* :salary 99.9234 :iq 0))]
          (if (> (.update ^SQLr %1 o2) 0) o2 nil)))))
 
 (defn- delete-emp
@@ -242,8 +242,8 @@
   [fname lname sex]
 
   (let [p (-> (-> (.get ^Schema @METAC ::Person)
-                  dbioCreateObj)
-              (dbioSetFlds*
+                  dbpojo)
+              (dbSetFlds*
                 :first_name fname
                 :last_name  lname
                 :iq 100
@@ -261,21 +261,21 @@
   (let [sql (.compositeSQLr ^DBAPI @DB)
         e (create-emp "joe" "blog" "joeb")
         pm (.execWith sql
-                      #(dbioGetO2O {:with %1 :as :person} e))
+                      #(dbGetO2O {:with %1 :as :person} e))
         w (create-person "mary" "lou" "female")
         [p1 w1]
         (.execWith sql
-                   #(dbioSetO2O {:as :spouse :with %1 } pm w))
+                   #(dbSetO2O {:as :spouse :with %1 } pm w))
         [w2 p2]
         (.execWith sql
-                   #(dbioSetO2O {:as :spouse :with %1 } w1 p1))
+                   #(dbSetO2O {:as :spouse :with %1 } w1 p1))
         w3
         (.execWith sql
-                   #(dbioGetO2O {:as :spouse
+                   #(dbGetO2O {:as :spouse
                                  :with %1 } p2))
         p3
         (.execWith sql
-                   #(dbioGetO2O {:as :spouse
+                   #(dbGetO2O {:as :spouse
                                  :with %1 } w3)) ]
     (and (some? w3)(some? p3))))
 
@@ -289,26 +289,26 @@
         e (fetch-emp "joeb")
         pm (.execWith
              sql
-             #(dbioGetO2O {:with %1 :as :person} e))
+             #(dbGetO2O {:with %1 :as :person} e))
         w (.execWith
             sql
-            #(dbioGetO2O {:as :spouse
+            #(dbGetO2O {:as :spouse
                           :with %1 } pm))
         p2 (.execWith
              sql
-             #(dbioClrO2O {:as :spouse
+             #(dbClrO2O {:as :spouse
                            :with %1 } pm))
         w2 (.execWith
              sql
-             #(dbioClrO2O {:as :spouse
+             #(dbClrO2O {:as :spouse
                            :with %1 } w))
         w3 (.execWith
              sql
-             #(dbioGetO2O {:as :spouse
+             #(dbGetO2O {:as :spouse
                            :with %1 } p2))
         p3 (.execWith
              sql
-             #(dbioGetO2O {:as :spouse
+             #(dbGetO2O {:as :spouse
                            :with %1 } w2))]
     (and (nil? w3)(nil? p3)(some? w))))
 
@@ -323,28 +323,28 @@
             #(.insert ^SQLr %1 (mkCompany "acme")))]
     (.execWith
       sql
-      #(dbioSetO2M {:as :depts :with %1 }
+      #(dbSetO2M {:as :depts :with %1 }
                    c
                    (.insert ^SQLr %1 (mkDept "d1"))))
     (.execWith
       sql
-      #(dbioSetO2M* {:as :depts :with %1 }
+      #(dbSetO2M* {:as :depts :with %1 }
                     c
                    (.insert ^SQLr %1 (mkDept "d2"))
                    (.insert ^SQLr %1 (mkDept "d3"))))
     (.execWith
       sql
-      #(dbioSetO2M* {:as :emps :with %1 }
+      #(dbSetO2M* {:as :emps :with %1 }
                     c
                     (.insert ^SQLr % (mkEmp "e1" ))
                     (.insert ^SQLr % (mkEmp "e2" ))
                     (.insert ^SQLr % (mkEmp "e3" )) ))
     (let [ds (.execWith
                sql
-               #(dbioGetO2M  {:as :depts :with %1} c))
+               #(dbGetO2M  {:as :depts :with %1} c))
           es (.execWith
                sql
-               #(dbioGetO2M  {:as :emps :with %1} c))]
+               #(dbGetO2M  {:as :emps :with %1} c))]
       (and (= (count ds) 3)
            (= (count es) 3))) ))
 
@@ -360,33 +360,33 @@
                        ::Company {:cname "acme"} ))
         ds (.execWith
              sql
-             #(dbioGetO2M {:as :depts :with %1} c))
+             #(dbGetO2M {:as :depts :with %1} c))
         es (.execWith
              sql
-             #(dbioGetO2M {:as :emps :with %1} c))]
+             #(dbGetO2M {:as :emps :with %1} c))]
     (.execWith
       sql
       #(do
          (doseq [d ds
                  :when (= (:dname d) "d2")]
            (doseq [e es]
-             (dbioSetM2M {:joined ::EmpDepts :with %1} d e)))
+             (dbSetM2M {:joined ::EmpDepts :with %1} d e)))
          (doseq [e es
                  :when (= (:login e) "e2")]
            (doseq [d ds
                    :let [dn (:dname d)]
                    :when (not= dn "d2")]
-             (dbioSetM2M {:joined ::EmpDepts :with %1} e d)))))
+             (dbSetM2M {:joined ::EmpDepts :with %1} e d)))))
     (let [s1 (.execWith
                sql
                (fn [s]
-                 (dbioGetM2M
+                 (dbGetM2M
                    {:joined ::EmpDepts :with s}
                    (some #(if (= (:dname %) "d2") % nil)  ds))))
           s2 (.execWith
                sql
                (fn [s]
-                 (dbioGetM2M
+                 (dbGetM2M
                    {:joined ::EmpDepts :with s}
                    (some #(if (= (:login %) "e2") % nil)  es))))]
       (and (== (count s1) 3)
@@ -406,16 +406,16 @@
              #(.findOne ^SQLr % ::Employee {:login "e2"} ))]
     (.execWith
       sql
-      #(dbioClrM2M {:joined ::EmpDepts :with % } d2))
+      #(dbClrM2M {:joined ::EmpDepts :with % } d2))
     (.execWith
       sql
-      #(dbioClrM2M {:joined ::EmpDepts :with % } e2))
+      #(dbClrM2M {:joined ::EmpDepts :with % } e2))
     (let [s1 (.execWith
                sql
-               #(dbioGetM2M {:joined ::EmpDepts :with %} d2))
+               #(dbGetM2M {:joined ::EmpDepts :with %} d2))
           s2 (.execWith
                sql
-               #(dbioGetM2M {:joined ::EmpDepts :with %} e2))]
+               #(dbGetM2M {:joined ::EmpDepts :with %} e2))]
       (and (== (count s1) 0)
            (== (count s2) 0)) )))
 
@@ -430,16 +430,16 @@
             #(.findOne ^SQLr % ::Company {:cname "acme"} ))]
     (.execWith
       sql
-      #(dbioClrO2M {:as :depts :with %} c))
+      #(dbClrO2M {:as :depts :with %} c))
     (.execWith
       sql
-      #(dbioClrO2M {:as :emps :with %} c))
+      #(dbClrO2M {:as :emps :with %} c))
     (let [s1 (.execWith
                sql
-               #(dbioGetO2M {:as :depts :with %} c))
+               #(dbGetO2M {:as :depts :with %} c))
           s2 (.execWith
                sql
-               #(dbioGetO2M {:as :emps :with %} c))]
+               #(dbGetO2M {:as :emps :with %} c))]
       (and (== (count s1) 0)
            (== (count s2) 0)))))
 

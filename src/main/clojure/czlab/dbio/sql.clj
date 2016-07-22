@@ -31,7 +31,7 @@
     [czlab.xlib.logging :as log]
     [clojure.string :as cs]
     [czlab.xlib.core
-     :refer [flattenNil
+     :refer [flatnil
              trap!
              nowJTstamp
              nnz]]
@@ -81,7 +81,7 @@
   [vendor model]
 
   (let [pk (:pkey model)]
-    (str (fmtSQLId vendor (dbColname pk model)) "=?")))
+    (str (fmtSQLId vendor (dbcol pk model)) "=?")))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -104,7 +104,7 @@
                        (if (nil? v)
                          " is null " " =? "))))
              (strbf) filters)]
-    [(str wc) (flattenNil (vals filters))]))
+    [(str wc) (flatnil (vals filters))]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -384,7 +384,7 @@
                    (not (:auto fd))
                    (not (:system fd)))
             (do
-              (addDelim! sb1 "," (fmtSQLId vendor (dbColname fd)))
+              (addDelim! sb1 "," (fmtSQLId vendor (dbcol fd)))
               (addDelim! sb2 "," (if (nil? v) "null" "?"))
               (if (some? v) (conj! %1 v) %1))
             %1))
@@ -410,7 +410,7 @@
                    (not (:auto fd))
                    (not (:system fd)))
             (do
-              (addDelim! sb1 "," (fmtSQLId vendor (dbColname fd)))
+              (addDelim! sb1 "," (fmtSQLId vendor (dbcol fd)))
               (.append sb1 (if (nil? v) "=null" "=?"))
               (if (some? v) (conj! %1 v) %1))
             %1))
@@ -480,7 +480,7 @@
     [rc (doQuery vendor
                  conn
                  (str "select count(*) from "
-                      (fmtSQLId vendor (dbTablename model) ))
+                      (fmtSQLId vendor (dbtable model) ))
                  [])]
     (if (empty? rc)
       0
@@ -494,7 +494,7 @@
   [vendor conn model]
 
   (let [sql (str "delete from "
-                 (fmtSQLId vendor (dbTablename model) ))]
+                 (fmtSQLId vendor (dbtable model) ))]
     (sqlExec vendor conn sql [])
     nil))
 
@@ -509,7 +509,7 @@
     (doExec vendor
             conn
             (str "delete from "
-                 (->> (dbTablename mcz)
+                 (->> (dbtable mcz)
                       (fmtSQLId vendor ))
                  " where "
                  (fmtUpdateWhere vendor mcz))
@@ -532,13 +532,13 @@
                     vendor
                     conn
                     (str "insert into "
-                         (->> (dbTablename mcz)
+                         (->> (dbtable mcz)
                               (fmtSQLId vendor ))
                          " ("
                          s1
                          ") values (" s2 ")")
                     pms
-                    {:pkey (dbColname pke mcz)})]
+                    {:pkey (dbcol pke mcz)})]
           (if (empty? out)
             (dberr "rowid must be returned")
             (log/debug "Exec-with-out %s" out))
@@ -564,7 +564,7 @@
         (doExec vendor
                 conn
                 (str "update "
-                     (->> (dbTablename mcz)
+                     (->> (dbtable mcz)
                           (fmtSQLId vendor ))
                      " set "
                      sb1

@@ -18,10 +18,12 @@
   czlab.dbddl.drivers
 
   (:require
+    [czlab.xlib.core :refer [try!]]
     [czlab.xlib.logging :as log]
     [czlab.xlib.str
      :refer [lcase
              ucase
+             strbf
              strim
              hgl?
              addDelim!]]
@@ -456,7 +458,7 @@
   (let
     [fields (:fields model)
      pke (:pkey model)
-     bf (StringBuilder.)
+     bf (strbf)
      pkeys
      (persistent!
        (reduce
@@ -523,9 +525,9 @@
                        :qstr ""
                        :case-fn clojure.string/upper-case}
             *DDL_BVS* (atom {})]
-    (let [drops (StringBuilder.)
-          body (StringBuilder.)
-          ms (.getModels schema)]
+    (let [ms (.models schema)
+          drops (strbf)
+          body (strbf)]
       (doseq [[id model] ms
               :let [tbl (:table model)]
               :when (and (not (:abstract model))
