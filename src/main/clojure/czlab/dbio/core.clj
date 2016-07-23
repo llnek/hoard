@@ -94,6 +94,16 @@
 (def ^:dynamic *DDL_CFG* nil)
 (def ^:dynamic *DDL_BVS* nil)
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
+(defmacro now<ts>
+
+  "A java sql Timestamp"
+  ^Timestamp
+  []
+
+  `(java.sql.Timestamp. (.getTime (java.util.Date.))))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defn- cleanName
