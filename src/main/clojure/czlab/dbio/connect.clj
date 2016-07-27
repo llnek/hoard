@@ -70,7 +70,7 @@
     (when-not (.containsKey c hc)
       (log/debug "No db-pool in DBIO-thread-local, creating one")
       (->> (merge POOL_CFG options)
-           (dbpool jdbc )
+           (dbpool<> jdbc )
            (.put c hc )))
     (.get c hc)))
 
@@ -98,7 +98,7 @@
   [^DBAPI db]
 
   (let [how Connection/TRANSACTION_SERIALIZABLE]
-    (reifySQLr
+    (sqlr<>
       db
       #(with-open [c2 (openDB db {})] (% c2)))))
 
@@ -139,9 +139,7 @@
                         (merge cfg)))]
           (try
             (let
-              [rc (cb (reifySQLr
-                        db
-                        #(% c)))]
+              [rc (cb (sqlr<> db #(% c)))]
               (commit c)
               rc)
             (catch Throwable e#
@@ -171,7 +169,7 @@
           (getMetas [_] schema)
           (vendor [_] v)
           (finz [_] )
-          (open [_] (dbconnect jdbc)))]
+          (open [_] (dbconnect<> jdbc)))]
     (test-nonil "database-vendor" v)
     (reset! s (simSQLr db))
     (reset! t (txSQLr db))
@@ -186,7 +184,7 @@
   [^JDBCInfo jdbc schema & [options]]
 
   (let [pool (->> (merge POOL_CFG options)
-                  (dbpool jdbc ))
+                  (dbpool<> jdbc ))
         v (.vendor pool)
         s (atom nil)
         t (atom nil)

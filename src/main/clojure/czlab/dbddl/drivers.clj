@@ -23,7 +23,7 @@
     [czlab.xlib.str
      :refer [lcase
              ucase
-             strbf
+             strbf<>
              strim
              hgl?
              addDelim!]]
@@ -407,7 +407,7 @@
                      ") "
                      (genExec dbtype) "\n\n"))))
         b)
-      (StringBuilder.)
+      (strbf<>)
       (:indexes model))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -431,7 +431,7 @@
                       (cs/join "," ))
                  ")")))
         b)
-      (StringBuilder.)
+      (strbf<>)
       (:uniques model))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -458,7 +458,7 @@
   (let
     [fields (:fields model)
      pke (:pkey model)
-     bf (strbf)
+     bf (strbf<>)
      pkeys
      (persistent!
        (reduce
@@ -526,8 +526,8 @@
                        :case-fn clojure.string/upper-case}
             *DDL_BVS* (atom {})]
     (let [ms (.models schema)
-          drops (strbf)
-          body (strbf)]
+          drops (strbf<>)
+          body (strbf<>)]
       (doseq [[id model] ms
               :let [tbl (:table model)]
               :when (and (not (:abstract model))

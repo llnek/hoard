@@ -33,8 +33,8 @@
 ;;
 (def METAC
   (atom
-    (dbschema
-      (dbmodel Address
+    (dbschema<>
+      (dbmodel<> Address
         (dbfields
           {:addr1 { :size 200 :null false }
            :addr2 { :size 64}
@@ -47,7 +47,7 @@
            :i2 #{ :zip :country }
            :i3 #{ :state }
            :i4 #{ :zip } } ))
-      (dbmodel Person
+      (dbmodel<> Person
         (dbfields
           {:first_name { :null false }
            :last_name { :null false }
@@ -60,7 +60,7 @@
         (dbassocs
           {:addrs {:kind :O2M :other ::Address :cascade true}
            :spouse {:kind :O2O :other ::Person } }))
-      (dbmodel Employee
+      (dbmodel<> Employee
         (dbfields
           {:salary { :domain :Float :null false }
            :passcode { :domain :Password }
@@ -70,12 +70,12 @@
         (dbindexes {:i1 #{ :login } } )
         (dbassocs
           {:person {:kind :O2O :other ::Person } }))
-      (dbmodel Department
+      (dbmodel<> Department
         (dbfields
           {:dname { :null false } })
         (dbuniques
           {:u1 #{ :dname }} ))
-      (dbmodel Company
+      (dbmodel<> Company
         (dbfields
           {:revenue { :domain :Double :null false }
            :cname { :null false }
@@ -86,7 +86,7 @@
            :hq {:kind :O2O :other ::Address :cascade true}})
         (dbuniques
           {:u1 #{ :cname } } ))
-      (dbjoined EmpDepts Department Employee))))
+      (dbjoined<> EmpDepts Department Employee))))
 (def JDBC (atom nil))
 (def DB (atom nil))
 
@@ -96,7 +96,7 @@
   (let [dir (File. (System/getProperty "java.io.tmpdir"))
         db (str "" (System/currentTimeMillis))
         url (H2Db dir db "sa" "hello")
-        jdbc (dbspec
+        jdbc (dbspec<>
                {:driver H2-DRIVER
                 :url url
                 :user "sa"
@@ -118,7 +118,7 @@
   [login]
 
   (let [emp (-> (.get ^Schema @METAC ::Employee)
-                dbpojo)]
+                dbpojo<>)]
     (dbSetFlds*
       emp
       {:salary 1000000.00
@@ -133,7 +133,7 @@
   [cname]
 
   (let [c (-> (.get ^Schema @METAC ::Company)
-              dbpojo)]
+              dbpojo<>)]
     (dbSetFlds*
       c
       {:cname cname
@@ -146,7 +146,7 @@
   [dname]
 
   (-> (-> (.get ^Schema @METAC ::Department)
-          dbpojo)
+          dbpojo<>)
       (dbSetFld :dname dname)))
 
 
@@ -236,7 +236,7 @@
   [fname lname sex]
 
   (let [p (-> (-> (.get ^Schema @METAC ::Person)
-                  dbpojo)
+                  dbpojo<>)
               (dbSetFlds*
                 {:first_name fname
                  :last_name  lname

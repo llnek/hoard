@@ -20,22 +20,18 @@
   (:require
     [czlab.xlib.meta :refer [bytesClass charsClass]]
     [czlab.xlib.io :refer [readChars readBytes]]
+    [czlab.xlib.core :refer [flatnil trap! nnz]]
     [czlab.xlib.str
      :refer [sname
              ucase
              lcase
-             strbf
+             strbf<>
              hgl?
              addDelim!
              strim]]
     [czlab.xlib.logging :as log]
     [clojure.string :as cs]
-    [czlab.xlib.core
-     :refer [flatnil
-             trap!
-             nowJTstamp
-             nnz]]
-    [czlab.xlib.dates :refer [gmtCal]])
+    [czlab.xlib.dates :refer [gcal<gmt>]])
 
   (:use [czlab.dbio.core])
 
@@ -47,7 +43,7 @@
     [czlab.dbio
      Schema
      SQLr
-     DBIOError ]
+     DBIOError]
     [java.math
      BigDecimal
      BigInteger]
@@ -90,20 +86,21 @@
   "returns [sql-filter-string, values]"
   [vendor model filters]
 
-  (let [flds (:fields model)
-        wc (reduce
-             #(let [[k v] %2
-                    fd (flds k)
-                    c (if (nil? fd)
-                        (sname k)
-                        (:column fd))]
-                (addDelim!
-                  %1
-                  " and "
-                  (str (fmtSQLId vendor c)
-                       (if (nil? v)
-                         " is null " " =? "))))
-             (strbf) filters)]
+  (let
+    [flds (:fields model)
+     wc (reduce
+          #(let [[k v] %2
+                 fd (flds k)
+                 c (if (nil? fd)
+                     (sname k)
+                     (:column fd))]
+             (addDelim!
+               %1
+               " and "
+               (str (fmtSQLId vendor c)
+                    (if (nil? v)
+                      " is null " " =? "))))
+          (strbf<>)filters)]
     [(str wc) (flatnil (vals filters))]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -138,8 +135,8 @@
   [sqlType pos ^ResultSet rset]
 
   (condp == (int sqlType)
-    Types/TIMESTAMP (.getTimestamp rset (int pos) (gmtCal))
-    Types/DATE (.getDate rset (int pos) (gmtCal))
+    Types/TIMESTAMP (.getTimestamp rset (int pos) (gcal<gmt>))
+    Types/DATE (.getDate rset (int pos) (gcal<gmt>))
     (readCol pos rset)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -217,11 +214,11 @@
     Boolean (.setInt ps pos (if p 1 0))
     Double (.setDouble ps pos p)
     Float (.setFloat ps pos p)
-    Timestamp (.setTimestamp ps pos p (gmtCal))
-    Date (.setDate ps pos p (gmtCal))
+    Timestamp (.setTimestamp ps pos p (gcal<gmt>))
+    Date (.setDate ps pos p (gcal<gmt>))
     Calendar (.setTimestamp ps pos
                             (Timestamp. (.getTimeInMillis ^Calendar p))
-                            (gmtCal))
+                            (gcal<gmt>))
     (dberr! "Unsupported param-type: %s" (type p))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -283,9 +280,10 @@
 
   (let [sql (jiggleSQL vendor sqlstr)
         ps (if (insert? sql)
-             (.prepareStatement conn
-                                sql
-                                Statement/RETURN_GENERATED_KEYS)
+             (.prepareStatement
+               conn
+               sql
+               Statement/RETURN_GENERATED_KEYS)
              (.prepareStatement conn sql))]
     (log/debug "SQLStmt: %s" sql)
     (doseq [n (range 0 (count params))]
@@ -374,8 +372,8 @@
   [vendor obj flds]
 
   (let
-    [sb2 (strbf)
-     sb1 (strbf)
+    [sb2 (strbf<>)
+     sb1 (strbf<>)
      ps
      (reduce
        #(let [[k v] %2
@@ -384,8 +382,10 @@
                    (not (:auto fd))
                    (not (:system fd)))
             (do
-              (addDelim! sb1 "," (fmtSQLId vendor (dbcol fd)))
-              (addDelim! sb2 "," (if (nil? v) "null" "?"))
+              (addDelim! sb1
+                         "," (fmtSQLId vendor (dbcol fd)))
+              (addDelim! sb2
+                         "," (if (nil? v) "null" "?"))
               (if (some? v) (conj! %1 v) %1))
             %1))
        (transient [])
@@ -400,7 +400,7 @@
   [vendor obj flds]
 
   (let
-    [sb1 (strbf)
+    [sb1 (strbf<>)
      ps
      (reduce
        #(let [[k v] %2
@@ -410,7 +410,8 @@
                    (not (:auto fd))
                    (not (:system fd)))
             (do
-              (addDelim! sb1 "," (fmtSQLId vendor (dbcol fd)))
+              (addDelim! sb1
+                         "," (fmtSQLId vendor (dbcol fd)))
               (.append sb1 (if (nil? v) "=null" "=?"))
               (if (some? v) (conj! %1 v) %1))
             %1))
@@ -586,7 +587,7 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defn reifySQLr
+(defn sqlr<>
 
   "Create a SQLr"
   {:tag SQLr :no-doc true}

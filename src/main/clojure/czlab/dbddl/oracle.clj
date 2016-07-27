@@ -17,11 +17,12 @@
 
   czlab.dbddl.oracle
 
-  (:require [czlab.xlib.logging :as log])
+  (:require
+    [czlab.xlib.str :refer [strbf<>]]
+    [czlab.xlib.logging :as log])
 
   (:use [czlab.dbddl.drivers]
         [czlab.dbio.core]))
-
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;(set! *warn-on-reflection* true)
@@ -33,8 +34,10 @@
   ""
   [dbtype model field]
 
-  (let [s (gSQLId (str "S_" (:table model) "_" (:column field)))
-        t (gSQLId (str "T_" (:table model) "_" (:column field)))]
+  (let [s (gSQLId (str "S_"
+                       (:table model) "_" (:column field)))
+        t (gSQLId (str "T_"
+                       (:table model) "_" (:column field)))]
     (str "create sequence "
          s
          " start with 1 increment by 1"
@@ -82,7 +85,7 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defn- auto-xxx
+(defn- autoXXX
 
   [dbtype model fld]
 
@@ -101,7 +104,7 @@
 
   (if (maybeTrackFields model field)
     (genInteger dbtype field)
-    (auto-xxx dbtype model field)))
+    (autoXXX dbtype model field)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -113,7 +116,7 @@
 
   (if (maybeTrackFields model field)
     (genLong dbtype field)
-    (auto-xxx dbtype model field)))
+    (autoXXX dbtype model field)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -134,7 +137,7 @@
               (.append bd (createSeq dbtype model fld)))
             bd
             fields))
-        (StringBuilder.)
+        (strbf<>)
         (deref *DDL_BVS*)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
