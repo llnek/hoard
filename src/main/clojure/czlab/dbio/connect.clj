@@ -152,7 +152,7 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defn dbopen
+(defn dbopen<>
 
   "Open/access to a datasource"
   ^DBAPI
@@ -177,7 +177,7 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defn dbopen+
+(defn dbopen<+>
 
   "Open/access to a datasource using pooled connections"
   ^DBAPI

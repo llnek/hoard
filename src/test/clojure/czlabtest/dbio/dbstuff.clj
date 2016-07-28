@@ -104,7 +104,7 @@
     ;;(writeFile (File. dir "dbstuff.out") (dbgShowSchema @METAC))
     (reset! JDBC jdbc)
     (uploadDdl jdbc (getDDL @METAC :h2))
-    (reset! DB (dbopen+ jdbc @METAC )))
+    (reset! DB (dbopen<+> jdbc @METAC )))
   ;;(println "\n\n" (dbgShowSchema @METAC))
   (when (fn? f) (f)))
 
