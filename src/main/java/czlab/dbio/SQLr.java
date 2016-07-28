@@ -37,10 +37,10 @@ public interface SQLr {
   public Object findOne(Object modeldef, Object filters);
 
   /**/
-  public Object update(Object obj);
+  public int update(Object obj);
 
   /**/
-  public Object delete(Object obj);
+  public int delete(Object obj);
 
   /**/
   public Object insert(Object obj);
@@ -55,13 +55,13 @@ public interface SQLr {
   public Object execWithOutput(String sql, Iterable<?> params);
 
   /**/
-  public Object exec(String sql, Iterable<?> params);
+  public int exec(String sql, Iterable<?> params);
 
   /**/
   public int countAll(Object modeldef);
 
   /**/
-  public void purge(Object modeldef);
+  public int purge(Object modeldef);
 
   /**/
   public Schema  metas();

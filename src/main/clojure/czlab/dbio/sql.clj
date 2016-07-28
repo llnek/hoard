@@ -442,6 +442,7 @@
 (defn- doExec
 
   ""
+  ^long
   [vendor conn sql pms]
 
   (sqlExec vendor conn sql pms))
@@ -497,13 +498,14 @@
   (let [sql (str "delete from "
                  (fmtSQLId vendor (dbtable model) ))]
     (sqlExec vendor conn sql [])
-    nil))
+    0))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defn- doDelete
 
   ""
+  ^long
   [vendor conn obj]
 
   (if-some [mcz (gmodel obj)]
@@ -522,6 +524,7 @@
 (defn- doInsert
 
   ""
+  ^Object
   [vendor conn obj]
 
   (if-some [mcz (gmodel obj)]
@@ -554,6 +557,7 @@
 (defn- doUpdate
 
   ""
+  ^long
   [vendor conn obj]
 
   (if-some [mcz (gmodel obj)]
