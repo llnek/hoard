@@ -64,7 +64,7 @@
   [^JDBCInfo jdbc options]
 
   (let [^Map
-        c (-> (DBIOLocal/getCache)
+        c (-> (DBIOLocal/cache)
               (.get))
         hc (.id jdbc)]
     (when-not (.containsKey c hc)
@@ -156,7 +156,7 @@
 
   "Open/access to a datasource"
   ^DBAPI
-  [^JDBCInfo jdbc schema & [options]]
+  [^JDBCInfo jdbc _schema & [options]]
 
   (let [v (resolveVendor jdbc)
         s (atom nil)
@@ -166,7 +166,7 @@
           DBAPI
           (compositeSQLr [this] @t)
           (simpleSQLr [this] @s)
-          (getMetas [_] schema)
+          (schema [_] _schema)
           (vendor [_] v)
           (finz [_] )
           (open [_] (dbconnect<> jdbc)))]
@@ -181,7 +181,7 @@
 
   "Open/access to a datasource using pooled connections"
   ^DBAPI
-  [^JDBCInfo jdbc schema & [options]]
+  [^JDBCInfo jdbc _schema & [options]]
 
   (let [pool (->> (merge POOL_CFG options)
                   (dbpool<> jdbc ))
@@ -193,7 +193,7 @@
           DBAPI
           (compositeSQLr [this] @t)
           (simpleSQLr [this] @s)
-          (getMetas [_] schema)
+          (schema [_] _schema)
           (vendor [_] v)
           (finz [_] (.shutdown pool))
           (open [_] (.nextFree pool)))]

@@ -598,7 +598,7 @@
   [^DBAPI db runc]
   {:pre [(fn? runc)]}
 
-  (let [schema (.getMetas db)
+  (let [schema (.schema db)
         vendor (.vendor db)]
     (reify
 
