@@ -23,7 +23,7 @@
     [java.sql DriverManager Connection Statement])
 
   (:require
-    [czlab.xlib.core :refer [test-nonil test-nestr]]
+    [czlab.xlib.core :refer [test-some test-hgl]]
     [czlab.xlib.logging :as log]
     [clojure.string :as cs]
     [clojure.java.io :as io])
@@ -116,9 +116,9 @@
    ^String user
    ^String pwd]
 
-  (test-nonil "file-dir" dbFileDir)
-  (test-nestr "db-id" dbid)
-  (test-nestr "user" user)
+  (test-some "file-dir" dbFileDir)
+  (test-hgl "db-id" dbid)
+  (test-hgl "user" user)
 
   (let [url (io/file dbFileDir dbid)
         u (.getCanonicalPath url)
@@ -145,9 +145,9 @@
    ^String user
    ^String pwd]
 
-  (test-nonil "file-dir" dbFileDir)
-  (test-nestr "db-id" dbid)
-  (test-nestr "user" user)
+  (test-some "file-dir" dbFileDir)
+  (test-hgl "db-id" dbid)
+  (test-hgl "user" user)
 
   (let [url (io/file dbFileDir dbid)
         u (.getCanonicalPath url)

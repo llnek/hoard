@@ -18,7 +18,7 @@
   czlab.dbio.connect
 
   (:require
-    [czlab.xlib.core :refer [try! test-nonil]]
+    [czlab.xlib.core :refer [try! test-some]]
     [czlab.xlib.logging :as log])
 
   (:use [czlab.dbio.core]
@@ -170,7 +170,7 @@
           (vendor [_] v)
           (finz [_] )
           (open [_] (dbconnect<> jdbc)))]
-    (test-nonil "database-vendor" v)
+    (test-some "database-vendor" v)
     (reset! s (simSQLr db))
     (reset! t (txSQLr db))
     db))
@@ -197,7 +197,7 @@
           (vendor [_] v)
           (finz [_] (.shutdown pool))
           (open [_] (.nextFree pool)))]
-    (test-nonil "database-vendor" v)
+    (test-some "database-vendor" v)
     (reset! s (simSQLr db))
     (reset! t (txSQLr db))
     db))

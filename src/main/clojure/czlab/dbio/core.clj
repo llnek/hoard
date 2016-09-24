@@ -59,10 +59,9 @@
              hasNoCase?]]
     [czlab.xlib.core
      :refer [asFQKeyword
-             test-nonil
+             test-some
              cast?
              try!
-             trylet!
              trap!
              interject
              nnz
@@ -985,17 +984,18 @@
 
   (with-local-vars [rc false]
     (log/debug "testing table: %s" table)
-    (trylet!
-      [mt (.getMetaData conn)]
-      (with-open
-        [res (.getColumns mt
-                          nil
-                          nil
-                          (fmtSQLId conn table)
-                          nil)]
-        (when (and (some? res)
-                   (.next res))
-          (var-set rc true))))
+    (try!
+      (let
+        [mt (.getMetaData conn)]
+        (with-open
+          [res (.getColumns mt
+                            nil
+                            nil
+                            (fmtSQLId conn table)
+                            nil)]
+          (when (and (some? res)
+                     (.next res))
+            (var-set rc true)))))
     @rc))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -1022,16 +1022,17 @@
   [^Connection conn ^String table]
 
   (with-local-vars [rc false]
-    (trylet!
-      [sql (str
-             "SELECT COUNT(*) FROM  "
-             (fmtSQLId conn table))]
-      (with-open [stmt (.createStatement conn)
-                  res (.executeQuery stmt sql)]
-        (when (and (some? res)
-                   (.next res))
-          (var-set rc
-                   (> (.getInt res (int 1)) 0)))))
+    (try!
+      (let
+        [sql (str
+               "SELECT COUNT(*) FROM  "
+               (fmtSQLId conn table))]
+        (with-open [stmt (.createStatement conn)
+                    res (.executeQuery stmt sql)]
+          (when (and (some? res)
+                     (.next res))
+            (var-set rc
+                     (> (.getInt res (int 1)) 0))))))
     @rc))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -1111,7 +1112,7 @@
   [^JDBCInfo jdbc ^HikariDataSource impl]
 
   (let [dbv (resolveVendor jdbc)]
-    (test-nonil "database-vendor" dbv)
+    (test-some "database-vendor" dbv)
     (reify
 
       JDBCPool
