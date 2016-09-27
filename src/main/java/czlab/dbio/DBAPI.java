@@ -52,7 +52,7 @@ public interface DBAPI {
   /**
    * Clean up
    */
-  public void finz();
+  public void finx();
 }
 
 

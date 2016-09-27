@@ -9,9 +9,9 @@
 
     [czlab/czlab-xlib "1.0.0" ]
 
-    [com.zaxxer/HikariCP "2.4.7"]
+    [com.zaxxer/HikariCP "2.5.1"]
 
-    [org.postgresql/postgresql "9.4.1209.jre7" ]
+    [org.postgresql/postgresql "9.4.1211.jre7" ]
     [com.h2database/h2 "1.4.192" ]
 
     ;;[commons-dbutils/commons-dbutils "1.6" ]

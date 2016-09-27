@@ -97,28 +97,28 @@
   ^SQLr
   [^DBAPI db]
 
-  (let [how Connection/TRANSACTION_SERIALIZABLE]
+  (let [cfg {:isolation Connection/TRANSACTION_SERIALIZABLE}]
     (sqlr<>
       db
-      #(with-open [c2 (openDB db {})] (% c2)))))
+      #(with-open [c2 (openDB db cfg)] (% c2)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defn- undo
+(defmacro ^:private undo
 
   ""
-  [^Connection conn]
+  [c]
 
-  (try! (.rollback conn)))
+  `(try! (.rollback ~(with-meta c {:tag 'Connection}))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defn- commit
+(defmacro ^:private commit
 
   ""
-  [^Connection conn]
+  [c]
 
-  (.commit conn))
+  `(.commit ~(with-meta c {:tag 'Connection})))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -128,9 +128,7 @@
   ^Transactable
   [^DBAPI db]
 
-  (reify
-
-    Transactable
+  (reify Transactable
 
     (execWith [_ cb cfg]
       (with-open
@@ -155,52 +153,52 @@
 (defn dbopen<>
 
   "Open/access to a datasource"
-  ^DBAPI
-  [^JDBCInfo jdbc _schema & [options]]
+  {:tag DBAPI}
 
-  (let [v (resolveVendor jdbc)
-        s (atom nil)
-        t (atom nil)
-        db
-        (reify
-          DBAPI
-          (compositeSQLr [this] @t)
-          (simpleSQLr [this] @s)
-          (schema [_] _schema)
-          (vendor [_] v)
-          (finz [_] )
-          (open [_] (dbconnect<> jdbc)))]
-    (test-some "database-vendor" v)
-    (reset! s (simSQLr db))
-    (reset! t (txSQLr db))
-    db))
+  ([^JDBCInfo jdbc _schema] (dbopen<> jdbc _schema nil))
+  ([^JDBCInfo jdbc _schema options]
+   (let [v (resolveVendor jdbc)
+         s (atom nil)
+         t (atom nil)
+         db
+         (reify DBAPI
+           (compositeSQLr [this] @t)
+           (simpleSQLr [this] @s)
+           (schema [_] _schema)
+           (vendor [_] v)
+           (finx [_] )
+           (open [_] (dbconnect<> jdbc)))]
+     (test-some "database-vendor" v)
+     (reset! s (simSQLr db))
+     (reset! t (txSQLr db))
+     db)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defn dbopen<+>
 
   "Open/access to a datasource using pooled connections"
-  ^DBAPI
-  [^JDBCInfo jdbc _schema & [options]]
+  {:tag DBAPI}
 
-  (let [pool (->> (merge POOL_CFG options)
-                  (dbpool<> jdbc ))
-        v (.vendor pool)
-        s (atom nil)
-        t (atom nil)
-        db
-        (reify
-          DBAPI
-          (compositeSQLr [this] @t)
-          (simpleSQLr [this] @s)
-          (schema [_] _schema)
-          (vendor [_] v)
-          (finz [_] (.shutdown pool))
-          (open [_] (.nextFree pool)))]
-    (test-some "database-vendor" v)
-    (reset! s (simSQLr db))
-    (reset! t (txSQLr db))
-    db))
+  ([^JDBCInfo jdbc _schema] (dbopen<+> jdbc _schema nil))
+  ([^JDBCInfo jdbc _schema options]
+   (let [pool (->> (merge POOL_CFG options)
+                   (dbpool<> jdbc ))
+         v (.vendor pool)
+         s (atom nil)
+         t (atom nil)
+         db
+         (reify DBAPI
+           (compositeSQLr [this] @t)
+           (simpleSQLr [this] @s)
+           (schema [_] _schema)
+           (vendor [_] v)
+           (finx [_] (.shutdown pool))
+           (open [_] (.nextFree pool)))]
+     (test-some "database-vendor" v)
+     (reset! s (simSQLr db))
+     (reset! t (txSQLr db))
+     db)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;EOF

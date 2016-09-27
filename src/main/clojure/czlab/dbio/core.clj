@@ -17,6 +17,17 @@
 
   czlab.dbio.core
 
+  (:require
+    [czlab.xlib.format :refer [writeEdnString]]
+    [czlab.xlib.logging :as log]
+    [clojure.string :as cs]
+    [clojure.set :as cset]
+    [czlab.xlib.meta :refer [forname]])
+
+  (:use [flatland.ordered.set]
+        [czlab.xlib.core]
+        [czlab.xlib.str])
+
   (:import
     [com.zaxxer.hikari HikariConfig HikariDataSource]
     [clojure.lang
@@ -41,38 +52,7 @@
      Driver
      DriverManager
      DatabaseMetaData]
-    [java.lang Math])
-
-  (:require
-    [czlab.xlib.format :refer [writeEdnString]]
-    [czlab.xlib.str
-     :refer [lcase
-             ucase
-             hgl?
-             sname
-             lcase
-             ucase
-             strimAny
-             strim
-             embeds?
-             addDelim!
-             hasNoCase?]]
-    [czlab.xlib.core
-     :refer [asFQKeyword
-             test-some
-             cast?
-             try!
-             trap!
-             interject
-             nnz
-             juid
-             rootCause]]
-    [czlab.xlib.logging :as log]
-    [clojure.string :as cs]
-    [clojure.set :as cset]
-    [czlab.xlib.meta :refer [forname]])
-
-  (:use [flatland.ordered.set]))
+    [java.lang Math]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;(set! *warn-on-reflection* true)
@@ -96,7 +76,6 @@
 (defmacro now<ts>
 
   "A java sql Timestamp"
-  ^Timestamp
   []
 
   `(java.sql.Timestamp. (.getTime (java.util.Date.))))
@@ -114,36 +93,46 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defmacro set-oid
+
   ""
   {:no-doc true}
   [obj pkeyValue]
-  `(let [pk# (:pkey (gmodel ~obj))]
-     (assoc ~obj pk# ~pkeyValue)))
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;
-(defmacro gtype
-  ""
-  {:no-doc true}
-  [obj]
-  `(:id (:model (meta ~obj))))
+  `(let [o# ~obj
+         pk# (:pkey (gmodel o#))]
+     (assoc o# pk# ~pkeyValue)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defmacro gmodel
+
   ""
   {:no-doc true}
   [obj]
+
   `(:model (meta ~obj)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defmacro goid
+(defmacro gtype
+
   ""
   {:no-doc true}
   [obj]
-  `(let [pk# (:pkey (gmodel ~obj))]
-     (pk# ~obj)))
+
+  `(:id (gmodel ~obj)))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
+(defmacro goid
+
+  ""
+  {:no-doc true}
+  [obj]
+
+  `(let [o# ~obj
+         pk# (:pkey (gmodel o#))]
+     (pk# o#)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -152,69 +141,73 @@
   ""
   {:no-doc true
    :tag Schema}
-
   [model]
+
   (:schema (meta model)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defmulti fmtSQLId
   "Format SQL identifier"
-  ^String (fn [a & xs] (class a)))
+  {:tag String} (fn [a & xs] (class a)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defmethod fmtSQLId
 
   APersistentMap
-  [info idstr & [quote?]]
 
-  (let [ch (strim (:qstr info))
-        id (cond
-             (:ucs? info)
-             (ucase idstr)
-             (:lcs? info)
-             (lcase idstr)
-             :else idstr)]
-    (if (false? quote?)
-      id
-      (str ch id ch))))
+  ([info idstr] (fmtSQLId info idstr nil))
+  ([info idstr quote?]
+   (let [ch (strim (:qstr info))
+         id (cond
+              (:ucs? info)
+              (ucase idstr)
+              (:lcs? info)
+              (lcase idstr)
+              :else idstr)]
+     (if (false? quote?)
+       id
+       (str ch id ch)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defmethod fmtSQLId
 
   DBAPI
-  [^DBAPI db idstr & [quote?]]
 
-  (fmtSQLId (.vendor db) idstr quote?))
+  ([^DBAPI db idstr] (fmtSQLId db idstr nil))
+  ([^DBAPI db idstr quote?]
+   (fmtSQLId (.vendor db) idstr quote?)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defmethod fmtSQLId
 
   DatabaseMetaData
-  [^DatabaseMetaData mt idstr & [quote?]]
 
-  (let [ch (strim (.getIdentifierQuoteString mt))
-        id (cond
-             (.storesUpperCaseIdentifiers mt)
-             (ucase idstr)
-             (.storesLowerCaseIdentifiers mt)
-             (lcase idstr)
-             :else idstr)]
-    (if (false? quote?)
-      id
-      (str ch id ch))))
+  ([^DatabaseMetaData mt idstr] (fmtSQLId mt idstr nil))
+  ([^DatabaseMetaData mt idstr quote?]
+   (let [ch (strim (.getIdentifierQuoteString mt))
+         id (cond
+              (.storesUpperCaseIdentifiers mt)
+              (ucase idstr)
+              (.storesLowerCaseIdentifiers mt)
+              (lcase idstr)
+              :else idstr)]
+     (if (false? quote?)
+       id
+       (str ch id ch)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defmethod fmtSQLId
 
   Connection
-  [^Connection conn idstr & [quote?]]
 
-  (fmtSQLId (.getMetaData conn) idstr quote?))
+  ([^Connection conn idstr] (fmtSQLId conn idstr nil))
+  ([^Connection conn idstr quote?]
+   (fmtSQLId (.getMetaData conn) idstr quote?)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; have to be function , not macro as this is passed into another higher
@@ -222,7 +215,6 @@
 (defn- mergeMeta
 
   "Merge 2 meta maps"
-
   ^APersistentMap
   [m1 m2]
   {:pre [(map? m1) (or (nil? m2)(map? m2))]}
@@ -234,10 +226,10 @@
 (defn dbtag
 
   "The id for this model"
+  {:tag Keyword}
 
-  (^Keyword [model] (:id model))
-
-  (^Keyword [typeid schema]
+  ([model] (:id model))
+  ([typeid schema]
    {:pre [(some? schema)]}
    (dbtag (.get ^Schema schema typeid))))
 
@@ -246,10 +238,10 @@
 (defn dbtable
 
   "The table-name defined for this model"
+  ^String
 
-  (^String [model] (:table model))
-
-  (^String [typeid schema]
+  ([model] (:table model))
+  ([typeid schema]
    {:pre [(some? schema)]}
    (dbtable (.get ^Schema schema typeid))))
 
@@ -258,10 +250,10 @@
 (defn dbcol
 
   "The column-name defined for this field"
+  {:tag String}
 
-  (^String [fdef] (:column fdef))
-
-  (^String [fid model]
+  ([fdef] (:column fdef))
+  ([fid model]
    {:pre [(map? model)]}
    (dbcol (-> (:fields model)
               (get fid)))))
@@ -276,18 +268,14 @@
   {:pre [(map? cfg)]}
 
   (let [id (juid)]
-    (reify
-
-      JDBCInfo
+    (reify JDBCInfo
 
       (url [_] (or (:server cfg) (:url cfg)))
       (id [_]  (or (:id cfg) id))
-
       (loadDriver [this]
-        (when-some [s (.url this)]
-          (when (hgl? s)
+        (if-some [s (.url this)]
+          (if (hgl? s)
             (DriverManager/getDriver s))))
-
       (driver [_] (:driver cfg))
       (user [_] (:user cfg))
       (passwd [_] (str (:passwd cfg))))))
@@ -339,12 +327,12 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defn- fmtfkey
+(defmacro ^:private fmtfkey
 
   "For o2o & o2m relations"
   [tn rn]
 
-  (keyword (str "fk_" (name tn) "_" (name rn))))
+  `(keyword (str "fk_" (name ~tn) "_" (name ~rn))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -356,8 +344,7 @@
 
   (let [kw (keyword (lcase spec))]
     (if (contains? *DBTYPES* kw)
-      kw
-      nil)))
+      kw)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -368,7 +355,7 @@
   [^String url]
 
   (let [ss (.split url ":")]
-    (when
+    (if
       (> (alength ss) 1)
       (matchSpec (aget ss 1)))))
 
@@ -377,7 +364,6 @@
 ;;
 ;;(def JOINED-MODEL-MONIKER ::DBIOJoinedModel)
 ;;(def BASEMODEL-MONIKER ::DBIOBaseModel)
-
 (def ^:private PKEY-DEF
   {:column COL_ROWID
    :domain :Long
@@ -412,8 +398,7 @@
   "Define a data model"
   [modelname & body]
 
-  `(-> (dbobject<> ~(name modelname))
-       ~@body))
+  `(-> (dbobject<> ~(name modelname)) ~@body))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -424,7 +409,6 @@
   {:tag APersistentMap
    :no-doc true}
   [pojo lhs rhs]
-
   {:pre [(map? pojo)
          (keyword? lhs) (keyword? rhs)]}
 
@@ -479,15 +463,16 @@
   [pojo kvs fld]
 
   ;;merge new stuff onto old stuff
-  (let
-    [m (persistent!
-         (reduce
-           #(assoc! %1
-                    (first %2)
-                    (into (ordered-set) (last %2)))
-           (transient {})
-           kvs))]
-    (interject pojo fld #(merge (%2 %1) m))))
+  (->>
+    (persistent!
+      (reduce
+        #(assoc! %1
+                 (first %2)
+                 (into (ordered-set) (last %2)))
+        (transient {})
+        kvs))
+    #(merge (%2 %1) )
+    (interject pojo fld )))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -520,15 +505,15 @@
     (assert (some? (:column m)))
     (assert (some? (:domain m)))
     (assert (some? p))
-    (let
-      [p2 (-> (if-not (:auto m)
-                (dissoc p :auto)
-                (assoc p :auto true))
-              (assoc :size (or (:size m) 255))
-              (assoc :domain (:domain m))
-              (assoc :column (:column m)))
-       fs2 (assoc fs pk p2)]
-      (assoc pojo :fields fs2))))
+    (->>
+      (-> (if-not (:auto m)
+            (dissoc p :auto)
+            (assoc p :auto true))
+          (assoc :size (or (:size m) 255))
+          (assoc :domain (:domain m))
+          (assoc :column (:column m)))
+      (assoc fs pk)
+      (assoc pojo :fields))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -583,11 +568,7 @@
   [pojo flddefs]
   {:pre [(map? pojo) (map? flddefs)]}
 
-  (with-local-vars [rcmap pojo]
-    (doseq [[k v] flddefs]
-      (->> (dbfield @rcmap k v)
-           (var-set rcmap)))
-    @rcmap))
+  (reduce #(let [[k v] %2] (dbfield %1 k v)) pojo flddefs))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -613,29 +594,25 @@
   [pojo reldefs]
   {:pre [(map? pojo) (map? reldefs)]}
 
-  (with-local-vars [rcmap pojo]
-    (doseq [[k v] reldefs]
-      (->> (dbassoc @rcmap k v)
-           (var-set rcmap)))
-    @rcmap))
+  (reduce #(let [[k v] %2] (dbassoc %1 k v)) pojo reldefs))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defn- with-abstract
+(defmacro ^:private with-abstract
 
   ""
   [pojo flag]
 
-  (assoc pojo :abstract flag))
+  `(assoc ~pojo :abstract ~flag))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defn- withDBSystem
+(defmacro ^:private withDBSystem
 
   ""
   [pojo]
 
-  (assoc pojo :system true))
+  `(assoc ~pojo :system true))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Defining the base model here
@@ -652,12 +629,12 @@
   ""
   [pojo fld]
 
-  (if-some [fs (:fields (gmodel pojo))]
-    (if-some [f (get fs fld)]
-      (not (or (:auto f)
-               (not (:updatable f))))
-      false)
-    false))
+  (boolean
+    (if-some [f (-> (gmodel pojo)
+                    (:fields )
+                    (get fld))]
+        (not (or (:auto f)
+                 (not (:updatable f)))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -675,10 +652,9 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defmacro mkfkdef<>
+(defmacro ^:private mkfkdef<>
 
   ""
-  {:private true}
   [fid ktype]
 
   `(merge (dftFld<> ~fid)
@@ -696,29 +672,28 @@
   ;; 1st, create placeholder maps for each model,
   ;; to hold new fields from rels
   (with-local-vars
-    [phd (reduce
-           #(assoc! %1 %2 {})
-           (transient {}) (keys metas))
+    [phd (doall (zipmap (keys metas) (repeat {})))
      xs (transient {})]
     ;; as we find new relation fields,
     ;; add them to the placeholders
     (doseq [[_ m] metas
             :let [pkey (:pkey m)
-                  kt (:domain (pkey (:fields m)))
-                  rs (:rels m)]
+                  rs (:rels m)
+                  kt (:domain (pkey (:fields m)))]
             :when (and (not (:abstract m))
                        (not (empty? rs)))]
       (doseq [[_ r] rs
-              :let [rid (:other r)
-                    t (:kind r)
-                    fid (:fkey r)]
-              :when (or (= :O2O t)
-                        (= :O2M t))]
-        (var-set phd
-                 (assoc! @phd
-                         rid
-                         (->> (mkfkdef<> fid kt)
-                              (assoc (@phd rid) fid ))))))
+              :let [{:keys [other
+                            kind
+                            fkey]} r]
+              :when (or (= :O2O kind)
+                        (= :O2M kind))]
+        (var-set
+          phd
+          (assoc! @phd
+                  other
+                  (->> (mkfkdef<> fkey kt)
+                       (assoc (@phd other) fkey))))))
     ;; now walk through all the placeholder maps and merge those new
     ;; fields to the actual models
     (doseq [[k v] (persistent! @phd)
@@ -738,24 +713,25 @@
   ""
   [metas]
 
-  (with-local-vars
-    [mms (transient {})]
+  (with-local-vars [mms (transient {})]
     (doseq [[k m] metas
-            :let [fs (:fields m)
+            :let [{:keys [fields
+                          rels]} m
+                  fs (:fields m)
                   rs (:rels m)]
             :when (:mxm m)]
       (->>
         (persistent!
           (reduce
-            (fn [sum [side kee]]
-              (let [other (get-in rs [side :other])
-                    mz (metas other)
-                    pke ((:fields mz) (:pkey mz))
-                    d (merge
-                        (kee fs)
-                        (select-keys pke
-                                     [:domain :size]))]
-                (assoc! sum kee d)))
+            #(let
+               [[side kee] %2
+                other (get-in rs [side :other])
+                mz (metas other)
+                pke ((:fields mz) (:pkey mz))
+                d (merge (kee fs)
+                         (select-keys pke
+                                      [:domain :size]))]
+               (assoc! %1 kee d))
             (transient {})
             [[:lhs :lhs-rowid]
              [:rhs :rhs-rowid]]))
@@ -772,10 +748,10 @@
   "Create a map of fields keyed by the column name"
   [flds]
 
-  (persistent!
+  (pcoll!
     (reduce
-      (fn [m [_ v]]
-        (assoc! m (ucase (:column v)) v))
+      #(let [[_ v] %2]
+         (assoc! %1 (ucase (:column v)) v))
       (transient {})
       flds)))
 
@@ -787,18 +763,16 @@
    its (complete) set of fields keyed by column nam or field id"
   [metas schema]
 
-  (with-local-vars
-    [sum (transient {})]
-    (doseq [[k m] metas]
-      (let [flds (:fields m)
-            cols (colmapFields flds)]
-        (var-set sum
-                 (assoc! @sum
-                         k
-                         (with-meta m
-                                    {:schema schema
-                                     :columns cols } ) ))))
-    (persistent! @sum)))
+  (pcoll!
+    (reduce
+      #(let [[k m] %2]
+         (->> [schema (->> (:fields m)
+                           (colmapFields ))]
+              (zipmap [:schema :columns])
+              (with-meta m)
+              (assoc! %1 k)))
+      (transient {})
+      metas)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -811,18 +785,17 @@
   (let
     [data (atom {})
      sch (reify Schema
-           (get [_ id] (get @data id))
+           (get [_ id] (@data id))
            (models [_] @data))
-     ms (if (empty? models)
+     ms (if-not (empty? models)
+          (reduce
+            #(assoc! %1 (:id %2) %2)
+            (transient {})
+            models))
+     m2 (if (== 0 (count ms))
           {}
-          (persistent!
-            (reduce
-              #(assoc! %1 (:id %2) %2)
-              (transient {})
-              models)))
-     m2 (if (empty? ms)
-          {}
-          (-> (resolveAssocs ms)
+          (-> (pcoll! ms)
+              (resolveAssocs )
               (resolveMXMs )
               (metaModels sch)))]
     (reset! data m2)
@@ -845,7 +818,7 @@
                     {:TABLE (:table %2)
                      :DEFN %2
                      :META (meta %2)}))
-      (StringBuilder.)
+      (strbf<>)
       (vals (.models mc)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -861,21 +834,19 @@
      dv (.driver jdbc)
      url (.url jdbc)
      d (.loadDriver jdbc)
-     p (let [pps (Properties.)]
-         (if (hgl? user)
-           (doto pps
-             (.put "password" (str (.passwd jdbc)))
-             (.put "user" user)
-             (.put "username" user)))
-         pps)]
-    (when (nil? d)
+     p (Properties.)]
+    (if (hgl? user)
+      (doto p
+        (.put "password" (str (.passwd jdbc)))
+        (.put "user" user)
+        (.put "username" user)))
+    (if (nil? d)
       (dberr! "Can't load Jdbc Url: %s" url))
-    (when (and (hgl? dv)
-               (not= (-> d
-                         (.getClass)
-                         (.getName)) dv))
-      (log/warn "want %s, got %s"
-                dv(.getClass d)))
+    (if (and (hgl? dv)
+             (not= (-> d
+                       (.getClass)
+                       (.getName)) dv))
+      (log/warn "want %s, got %s" dv (class d)))
     (.connect d url p)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -889,13 +860,13 @@
 
   (let
     [url (.url jdbc)
-     ^Connection
      conn (if (hgl? (.user jdbc))
             (safeGetConn jdbc)
             (DriverManager/getConnection url))]
-    (when (nil? conn)
+    (if (nil? conn)
       (dberr! "Failed to connect: %s" url))
-    (doto conn
+    (doto ^Connection
+      conn
       (.setTransactionIsolation
         Connection/TRANSACTION_SERIALIZABLE))))
 
@@ -982,21 +953,15 @@
   Connection
   [^Connection conn ^String table]
 
-  (with-local-vars [rc false]
-    (log/debug "testing table: %s" table)
-    (try!
-      (let
-        [mt (.getMetaData conn)]
-        (with-open
-          [res (.getColumns mt
-                            nil
-                            nil
-                            (fmtSQLId conn table)
-                            nil)]
-          (when (and (some? res)
-                     (.next res))
-            (var-set rc true)))))
-    @rc))
+  (log/debug "testing table: %s" table)
+  (try!!
+    false
+    (let [mt (.getMetaData conn)]
+      (with-open
+        [res (.getColumns
+               mt nil nil
+               (fmtSQLId conn table) nil)]
+        (and (some? res) (.next res))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -1021,19 +986,16 @@
   Connection
   [^Connection conn ^String table]
 
-  (with-local-vars [rc false]
-    (try!
-      (let
-        [sql (str
-               "SELECT COUNT(*) FROM  "
-               (fmtSQLId conn table))]
-        (with-open [stmt (.createStatement conn)
-                    res (.executeQuery stmt sql)]
-          (when (and (some? res)
-                     (.next res))
-            (var-set rc
-                     (> (.getInt res (int 1)) 0))))))
-    @rc))
+  (try!!
+    false
+    (let
+      [sql (str "select count(*) from "
+                (fmtSQLId conn table))]
+      (with-open [stmt (.createStatement conn)
+                  res (.executeQuery stmt sql)]
+        (and (some? res)
+             (.next res)
+             (> (.getInt res (int 1)) 0))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -1047,24 +1009,22 @@
   (with-local-vars
     [pkeys #{} cms {}]
     (with-open
-      [rs (.getPrimaryKeys mt
-                           catalog
-                           schema table)]
+      [rs (.getPrimaryKeys
+            mt catalog schema table)]
       (loop [sum (transient #{})
              more (.next rs)]
         (if-not more
-          (var-set pkeys (persistent! sum))
+          (var-set pkeys (pcoll! sum))
           (recur
             (conj! sum (.getString rs (int 4)))
             (.next rs)))))
     (with-open
-      [rs (.getColumns mt
-                       catalog
-                       schema table "%")]
+      [rs (.getColumns
+            mt catalog schema table "%")]
       (loop [sum (transient {})
              more (.next rs)]
         (if-not more
-          (var-set cms (persistent! sum))
+          (var-set cms (pcoll! sum))
           (let [opt (not= (.getInt rs (int 11))
                           DatabaseMetaData/columnNoNulls)
                 n (.getString rs (int 4))
@@ -1113,9 +1073,7 @@
 
   (let [dbv (resolveVendor jdbc)]
     (test-some "database-vendor" dbv)
-    (reify
-
-      JDBCPool
+    (reify JDBCPool
 
       (shutdown [_]
         (log/debug "shutting down pool impl: %s" impl)
@@ -1155,7 +1113,7 @@
     ;;(log/debug "Driver: %s" dv)
     ;;(log/debug "Options: %s" options)
 
-    (when (hgl? dv) (forname dv))
+    (if (hgl? dv) (forname dv))
     (doto hc
           (.setPassword (str (.passwd jdbc)))
           (.setUsername (.user jdbc))
@@ -1170,19 +1128,17 @@
   ""
   [^String dbn ^Throwable e]
 
-  (if-some [ee (->> (rootCause e)
-                    (cast? SQLException ))]
-    (let [ec (.getErrorCode
-               ^SQLException ee)]
-      (cond
-        (and (embeds? (str dbn) "oracle")
-             (== 942 ec)
-             (== 1418 ec)
-             (== 2289 ec)(== 0 ec))
-        true
-        :else
-        (throw e)))
-    (throw e)))
+  (let [ee (cast? SQLException (rootCause e))
+        ec (some-> ee (.getErrorCode))]
+    (if
+      (and (embeds? (str dbn) "oracle")
+           (some? ec)
+           (== 942 ec)
+           (== 1418 ec)
+           (== 2289 ec)
+           (== 0 ec))
+      true
+      (throw e))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -1254,8 +1210,9 @@
   ""
   [obj]
 
-  `(let [pk# (:pkey (gmodel ~obj))]
-     (with-meta {pk# (goid ~obj)} (meta ~obj))))
+  `(let [o# ~obj
+         pk# (:pkey (gmodel o#))]
+     (with-meta {pk# (goid o#)} (meta o#))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -1293,8 +1250,7 @@
   [pojo & fvs]
 
   (reduce
-    (fn [p [f v]]
-      (assoc p f v))
+    #(assoc %1 (first %2) (last %2))
     pojo
     (partition 2 fvs)))
 
@@ -1327,9 +1283,9 @@
   "Get the relation definition"
   [model rid kind]
 
-  (if-some [r (get (:rels model) rid)]
-    (when (= (:kind r) kind)
-      r)))
+  (if-some
+    [r (get (:rels model) rid)]
+    (if (= (:kind r) kind) r)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -1355,10 +1311,9 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defmacro selectSide
+(defmacro ^:private selectSide
 
   ""
-  {:private true}
   [mxm obj]
 
   `(first (selectSide+ ~mxm  ~obj)))
@@ -1406,7 +1361,8 @@
   [ctx lhsObj]
   {:pre [(map? ctx)(map? lhsObj)]}
 
-  (when-some [r (dbioGetO2X ctx lhsObj :O2M)]
+  (if-some
+    [r (dbioGetO2X ctx lhsObj :O2M)]
     (-> ^SQLr
         (:with ctx)
         (.findSome (or (:cast ctx)
@@ -1431,7 +1387,7 @@
   ^APersistentVector
   [ctx lhsObj & rhsObjs]
 
-  (persistent!
+  (pcoll!
     (reduce
       #(conj! %1 (last (dbioSetO2X
                          ctx
@@ -1450,7 +1406,8 @@
   [ctx lhsObj]
   {:pre [(map? ctx) (map? lhsObj)]}
 
-  (when-some [r (dbioGetO2X ctx lhsObj :O2O)]
+  (if-some
+    [r (dbioGetO2X ctx lhsObj :O2O)]
     (-> ^SQLr
         (:with ctx)
         (.findOne (or (:cast ctx)
@@ -1561,7 +1518,6 @@
   ""
 
   ([ctx obj] (dbClrM2M ctx obj nil))
-
   ([ctx objA objB]
    {:pre [(some? objA)]}
     (let [^SQLr sqlr (:with ctx)
@@ -1606,7 +1562,7 @@
             t2 (or (:cast ctx) t)
             fs (:fields mm)
             tm (.get schema t2)]
-        (when (nil? tm)
+        (if (nil? tm)
           (dberr! "Unknown model: %s" t2))
         (.select
           sqlr
