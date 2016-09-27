@@ -672,7 +672,7 @@
   ;; 1st, create placeholder maps for each model,
   ;; to hold new fields from rels
   (with-local-vars
-    [phd (doall (zipmap (keys metas) (repeat {})))
+    [phd (transient (zipmap (keys metas) (repeat {})))
      xs (transient {})]
     ;; as we find new relation fields,
     ;; add them to the placeholders

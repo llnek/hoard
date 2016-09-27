@@ -108,7 +108,7 @@
   ;;(println "\n\n" (dbgShowSchema @METAC))
   (when (fn? f) (f)))
 
-(defn finz-test "" [] (.finz ^DBAPI @DB) true)
+(defn finz-test "" [] (.finx ^DBAPI @DB) true)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;

@@ -20,20 +20,13 @@
   (:require
     [czlab.xlib.meta :refer [bytesClass charsClass]]
     [czlab.xlib.io :refer [readChars readBytes]]
-    [czlab.xlib.core :refer [flatnil trap! nnz]]
-    [czlab.xlib.str
-     :refer [sname
-             ucase
-             lcase
-             strbf<>
-             hgl?
-             addDelim!
-             strim]]
     [czlab.xlib.logging :as log]
     [clojure.string :as cs]
     [czlab.xlib.dates :refer [gcal<gmt>]])
 
-  (:use [czlab.dbio.core])
+  (:use [czlab.dbio.core]
+        [czlab.xlib.core]
+        [czlab.xlib.str])
 
   (:import
     [java.util
@@ -76,14 +69,15 @@
   ""
   [vendor model]
 
-  (let [pk (:pkey model)]
-    (str (fmtSQLId vendor (dbcol pk model)) "=?")))
+  (str
+    (fmtSQLId vendor
+              (dbcol (:pkey model) model)) "=?"))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defn- sqlFilterClause
 
-  "returns [sql-filter-string, values]"
+  "[sql-filter-string, values]"
   [vendor model filters]
 
   (let
@@ -100,7 +94,7 @@
                (str (fmtSQLId vendor c)
                     (if (nil? v)
                       " is null " " =? "))))
-          (strbf<>)filters)]
+          (strbf<>) filters)]
     [(str wc) (flatnil (vals filters))]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -111,17 +105,18 @@
   ^Object
   [pos ^ResultSet rset]
 
-  (let [obj (.getObject rset (int pos))
-        ^InputStream
-        inp (condp instance? obj
-              Blob (.getBinaryStream ^Blob obj)
-              InputStream obj
-              nil)
-        ^Reader
-        rdr (condp instance? obj
-              Clob (.getCharacterStream ^Clob obj)
-              Reader obj
-              nil)]
+  (let
+    [obj (.getObject rset (int pos))
+     ^InputStream
+     inp (condp instance? obj
+           Blob (.getBinaryStream ^Blob obj)
+           InputStream obj
+           nil)
+     ^Reader
+     rdr (condp instance? obj
+           Clob (.getCharacterStream ^Clob obj)
+           Reader obj
+           nil)]
     (cond
       (some? rdr) (with-open [r rdr] (readChars r))
       (some? inp) (with-open [p inp] (readBytes p))
@@ -135,8 +130,10 @@
   [sqlType pos ^ResultSet rset]
 
   (condp == (int sqlType)
-    Types/TIMESTAMP (.getTimestamp rset (int pos) (gcal<gmt>))
-    Types/DATE (.getDate rset (int pos) (gcal<gmt>))
+    Types/TIMESTAMP (.getTimestamp
+                      rset (int pos) (gcal<gmt>))
+    Types/DATE (.getDate
+                 rset (int pos) (gcal<gmt>))
     (readCol pos rset)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -147,11 +144,11 @@
   [model row cn ct cv]
 
   ;;if column is not defined in the model, ignore it
-  (let [fdef (-> (:columns (meta model))
-                 (get (ucase cn)))]
-    (if (nil? fdef)
-      row
-      (assoc! row (:id fdef) cv))))
+  (if-some
+    [fdef (-> (:columns (meta model))
+              (get (ucase cn)))]
+    (assoc! row (:id fdef) cv)
+    row))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -170,24 +167,26 @@
   "Convert a jdbc row into object"
   [finj ^ResultSet rs ^ResultSetMetaData rsmeta]
 
-  (persistent!
+  (pcoll!
     (reduce
-      #(let [ct (.getColumnType rsmeta (int %2))]
+      #(let
+         [pos (int %2)
+          ct (.getColumnType rsmeta pos)]
          (finj %1
-               (.getColumnName rsmeta (int %2))
+               (.getColumnName rsmeta pos)
                ct
-               (readOneCol ct (int %2) rs)))
+               (readOneCol ct pos rs)))
       (transient {})
       (range 1 (inc (.getColumnCount rsmeta))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defn- insert?
+(defmacro ^:private insert?
 
   ""
-  [^String sql]
+  [sql]
 
-  (.startsWith (lcase (strim sql)) "insert"))
+  `(.startsWith (lcase (strim ~sql)) "insert"))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -234,7 +233,8 @@
          sql sqlstr]
     (if stop
       sql
-      (let [pos (.indexOf (lcase sql) target start)
+      (let [pos (.indexOf (lcase sql)
+                          target start)
             rc (if (< pos 0)
                  nil
                  [(.substring sql 0 pos)
@@ -278,13 +278,14 @@
   ^PreparedStatement
   [vendor ^Connection conn sqlstr params]
 
-  (let [sql (jiggleSQL vendor sqlstr)
-        ps (if (insert? sql)
-             (.prepareStatement
-               conn
-               sql
-               Statement/RETURN_GENERATED_KEYS)
-             (.prepareStatement conn sql))]
+  (let
+    [sql (jiggleSQL vendor sqlstr)
+     ps (if (insert? sql)
+          (.prepareStatement
+            conn
+            sql
+            Statement/RETURN_GENERATED_KEYS)
+          (.prepareStatement conn sql))]
     (log/debug "SQLStmt: %s" sql)
     (doseq [n (range 0 (count params))]
       (setBindVar ps (inc n) (nth params n)))
@@ -295,32 +296,33 @@
 (defn- handleGKeys
 
   ""
-  [^ResultSet rs cnt options]
+  [^ResultSet rs cnt args]
 
-  (let [rc (if (== cnt 1)
-             (.getObject rs 1)
-             (.getLong rs (str (:pkey options)))) ]
-    {:1 rc}))
+  {:1 (if (== cnt 1)
+        (.getObject rs 1)
+        (.getLong rs
+                  (str (:pkey args))))})
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defn- sqlExecWithOutput
 
   ""
-  [vendor conn sql pms options]
+  [vendor conn sql pms args]
 
-  (with-open [s (fmtStmt vendor conn sql pms)]
-    (when (> (.executeUpdate s) 0)
-      (with-open [rs (.getGeneratedKeys s)]
+  (with-open
+    [s (fmtStmt vendor conn sql pms)]
+    (if (> (.executeUpdate s) 0)
+      (with-open
+        [rs (.getGeneratedKeys s)]
         (let [cnt (if (nil? rs)
                     0
                     (-> (.getMetaData rs)
                         (.getColumnCount)))]
           (if (and (> cnt 0)
                    (.next rs))
-            (handleGKeys rs cnt options)
-            {}
-            ))))))
+            (handleGKeys rs cnt args)
+            {}))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -332,12 +334,12 @@
   (with-open
     [s (fmtStmt vendor conn sql pms)
      rs (.executeQuery s)]
-    (let [rsmeta (.getMetaData rs)]
+    (let [m (.getMetaData rs)]
       (loop [sum (transient [])
              ok (.next rs)]
         (if-not ok
-          (persistent! sum)
-          (recur (->> (post (func rs rsmeta))
+          (pcoll! sum)
+          (recur (->> (post (func rs m))
                       (conj! sum))
                  (.next rs)))))))
 
@@ -348,11 +350,12 @@
   ""
   [vendor conn sql pms]
 
-  (sqlSelect+ vendor
-              conn
-              sql
-              pms
-              (partial row2Obj stdInjtor) identity))
+  (sqlSelect+
+    vendor
+    conn
+    sql
+    pms
+    (partial row2Obj stdInjtor) identity))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
