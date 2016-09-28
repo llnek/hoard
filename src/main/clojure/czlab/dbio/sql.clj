@@ -129,12 +129,12 @@
   "Read column"
   [sqlType pos ^ResultSet rset]
 
-  (condp == (int sqlType)
-    Types/TIMESTAMP (.getTimestamp
-                      rset (int pos) (gcal<gmt>))
-    Types/DATE (.getDate
-                 rset (int pos) (gcal<gmt>))
-    (readCol pos rset)))
+  (let [c (gcal<gmt>)
+        pos (int pos)]
+    (condp == (int sqlType)
+      Types/TIMESTAMP (.getTimestamp rset pos c)
+      Types/DATE (.getDate rset pos c)
+      (readCol pos rset))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -393,7 +393,7 @@
             %1))
        (transient [])
        obj)]
-    [(str sb1) (str sb2) (persistent! ps)]))
+    [(str sb1) (str sb2) (pcoll! ps)]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -420,7 +420,7 @@
             %1))
        (transient [])
        obj)]
-    [(str sb1) (persistent! ps)]))
+    [(str sb1) (pcoll! ps)]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -534,23 +534,21 @@
     (let [pke (:pkey mcz)
           [s1 s2 pms]
           (insertFlds vendor obj (:fields mcz))]
-      (when (hgl? s1)
+      (if (hgl? s1)
         (let [out (doExec+
                     vendor
                     conn
                     (str "insert into "
                          (->> (dbtable mcz)
                               (fmtSQLId vendor ))
-                         " ("
-                         s1
-                         ") values (" s2 ")")
+                         " (" s1 ") values (" s2 ")")
                     pms
                     {:pkey (dbcol pke mcz)})]
           (if (empty? out)
             (dberr! "rowid must be returned")
             (log/debug "Exec-with-out %s" out))
           (let [n (:1 out)]
-            (when-not (number? n)
+            (if-not (number? n)
               (dberr! "rowid must be a Long"))
             (merge obj {pke  n})))))
     (dberr! "Unknown model for: %s" obj)))
@@ -574,9 +572,7 @@
                 (str "update "
                      (->> (dbtable mcz)
                           (fmtSQLId vendor ))
-                     " set "
-                     sb1
-                     " where "
+                     " set " sb1 " where "
                      (fmtUpdateWhere vendor mcz))
                 (conj pms (goid obj)))
         0))
@@ -584,28 +580,21 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defn- doExtraSQL
-
-  ""
-  ^String
-  [^String sql extra]
-
-  sql)
+(defn- doExtraSQL "" ^String [^String sql extra] sql)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defn sqlr<>
 
   "Create a SQLr"
-  {:tag SQLr :no-doc true}
+  {:tag SQLr
+   :no-doc true}
   [^DBAPI db runc]
   {:pre [(fn? runc)]}
 
   (let [schema (.schema db)
         vendor (.vendor db)]
-    (reify
-
-      SQLr
+    (reify SQLr
 
       (findSome [me typeid filters]
         (.findSome me typeid filters {} ))
@@ -618,7 +607,7 @@
 
       (findOne [me typeid filters]
         (let [rs (.findSome me typeid filters)]
-          (when-not (empty? rs) (first rs))))
+          (if-not (empty? rs) (first rs))))
 
       (findSome [_ typeid filters extraSQL]
         (if-some [mcz (.get schema typeid)]
