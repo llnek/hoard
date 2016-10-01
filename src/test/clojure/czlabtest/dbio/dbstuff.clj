@@ -16,7 +16,7 @@
 
   czlabtest.dbio.dbstuff
 
-  (:use [czlab.xlib.files :only [writeFile]]
+  (:use [czlab.xlib.io :only [writeFile]]
         [czlab.xlib.core]
         [czlab.dbddl.drivers]
         [czlab.dbio.connect]
