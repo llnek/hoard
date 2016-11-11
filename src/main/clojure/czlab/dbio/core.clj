@@ -17,42 +17,40 @@
 
   czlab.dbio.core
 
-  (:require
-    [czlab.xlib.format :refer [writeEdnString]]
-    [czlab.xlib.logging :as log]
-    [clojure.string :as cs]
-    [clojure.set :as cset]
-    [czlab.xlib.meta :refer [forname]])
+  (:require [czlab.xlib.format :refer [writeEdnString]]
+            [czlab.xlib.logging :as log]
+            [clojure.string :as cs]
+            [clojure.set :as cset]
+            [czlab.xlib.meta :refer [forname]])
 
   (:use [flatland.ordered.set]
         [czlab.xlib.core]
         [czlab.xlib.str])
 
-  (:import
-    [com.zaxxer.hikari HikariConfig HikariDataSource]
-    [clojure.lang
-     Keyword
-     APersistentMap
-     APersistentVector]
-    [java.util
-     HashMap
-     TimeZone
-     Properties
-     GregorianCalendar]
-    [czlab.dbio
-     DBAPI
-     Schema
-     DBIOError
-     SQLr
-     JDBCPool
-     JDBCInfo]
-    [java.sql
-     SQLException
-     Connection
-     Driver
-     DriverManager
-     DatabaseMetaData]
-    [java.lang Math]))
+  (:import [com.zaxxer.hikari HikariConfig HikariDataSource]
+           [clojure.lang
+            Keyword
+            APersistentMap
+            APersistentVector]
+           [java.util
+            HashMap
+            TimeZone
+            Properties
+            GregorianCalendar]
+           [czlab.dbio
+            DBAPI
+            Schema
+            DBIOError
+            SQLr
+            JDBCPool
+            JDBCInfo]
+           [java.sql
+            SQLException
+            Connection
+            Driver
+            DriverManager
+            DatabaseMetaData]
+           [java.lang Math]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;(set! *warn-on-reflection* true)
@@ -74,75 +72,53 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defmacro now<ts>
-
   "A java sql Timestamp"
   []
-
   `(java.sql.Timestamp. (.getTime (java.util.Date.))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defn- cleanName
-
   ""
   [s]
-
   (-> (cs/replace (name s) #"[^a-zA-Z0-9_-]" "")
       (cs/replace  #"-" "_")))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defmacro set-oid
+(defmacro gmodel
+  "" {:no-doc true} [obj] `(:model (meta ~obj)))
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
+(defmacro set-oid
   ""
   {:no-doc true}
   [obj pkeyValue]
-
   `(let [o# ~obj
          pk# (:pkey (gmodel o#))]
      (assoc o# pk# ~pkeyValue)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defmacro gmodel
-
-  ""
-  {:no-doc true}
-  [obj]
-
-  `(:model (meta ~obj)))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;
 (defmacro gtype
-
   ""
-  {:no-doc true}
-  [obj]
-
-  `(:id (gmodel ~obj)))
+  {:no-doc true} [obj] `(:id (gmodel ~obj)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defmacro goid
-
   ""
   {:no-doc true}
-  [obj]
-
-  `(let [o# ~obj
-         pk# (:pkey (gmodel o#))]
-     (pk# o#)))
+  [obj] `(let [o# ~obj pk# (:pkey (gmodel o#))] (pk# o#)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defn gschema
-
   ""
   {:no-doc true
    :tag Schema}
   [model]
-
   (:schema (meta model)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -213,21 +189,18 @@
 ;; have to be function , not macro as this is passed into another higher
 ;; function - merge.
 (defn- mergeMeta
-
   "Merge 2 meta maps"
   ^APersistentMap
   [m1 m2]
-  {:pre [(map? m1) (or (nil? m2)(map? m2))]}
-
+  {:pre [(map? m1)
+         (or (nil? m2)(map? m2))]}
   (merge m1 m2))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defn dbtag
-
   "The id for this model"
   {:tag Keyword}
-
   ([model] (:id model))
   ([typeid schema]
    {:pre [(some? schema)]}
@@ -236,10 +209,8 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defn dbtable
-
   "The table-name defined for this model"
   ^String
-
   ([model] (:table model))
   ([typeid schema]
    {:pre [(some? schema)]}
@@ -248,10 +219,8 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defn dbcol
-
   "The column-name defined for this field"
   {:tag String}
-
   ([fdef] (:column fdef))
   ([fid model]
    {:pre [(map? model)]}
@@ -261,21 +230,17 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defn dbspec<>
-
   "Basic jdbc parameters"
   ^JDBCInfo
   [cfg]
   {:pre [(map? cfg)]}
-
   (let [id (juid)]
     (reify JDBCInfo
-
       (url [_] (or (:server cfg) (:url cfg)))
       (id [_]  (or (:id cfg) id))
       (loadDriver [this]
-        (if-some [s (.url this)]
-          (if (hgl? s)
-            (DriverManager/getDriver s))))
+        (if-some+ [s (.url this)]
+          (DriverManager/getDriver s)))
       (driver [_] (:driver cfg))
       (user [_] (:user cfg))
       (passwd [_] (str (:passwd cfg))))))
@@ -302,19 +267,15 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defn dberr!
-
   "Throw a DBIOError execption"
   [fmt & more]
-
   (trap! DBIOError (str (apply format fmt more))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defn- maybeGetVendor
-
-  "Try to detect the database vendor"
+  "Detect the database vendor"
   [product]
-
   (let [fc #(embeds? %2 %1)
         lp (lcase product)]
     (condp fc lp
@@ -328,32 +289,25 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defmacro ^:private fmtfkey
-
   "For o2o & o2m relations"
   [tn rn]
-
   `(keyword (str "fk_" (name ~tn) "_" (name ~rn))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defn matchSpec
-
   "Ensure the database type is supported"
   ^Keyword
   [^String spec]
-
   (let [kw (keyword (lcase spec))]
-    (if (contains? *DBTYPES* kw)
-      kw)))
+    (if (contains? *DBTYPES* kw) kw)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defn matchUrl
-
   "From the jdbc url, get the database type"
   ^Keyword
   [^String url]
-
   (let [ss (.split url ":")]
     (if
       (> (alength ss) 1)
@@ -364,7 +318,9 @@
 ;;
 ;;(def JOINED-MODEL-MONIKER ::DBIOJoinedModel)
 ;;(def BASEMODEL-MONIKER ::DBIOBaseModel)
-(def ^:private PKEY-DEF
+(def
+  ^:private
+  PKEY-DEF
   {:column COL_ROWID
    :domain :Long
    :id :rowid
@@ -374,12 +330,10 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defn dbobject<>
-
+(defn dbdef<>
   "Define a generic model"
   ^APersistentMap
   [^String nm]
-
   {:table (cleanName nm)
    :id (asFQKeyword nm)
    :abstract false
@@ -389,29 +343,25 @@
    :indexes {}
    :uniques {}
    :rels {}
-   :fields {:rowid PKEY-DEF} })
+   :fields {:rowid PKEY-DEF}})
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defmacro dbmodel<>
-
   "Define a data model"
   [modelname & body]
-
-  `(-> (dbobject<> ~(name modelname)) ~@body))
+  `(-> (dbdef<> ~(name modelname)) ~@body))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defn withJoined
-
   "A special model with 2 relations,
    left hand side and right hand side. *internal only*"
   {:tag APersistentMap
    :no-doc true}
   [pojo lhs rhs]
   {:pre [(map? pojo)
-         (keyword? lhs) (keyword? rhs)]}
-
+         (isFQKeyword? lhs) (isFQKeyword? rhs)]}
   (let [a2 {:lhs {:kind :MXM
                   :other lhs
                   :fkey :lhs-rowid}
@@ -425,12 +375,9 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defmacro dbjoined<>
-
   "Define a joined data model"
   [modelname lhs rhs]
-  {:pre [(symbol? lhs)(symbol? rhs)]}
-
-  `(-> (dbobject<> ~(name modelname))
+  `(-> (dbdef<> ~(name modelname))
        (dbfields
          {:lhs-rowid {:column COL_LHS_ROWID
                       :domain :Long
@@ -440,60 +387,48 @@
                       :null false} })
        (dbuniques
          {:i1 #{ :lhs-rowid :rhs-rowid }})
-       (withJoined
-         (asFQKeyword ~(name lhs))
-         (asFQKeyword ~(name rhs)))))
+       (withJoined ~lhs ~rhs)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defn withTable
-
   "Set the table name"
   ^APersistentMap
   [pojo table]
   {:pre [(map? pojo)]}
-
   (assoc pojo :table (cleanName table)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defn- withXXXSets
-
   ""
   [pojo kvs fld]
-
   ;;merge new stuff onto old stuff
   (->>
-    (persistent!
-      (reduce
-        #(assoc! %1
-                 (first %2)
-                 (into (ordered-set) (last %2)))
-        (transient {})
-        kvs))
+    (preduce<map>
+      #(assoc! %1
+               (first %2)
+               (into (ordered-set) (last %2)))
+      kvs)
     #(merge (%2 %1) )
     (interject pojo fld )))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defn dbindexes
-
   "Set indexes to the model"
   ^APersistentMap
   [pojo indexes]
   {:pre [(map? pojo) (map? indexes)]}
-
   ;;indices = { :a #{ :f1 :f2} ] :b #{:f3 :f4} }
   (withXXXSets pojo indexes :indexes))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defn dbkey
-
   "Declare your own primary key"
   [pojo pke]
   {:pre [(map? pojo)(map? pke)]}
-
   (let
     [m (select-keys pke [:domain
                          :column

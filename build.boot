@@ -12,7 +12,7 @@
     [com.zaxxer/HikariCP "2.5.1"]
 
     [org.postgresql/postgresql "9.4.1211.jre7" ]
-    [com.h2database/h2 "1.4.192" ]
+    [com.h2database/h2 "1.4.193" ]
 
     ;;[commons-dbutils/commons-dbutils "1.6" ]
     ;;[com.jolbox/bonecp "0.8.0.RELEASE" ]
@@ -21,10 +21,10 @@
     [org.clojure/clojure "1.8.0" ]
 
     [com.cemerick/pomegranate "0.3.1" :scope "provided"]
-    [net.mikera/cljunit "0.4.1" :scope "provided"]
+    [net.mikera/cljunit "0.5.0" :scope "provided"]
     [junit/junit "4.12"  :scope "provided"]
 
-    [codox/codox "0.9.5" :scope "provided"]
+    [codox/codox "0.10.1" :scope "provided"]
   ]
 
   :source-paths #{"src/main/clojure" "src/main/java"}
@@ -35,14 +35,11 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(require
-  '[czlab.tpcl.boot
-    :as b
-    :refer [artifactID fp! ge]]
-  '[clojure.tools.logging :as log]
-  '[clojure.java.io :as io]
-  '[clojure.string :as cs]
-  '[czlab.xlib.antlib :as a])
+(require '[czlab.tpcl.boot :as b :refer [artifactID fp! ge]]
+         '[clojure.tools.logging :as log]
+         '[clojure.java.io :as io]
+         '[clojure.string :as cs]
+         '[czlab.xlib.antlib :as a])
 
 (import '[java.io File])
 
