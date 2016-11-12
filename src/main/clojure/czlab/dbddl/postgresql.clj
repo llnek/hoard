@@ -30,7 +30,6 @@
 (def POSTGRESQL-URL "jdbc:postgresql://{{host}}:{{port}}/{{db}}" )
 (def POSTGRESQL-DRIVER "org.postgresql.Driver")
 
-
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 ;; Postgresql
@@ -42,41 +41,29 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defmethod genCaldr
-
   Postgresql
-
   [dbtype field]
-
   (genTimestamp dbtype field))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defmethod genAutoInteger
-
   Postgresql
-
   [dbtype model field]
-
   (genColDef dbtype (genCol field) "serial" false nil))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defmethod genAutoLong
-
   Postgresql
-
   [dbtype model field]
-
   (genColDef dbtype (genCol field) "bigserial" false nil))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defmethod genDrop
-
   Postgresql
-
   [dbtype model]
-
   (str "drop table if exists "
        (gtable model)
        " cascade "

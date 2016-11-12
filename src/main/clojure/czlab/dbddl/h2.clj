@@ -17,19 +17,17 @@
 
   czlab.dbddl.h2
 
-  (:import
-    [czlab.dbio DBIOError]
-    [java.io File]
-    [java.sql DriverManager Connection Statement])
-
-  (:require
-    [czlab.xlib.core :refer [test-some test-hgl]]
-    [czlab.xlib.logging :as log]
-    [clojure.string :as cs]
-    [clojure.java.io :as io])
+  (:require [czlab.xlib.core :refer [test-some test-hgl]]
+            [czlab.xlib.logging :as log]
+            [clojure.string :as cs]
+            [clojure.java.io :as io])
 
   (:use [czlab.dbddl.drivers]
-        [czlab.dbio.core]))
+        [czlab.dbio.core])
+
+  (:import [czlab.dbio DBIOError]
+           [java.io File]
+           [java.sql DriverManager Connection Statement]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;(set! *warn-on-reflection* true)
@@ -54,11 +52,8 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defmethod genAutoInteger
-
   H2
-
   [dbtype model field]
-
   (str (getPad dbtype)
        (genCol field)
        " "
@@ -70,11 +65,8 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defmethod genAutoLong
-
   H2
-
   [dbtype model field]
-
   (str (getPad dbtype)
        (genCol field)
        " "
@@ -86,21 +78,15 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defmethod genBegin
-
   H2
-
   [_ model]
-
   (str "create cached table " (gtable model) " (\n" ))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defmethod genDrop
-
   H2
-
   [dbtype model]
-
   (str "drop table "
        (gtable model)
        " if exists cascade" (genExec dbtype) "\n\n"))
@@ -108,20 +94,17 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defn H2Db
-
   "Create a H2 database"
-
   [dbDir ^String dbid ^String user ^String pwd]
 
   (test-some "file-dir" dbDir)
   (test-hgl "db-id" dbid)
   (test-hgl "user" user)
 
-  (let [url (io/file dbDir dbid)
+  (let [url (doto (io/file dbDir dbid) (.mkdirs))
         u (.getCanonicalPath url)
         dbUrl (cs/replace H2-FILE-URL "{{path}}" u)]
     (log/debug "Creating H2: %s" dbUrl)
-    (.mkdir url)
     (with-open [c1 (DriverManager/getConnection dbUrl user pwd)]
       (.setAutoCommit c1 true)
       (with-open [s (.createStatement c1)]
@@ -134,19 +117,14 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defn closeH2Db
-
   "Close an existing H2 database"
+  [dbDir ^String dbid ^String user ^String pwd]
 
-  [^File dbFileDir
-   ^String dbid
-   ^String user
-   ^String pwd]
-
-  (test-some "file-dir" dbFileDir)
+  (test-some "file-dir" dbDir)
   (test-hgl "db-id" dbid)
   (test-hgl "user" user)
 
-  (let [url (io/file dbFileDir dbid)
+  (let [url (io/file dbDir dbid)
         u (.getCanonicalPath url)
         dbUrl (cs/replace H2-FILE-URL "{{path}}" u)]
     (log/debug "Closing H2: %s" dbUrl)

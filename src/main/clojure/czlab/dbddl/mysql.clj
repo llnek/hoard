@@ -37,21 +37,15 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defmethod genEnd
-
   MySQL
-
   [dbtype model]
-
   (str "\n) type=InnoDB" (genExec dbtype) "\n\n"))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defmethod genAutoInteger
-
   MySQL
-
   [dbtype model field]
-
   (str (getPad dbtype)
        (genCol field)
        " "
@@ -61,11 +55,8 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defmethod genAutoLong
-
   MySQL
-
   [dbtype model field]
-
   (str (getPad dbtype)
        (genCol field)
        " "
@@ -75,11 +66,8 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defmethod genDrop
-
   MySQL
-
   [dbtype model]
-
   (str "drop table if exists "
        (gtable model)
        (genExec dbtype) "\n\n"))

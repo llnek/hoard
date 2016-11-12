@@ -17,25 +17,22 @@
 
   czlab.dbio.connect
 
-  (:require
-    [czlab.xlib.core :refer [try! test-some]]
-    [czlab.xlib.logging :as log])
+  (:require [czlab.xlib.logging :as log])
 
   (:use [czlab.dbio.core]
+        [czlab.xlib.core]
         [czlab.dbio.sql])
 
-  (:import
-    [java.sql Connection]
-    [czlab.dbio
-     DBAPI
-     SQLr
-     Schema
-     JDBCPool
-     JDBCInfo
-     DBIOLocal
-     Transactable]
-    [java.util Map]))
-
+  (:import [java.sql Connection]
+           [czlab.dbio
+            DBAPI
+            SQLr
+            Schema
+            JDBCPool
+            JDBCInfo
+            DBIOLocal
+            Transactable]
+           [java.util Map]))
 
 ;;The calculation of pool size in order to avoid deadlock is a
 ;;fairly simple resource allocation formula:
@@ -43,7 +40,6 @@
 ;;Where Tn is the maximum number of threads,
 ;;and Cm is the maximum number of simultaneous connections
 ;;held by a single thread.
-
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;(set! *warn-on-reflection* true)
@@ -58,11 +54,9 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defn- registerJdbcTL
-
   "Add a thread-local db pool"
   ^JDBCPool
   [^JDBCInfo jdbc options]
-
   (let [^Map
         c (-> (DBIOLocal/cache)
               (.get))
@@ -77,11 +71,9 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defn- openDB
-
   "Connect to a database"
   ^Connection
   [^DBAPI db cfg]
-
   (let [how (or (:isolation cfg)
                 Connection/TRANSACTION_SERIALIZABLE)
         auto? (not (false? (:auto? cfg)))]
@@ -92,11 +84,9 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defn- simSQLr
-
   "Non transactional SQL object"
   ^SQLr
   [^DBAPI db]
-
   (let [cfg {:isolation Connection/TRANSACTION_SERIALIZABLE}]
     (sqlr<>
       db
@@ -105,57 +95,44 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defmacro ^:private undo
-
-  ""
-  [c]
-
-  `(try! (.rollback ~(with-meta c {:tag 'Connection}))))
+  "" [c] `(try! (.rollback ~(with-meta c {:tag 'Connection}))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defmacro ^:private commit
-
-  ""
-  [c]
-
-  `(.commit ~(with-meta c {:tag 'Connection})))
+  "" [c] `(.commit ~(with-meta c {:tag 'Connection})))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defn- txSQLr
-
   "A composite supports transactions"
   ^Transactable
   [^DBAPI db]
-
   (reify Transactable
-
     (execWith [_ cb cfg]
       (with-open
         [c (openDB db
                    (->> {:auto? false}
                         (merge cfg)))]
-          (try
-            (let
-              [rc (cb (sqlr<> db #(% c)))]
-              (commit c)
-              rc)
-            (catch Throwable e#
-              (undo c)
-              (log/warn e# "")
-              (throw e#)))))
-
+        (try
+          (let
+            [rc (cb (sqlr<> db #(% c)))]
+            (commit c)
+            rc)
+          (catch Throwable e#
+            (undo c)
+            (log/warn e# "")
+            (throw e#)))))
     (execWith [this cb]
       (.execWith this cb {}))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defn dbopen<>
-
   "Open/access to a datasource"
   {:tag DBAPI}
 
-  ([^JDBCInfo jdbc _schema] (dbopen<> jdbc _schema nil))
+  ([jdbc _schema] (dbopen<> jdbc _schema nil))
   ([^JDBCInfo jdbc _schema options]
    (let [v (resolveVendor jdbc)
          s (atom nil)
@@ -176,11 +153,10 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defn dbopen<+>
-
   "Open/access to a datasource using pooled connections"
   {:tag DBAPI}
 
-  ([^JDBCInfo jdbc _schema] (dbopen<+> jdbc _schema nil))
+  ([jdbc _schema] (dbopen<+> jdbc _schema nil))
   ([^JDBCInfo jdbc _schema options]
    (let [pool (->> (merge POOL_CFG options)
                    (dbpool<> jdbc ))

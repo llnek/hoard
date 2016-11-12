@@ -17,11 +17,11 @@
 
   czlab.dbddl.oracle
 
-  (:require
-    [czlab.xlib.str :refer [strbf<>]]
-    [czlab.xlib.logging :as log])
+  (:require [czlab.xlib.str :refer [strbf<>]]
+            [czlab.xlib.logging :as log])
 
   (:use [czlab.dbddl.drivers]
+        [czlab.xlib.core]
         [czlab.dbio.core]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -30,10 +30,8 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defn- createSeq
-
   ""
   [dbtype model field]
-
   (let [s (gSQLId (str "S_"
                        (:table model) "_" (:column field)))
         t (gSQLId (str "T_"
@@ -69,10 +67,8 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defn- maybeTrackFields
-
   ""
   [model field]
-
   (if (or (= "12c+" (*DDL_CFG* :db-version))
           (= "12c" (*DDL_CFG* :db-version)))
     false
@@ -86,9 +82,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defn- autoXXX
-
   [dbtype model fld]
-
   (str (getPad dbtype)
        (genCol fld)
        " "
@@ -97,11 +91,8 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defmethod genAutoInteger
-
   Oracle
-
   [dbtype model field]
-
   (if (maybeTrackFields model field)
     (genInteger dbtype field)
     (autoXXX dbtype model field)))
@@ -109,11 +100,8 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defmethod genAutoLong
-
   Oracle
-
   [dbtype model field]
-
   (if (maybeTrackFields model field)
     (genLong dbtype field)
     (autoXXX dbtype model field)))
@@ -121,33 +109,27 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defmethod genEndSQL
-
   Oracle
-
   [dbtype]
-
   (if (or (= "12c+" (*DDL_CFG* :db-version))
           (= "12c" (*DDL_CFG* :db-version)))
     ""
-    (str
-      (reduce
-        (fn [bd [model fields]]
-          (reduce
-            (fn [^StringBuilder bd [_ fld]]
-              (.append bd (createSeq dbtype model fld)))
-            bd
-            fields))
-        (strbf<>)
-        (deref *DDL_BVS*)))))
+    (sreduce<>
+      (fn [bd [model fields]]
+        (reduce
+          (fn [bd [_ fld]]
+            (.append ^StringBuilder
+                     bd
+                     (createSeq dbtype model fld)))
+          bd
+          fields))
+      (deref *DDL_BVS*))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defmethod genDrop
-
   Oracle
-
   [dbtype model]
-
   (str "drop table "
        (gtable model)
        " cascade constraints purge"

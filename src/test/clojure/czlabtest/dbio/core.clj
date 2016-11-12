@@ -27,7 +27,7 @@
         [czlab.dbddl.h2]
         [clojure.test])
 
-  (:import [czlab.dbio Transactable SQLr Schema DBAPI]
+  (:import [czlab.dbio Transactable JDBCInfo SQLr Schema DBAPI]
            [java.io File]
            [java.util GregorianCalendar Calendar]))
 
@@ -401,12 +401,93 @@
 
   (is (do (initTest nil) true))
 
+  (is (some? (now<ts>)))
+
+  (is (let [db (dbopen<+> @JDBC @METAC)
+            url (.url ^JDBCInfo @JDBC)
+            c (.compositeSQLr db)
+            s (.simpleSQLr db)
+            h (.schema db)
+            v (.vendor db)
+            conn (.open db)
+            a (fmtSQLId db "hello")
+            b (fmtSQLId conn "hello")
+            id (dbtag ::Person h)
+            t (dbtable ::Person h)
+            m (.get ^Schema h ::Person)
+            cn (dbcol :iq m)
+            ks1 (matchSpec "h2")
+            ks2 (matchUrl url)]
+        (try
+          (and (some? c)
+               (some? s)
+               (inst? Schema h)
+               (map? v)
+               (some? conn)
+               (= a b)
+               (= id ::Person)
+               (= t "Person")
+               (= "iq" cn)
+               (= ks1 ks2))
+          (finally
+            (.close conn)
+            (.finx db)))))
+
+  (is (let [db (dbopen<> @JDBC @METAC)
+            url (.url ^JDBCInfo @JDBC)
+            c (.compositeSQLr db)
+            s (.simpleSQLr db)
+            h (.schema db)
+            v (.vendor db)
+            conn (.open db)
+            a (fmtSQLId db "hello")
+            b (fmtSQLId conn "hello")
+            id (dbtag ::Person h)
+            t (dbtable ::Person h)
+            m (.get ^Schema h ::Person)
+            cn (dbcol :iq m)
+            ks1 (matchSpec "h2")
+            ks2 (matchUrl url)]
+        (try
+          (and (some? c)
+               (some? s)
+               (inst? Schema h)
+               (map? v)
+               (some? conn)
+               (= a b)
+               (= id ::Person)
+               (= t "Person")
+               (= "iq" cn)
+               (= ks1 ks2))
+          (finally
+            (.close conn)
+            (.finx db)))))
+
+  (is (let [c (dbconnect<> @JDBC)]
+        (try
+          (map? (loadTableMeta c "Person"))
+          (finally (.close c)))))
+
+  (is (testConnect? @JDBC))
+
+  (is (map? (resolveVendor @JDBC)))
+
+  (is (tableExist? @JDBC "Person"))
+
+  (is (let [p (dbpool<> @JDBC)]
+        (try
+          (tableExist? p "Person")
+          (finally
+            (.shutdown p)))))
+
   ;; basic CRUD
   ;;
 
   (is (let [m (createPerson "joe" "blog" "male")
             r (:rowid m)]
         (> r 0)))
+
+  (is (rowExist? @JDBC "Person"))
 
   (is (let [m (createEmp "joe" "blog" "male" "joeb")
             r (:rowid m)]

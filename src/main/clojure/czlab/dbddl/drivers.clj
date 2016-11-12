@@ -91,9 +91,7 @@
    (let [f  (:case-fn *DDL_CFG*)
          ch (:qstr *DDL_CFG*)
          id (f idstr)]
-     (if (false? quote?)
-       id
-       (str ch id ch)))))
+     (if (false? quote?) id (str ch id ch)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;

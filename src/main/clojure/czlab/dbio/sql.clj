@@ -53,10 +53,8 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defn- fmtUpdateWhere
-
   ""
   [vendor model]
-
   (str
     (fmtSQLId vendor
               (dbcol (:pkey model) model)) "=?"))
@@ -64,13 +62,11 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defn- sqlFilterClause
-
   "[sql-filter-string, values]"
   [vendor model filters]
-
   (let
     [flds (:fields model)
-     wc (reduce
+     wc (sreduce<>
           #(let [[k v] %2
                  fd (flds k)
                  c (if (nil? fd)
@@ -82,17 +78,15 @@
                (str (fmtSQLId vendor c)
                     (if (nil? v)
                       " is null " " =? "))))
-          (strbf<>) filters)]
-    [(str wc) (flatnil (vals filters))]))
+          filters)]
+    [wc (flatnil (vals filters))]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defn- readCol
-
   "Read column value, handling blobs"
   ^Object
   [pos ^ResultSet rset]
-
   (let
     [obj (.getObject rset (int pos))
      ^InputStream
@@ -113,10 +107,8 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defn- readOneCol
-
   "Read column"
   [sqlType pos ^ResultSet rset]
-
   (let [c (gcal<gmt>)
         pos (int pos)]
     (condp == (int sqlType)
@@ -127,10 +119,8 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defn- modelInjtor
-
   "Row is a transient object"
   [model row cn ct cv]
-
   ;;if column is not defined in the model, ignore it
   (if-some
     [fdef (-> (:columns (meta model))
@@ -141,48 +131,38 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defn- stdInjtor
-
   "Generic resultset, no model defined
    Row is a transient object"
   [row cn ct cv]
-
   (assoc! row (keyword cn) cv))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defn- row2Obj
-
   "Convert a jdbc row into object"
   [finj ^ResultSet rs ^ResultSetMetaData rsmeta]
-
-  (pcoll!
-    (reduce
-      #(let
-         [pos (int %2)
-          ct (.getColumnType rsmeta pos)]
-         (finj %1
-               (.getColumnName rsmeta pos)
-               ct
-               (readOneCol ct pos rs)))
-      (transient {})
-      (range 1 (inc (.getColumnCount rsmeta))))))
+  (preduce<map>
+    #(let
+       [pos (int %2)
+        ct (.getColumnType rsmeta pos)]
+       (finj %1
+             (.getColumnName rsmeta pos)
+             ct
+             (readOneCol ct pos rs)))
+    (range 1 (inc (.getColumnCount rsmeta)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defmacro ^:private insert?
-
   ""
   [sql]
-
   `(.startsWith (lcase (strim ~sql)) "insert"))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defn- setBindVar
-
   ""
   [^PreparedStatement ps pos p]
-
   (condp instance? p
     String (.setString ps pos p)
     Long (.setLong ps pos p)
@@ -211,10 +191,8 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defn- mssqlTweakSqlstr
-
   ""
   [^String sqlstr token cmd]
-
   (loop [target (sname token)
          start 0
          stop false
@@ -240,11 +218,9 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defn- jiggleSQL
-
   ""
   ^String
   [vendor ^String sqlstr]
-
   (let [sql (strim sqlstr)
         lcs (lcase sql)]
     (if (= SQLServer (:id vendor))
@@ -261,11 +237,9 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defn- fmtStmt
-
   ""
   ^PreparedStatement
   [vendor ^Connection conn sqlstr params]
-
   (let
     [sql (jiggleSQL vendor sqlstr)
      ps (if (insert? sql)
@@ -282,10 +256,8 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defn- handleGKeys
-
   ""
   [^ResultSet rs cnt args]
-
   {:1 (if (== cnt 1)
         (.getObject rs 1)
         (.getLong rs
@@ -294,10 +266,8 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defn- sqlExecWithOutput
-
   ""
   [vendor conn sql pms args]
-
   (with-open
     [s (fmtStmt vendor conn sql pms)]
     (if (> (.executeUpdate s) 0)
@@ -315,10 +285,8 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defn- sqlSelect+
-
   ""
   [vendor conn sql pms func post]
-
   (with-open
     [s (fmtStmt vendor conn sql pms)
      rs (.executeQuery s)]
@@ -334,10 +302,8 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defn- sqlSelect
-
   ""
   [vendor conn sql pms]
-
   (sqlSelect+
     vendor
     conn
@@ -348,25 +314,21 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defn- sqlExec
-
   ""
   [vendor conn sql pms]
-
   (with-open [s (fmtStmt vendor conn sql pms)]
     (.executeUpdate s)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defn- insertFlds
-
   "Format sql string for insert"
   [vendor obj flds]
-
   (let
     [sb2 (strbf<>)
      sb1 (strbf<>)
      ps
-     (reduce
+     (preduce<vec>
        #(let [[k v] %2
               fd (get flds k)]
           (if (and (some? fd)
@@ -379,21 +341,18 @@
                          "," (if (nil? v) "null" "?"))
               (if (some? v) (conj! %1 v) %1))
             %1))
-       (transient [])
        obj)]
-    [(str sb1) (str sb2) (pcoll! ps)]))
+    [(str sb1) (str sb2) ps]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defn- updateFlds
-
   "Format sql string for update"
   [vendor obj flds]
-
   (let
     [sb1 (strbf<>)
      ps
-     (reduce
+     (preduce<vec>
        #(let [[k v] %2
               fd (get flds k)]
           (if (and (some? fd)
@@ -406,45 +365,36 @@
               (.append sb1 (if (nil? v) "=null" "=?"))
               (if (some? v) (conj! %1 v) %1))
             %1))
-       (transient [])
        obj)]
-    [(str sb1) (pcoll! ps)]))
+    [(str sb1) ps]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defn- postFmtModelRow
-
   ""
   [model obj]
-
   (with-meta obj {:model model}))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defn- doExec+
-
   ""
   [vendor conn sql pms options]
-
   (sqlExecWithOutput vendor conn sql pms options))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defn- doExec
-
   ""
   ^long
   [vendor conn sql pms]
-
   (sqlExec vendor conn sql pms))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defn- doQuery+
-
   ""
   [vendor conn sql pms model]
-
   (sqlSelect+ vendor
               conn
               sql
@@ -456,19 +406,15 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defn- doQuery
-
   ""
   [vendor conn sql pms]
-
   (sqlSelect vendor conn sql pms))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defn- doCount
-
   ""
   [vendor conn model]
-
   (let
     [rc (doQuery vendor
                  conn
@@ -482,10 +428,8 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defn- doPurge
-
   ""
   [vendor conn model]
-
   (let [sql (str "delete from "
                  (fmtSQLId vendor (dbtable model) ))]
     (sqlExec vendor conn sql [])
@@ -494,11 +438,9 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defn- doDelete
-
   ""
   ^long
   [vendor conn obj]
-
   (if-some [mcz (gmodel obj)]
     (doExec vendor
             conn
@@ -513,11 +455,9 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defn- doInsert
-
   ""
   ^Object
   [vendor conn obj]
-
   (if-some [mcz (gmodel obj)]
     (let [pke (:pkey mcz)
           [s1 s2 pms]
@@ -544,11 +484,9 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defn- doUpdate
-
   ""
   ^long
   [vendor conn obj]
-
   (if-some [mcz (gmodel obj)]
     (let [[sb1 pms]
           (updateFlds vendor
@@ -573,13 +511,11 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defn sqlr<>
-
   "Create a SQLr"
   {:tag SQLr
    :no-doc true}
   [^DBAPI db runc]
   {:pre [(fn? runc)]}
-
   (let [schema (.schema db)
         vendor (.vendor db)]
     (reify SQLr

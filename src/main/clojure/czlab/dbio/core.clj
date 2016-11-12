@@ -97,8 +97,7 @@
   {:no-doc true}
   [obj pkeyValue]
   `(let [o# ~obj
-         pk# (:pkey (gmodel o#))]
-     (assoc o# pk# ~pkeyValue)))
+         pk# (:pkey (gmodel o#))] (assoc o# pk# ~pkeyValue)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -143,9 +142,7 @@
               (:lcs? info)
               (lcase idstr)
               :else idstr)]
-     (if (false? quote?)
-       id
-       (str ch id ch)))))
+     (if (false? quote?) id (str ch id ch)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -163,7 +160,7 @@
 
   DatabaseMetaData
 
-  ([^DatabaseMetaData mt idstr] (fmtSQLId mt idstr nil))
+  ([mt idstr] (fmtSQLId mt idstr nil))
   ([^DatabaseMetaData mt idstr quote?]
    (let [ch (strim (.getIdentifierQuoteString mt))
          id (cond
@@ -172,9 +169,7 @@
               (.storesLowerCaseIdentifiers mt)
               (lcase idstr)
               :else idstr)]
-     (if (false? quote?)
-       id
-       (str ch id ch)))))
+     (if (false? quote?) id (str ch id ch)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -182,7 +177,7 @@
 
   Connection
 
-  ([^Connection conn idstr] (fmtSQLId conn idstr nil))
+  ([conn idstr] (fmtSQLId conn idstr nil))
   ([^Connection conn idstr quote?]
    (fmtSQLId (.getMetaData conn) idstr quote?)))
 
@@ -309,7 +304,7 @@
   "From the jdbc url, get the database type"
   ^Keyword
   [^String url]
-  (let [ss (.split url ":")]
+  (if-some [ss (.split (str url) ":")]
     (if
       (> (alength ss) 1)
       (matchSpec (aget ss 1)))))
@@ -828,11 +823,13 @@
   (log/debug "testing table: %s" table)
   (try!!
     false
-    (let [mt (.getMetaData conn)]
+    (let [dbv (resolveVendor conn)
+          mt (.getMetaData conn)
+          s (if (= (:id dbv) :oracle) "%")]
       (with-open
         [res (.getColumns
-               mt nil nil
-               (fmtSQLId conn table) nil)]
+               mt nil s
+               (fmtSQLId conn table false) "%")]
         (and (some? res) (.next res))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -905,11 +902,11 @@
                        :pkey (contains? @pkeys n) })
               (.next rs))))))
     (with-meta @cms
-               {:supportsGetGeneratedKeys
+               {:supportsGetGeneratedKeys?
                 (.supportsGetGeneratedKeys mt)
                 :primaryKeys
                 @pkeys
-                :supportsTransactions
+                :supportsTransactions?
                 (.supportsTransactions mt) })))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -921,7 +918,7 @@
   (let [dbv (resolveVendor conn)
         mt (.getMetaData conn)
         catalog nil
-        schema (if (= (:id dbv) :oracle) "%" nil)
+        schema (if (= (:id dbv) :oracle) "%")
         tbl (fmtSQLId conn table false)]
     ;; not good, try mixed case... arrrrrrrrrrhhhhhhhhhhhhhh
     ;;rs = m.getTables( catalog, schema, "%", null)
@@ -963,21 +960,23 @@
 ;;
 (defn dbpool<>
   "Create a db connection pool"
-  ^JDBCPool
-  [^JDBCInfo jdbc options]
-  (let [options (or options {})
-        dv (.driver jdbc)
-        hc (HikariConfig.) ]
-    ;;(log/debug "URL: %s"  (.url jdbc))
-    ;;(log/debug "Driver: %s" dv)
-    ;;(log/debug "Options: %s" options)
-    (if (hgl? dv) (forname dv))
-    (doto hc
-          (.setPassword (str (.passwd jdbc)))
-          (.setUsername (.user jdbc))
-          (.setJdbcUrl (.url jdbc)))
-    (log/debug "[hikari]\n%s" (.toString hc))
-    (makePool<> jdbc (HikariDataSource. hc))))
+  {:tag JDBCPool}
+
+  ([jdbc] (dbpool<> jdbc nil))
+  ([^JDBCInfo jdbc options]
+   (let [options (or options {})
+         dv (.driver jdbc)
+         hc (HikariConfig.) ]
+     ;;(log/debug "URL: %s"  (.url jdbc))
+     ;;(log/debug "Driver: %s" dv)
+     ;;(log/debug "Options: %s" options)
+     (if (hgl? dv) (forname dv))
+     (doto hc
+       (.setPassword (str (.passwd jdbc)))
+       (.setUsername (.user jdbc))
+       (.setJdbcUrl (.url jdbc)))
+     (log/debug "[hikari]\n%s" (.toString hc))
+     (makePool<> jdbc (HikariDataSource. hc)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
