@@ -25,7 +25,7 @@ public class ClojureJUnit extends ClojureTest {
   @Override
   public List<String> namespaces() {
     return Arrays.asList(new String[] {
-      "czlabtest.dbio.dbstuff"
+      "czlabtest.dbio.core"
     });
   }
 }

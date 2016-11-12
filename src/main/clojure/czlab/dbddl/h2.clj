@@ -111,20 +111,17 @@
 
   "Create a H2 database"
 
-  [^File dbFileDir
-   ^String dbid
-   ^String user
-   ^String pwd]
+  [dbDir ^String dbid ^String user ^String pwd]
 
-  (test-some "file-dir" dbFileDir)
+  (test-some "file-dir" dbDir)
   (test-hgl "db-id" dbid)
   (test-hgl "user" user)
 
-  (let [url (io/file dbFileDir dbid)
+  (let [url (io/file dbDir dbid)
         u (.getCanonicalPath url)
         dbUrl (cs/replace H2-FILE-URL "{{path}}" u)]
     (log/debug "Creating H2: %s" dbUrl)
-    (.mkdir dbFileDir)
+    (.mkdir url)
     (with-open [c1 (DriverManager/getConnection dbUrl user pwd)]
       (.setAutoCommit c1 true)
       (with-open [s (.createStatement c1)]

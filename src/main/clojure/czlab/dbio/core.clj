@@ -19,6 +19,7 @@
 
   (:require [czlab.xlib.format :refer [writeEdnString]]
             [czlab.xlib.logging :as log]
+            [clojure.java.io :as io]
             [clojure.string :as cs]
             [clojure.set :as cset]
             [czlab.xlib.meta :refer [forname]])
@@ -333,9 +334,10 @@
 (defn dbdef<>
   "Define a generic model"
   ^APersistentMap
-  [^String nm]
-  {:table (cleanName nm)
-   :id (asFQKeyword nm)
+  [modelName]
+  {:pre [(isFQKeyword? modelName)]}
+  {:table (cleanName (name modelName))
+   :id modelName
    :abstract? false
    :system? false
    :mxm? false
@@ -350,7 +352,7 @@
 (defmacro dbmodel<>
   "Define a data model"
   [modelname & body]
-  `(-> (dbdef<> ~(name modelname)) ~@body))
+  `(-> (dbdef<> ~modelname) ~@body))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -377,14 +379,14 @@
 (defmacro dbjoined<>
   "Define a joined data model"
   [modelname lhs rhs]
-  `(-> (dbdef<> ~(name modelname))
+  `(-> (dbdef<> ~modelname)
        (dbfields
          {:lhs-rowid {:column COL_LHS_ROWID
                       :domain :Long
-                      :null false}
+                      :null? false}
           :rhs-rowid {:column COL_RHS_ROWID
                       :domain :Long
-                      :null false} })
+                      :null? false} })
        (dbuniques
          {:i1 #{ :lhs-rowid :rhs-rowid }})
        (withJoined ~lhs ~rhs)))
@@ -533,7 +535,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Defining the base model here
 (comment
-(dbmodel<> DBIOBaseModel
+(dbmodel<> ::DBIOBaseModel
   (with-abstract true)
   (withDBSystem)
   (dbfields {:rowid PKEY-DEF })))
@@ -553,7 +555,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (comment
-(dbmodel<> DBIOJoinedModel
+(dbmodel<> ::DBIOJoinedModel
   (with-abstract true)
   (withDBSystem)
   (dbfields
@@ -570,7 +572,7 @@
   ""
   [fid ktype]
   `(merge (dftFld<> ~fid)
-          {:rel-key true :domain ~ktype }))
+          {:rel-key? true :domain ~ktype }))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -687,8 +689,7 @@
             models))
      m2 (if (== 0 (count ms))
           {}
-          (-> (pcoll! ms)
-              (resolveAssocs )
+          (-> (resolveAssocs ms)
               (resolveMXMs )
               (metaModels sch)))]
     (reset! data m2)
@@ -900,7 +901,7 @@
                       (keyword cn)
                       {:column n
                        :sql-type ctype
-                       :null opt
+                       :null? opt
                        :pkey (contains? @pkeys n) })
               (.next rs))))))
     (with-meta @cms

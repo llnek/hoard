@@ -17,47 +17,35 @@
 
   czlab.dbio.sql
 
-  (:require
-    [czlab.xlib.meta :refer [bytesClass charsClass]]
-    [czlab.xlib.io :refer [readChars readBytes]]
-    [czlab.xlib.logging :as log]
-    [clojure.string :as cs]
-    [czlab.xlib.dates :refer [gcal<gmt>]])
+  (:require [czlab.xlib.meta :refer [bytesClass charsClass]]
+            [czlab.xlib.io :refer [readChars readBytes]]
+            [czlab.xlib.logging :as log]
+            [clojure.string :as cs]
+            [czlab.xlib.dates :refer [gcal<gmt>]])
 
   (:use [czlab.dbio.core]
         [czlab.xlib.core]
         [czlab.xlib.str])
 
-  (:import
-    [java.util
-     Calendar
-     TimeZone
-     GregorianCalendar]
-    [czlab.dbio
-     Schema
-     SQLr
-     DBIOError]
-    [java.math
-     BigDecimal
-     BigInteger]
-    [java.io
-     Reader
-     InputStream]
-    [czlab.dbio DBAPI]
-    [czlab.xlib XData]
-    [java.sql
-     ResultSet
-     Types
-     SQLException
-     Date
-     Timestamp
-     Blob
-     Clob
-     Statement
-     Connection
-     PreparedStatement
-     DatabaseMetaData
-     ResultSetMetaData]))
+  (:import [java.util Calendar TimeZone GregorianCalendar]
+           [czlab.dbio Schema SQLr DBIOError]
+           [java.math BigDecimal BigInteger]
+           [java.io Reader InputStream]
+           [czlab.dbio DBAPI]
+           [czlab.xlib XData]
+           [java.sql
+            ResultSet
+            Types
+            SQLException
+            Date
+            Timestamp
+            Blob
+            Clob
+            Statement
+            Connection
+            PreparedStatement
+            DatabaseMetaData
+            ResultSetMetaData]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;(set! *warn-on-reflection* true)
@@ -382,8 +370,8 @@
        #(let [[k v] %2
               fd (get flds k)]
           (if (and (some? fd)
-                   (not (:auto fd))
-                   (not (:system fd)))
+                   (not (:auto? fd))
+                   (not (:system? fd)))
             (do
               (addDelim! sb1
                          "," (fmtSQLId vendor (dbcol fd)))
@@ -409,9 +397,9 @@
        #(let [[k v] %2
               fd (get flds k)]
           (if (and (some? fd)
-                   (:updatable fd)
-                   (not (:auto fd))
-                   (not (:system fd)))
+                   (:updatable? fd)
+                   (not (:auto? fd))
+                   (not (:system? fd)))
             (do
               (addDelim! sb1
                          "," (fmtSQLId vendor (dbcol fd)))

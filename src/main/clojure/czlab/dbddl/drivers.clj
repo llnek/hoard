@@ -176,7 +176,7 @@
   ^String
   [_]
 
-  `(if (:use-sep *DDL_CFG*) DDL_SEP ""))
+  `(if (:use-sep? *DDL_CFG*) DDL_SEP ""))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -257,7 +257,7 @@
     (str (getPad dbtype)
          (genCol field)
          (str " " typedef " ")
-         (nullClause dbtype (:null field))
+         (nullClause dbtype (:null? field))
          (if (hgl? dft) (str " default " dft) ""))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -468,10 +468,10 @@
                   :Date (genDate dbtype fld)
                   :Calendar (genCaldr dbtype fld)
                   :Boolean (genBool dbtype fld)
-                  :Int (if (:auto fld)
+                  :Int (if (:auto? fld)
                          (genAutoInteger dbtype model fld)
                          (genInteger dbtype fld))
-                  :Long (if (:auto fld)
+                  :Long (if (:auto? fld)
                           (genAutoLong dbtype model fld)
                           (genLong dbtype fld))
                   :Double (genDouble dbtype fld)
@@ -521,7 +521,7 @@
   [^Schema schema dbID & [dbver]]
 
   (binding [*DDL_CFG* {:db-version (strim dbver)
-                       :use-sep true
+                       :use-sep? true
                        :qstr ""
                        :case-fn clojure.string/upper-case}
             *DDL_BVS* (atom {})]
@@ -530,7 +530,7 @@
           body (strbf<>)]
       (doseq [[id model] ms
               :let [tbl (:table model)]
-              :when (and (not (:abstract model))
+              :when (and (not (:abstract? model))
                          (hgl? tbl))]
         (log/debug "model id: %s, table: %s" (name id) tbl)
         (.append drops (genDrop dbID model))
