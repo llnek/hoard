@@ -17,25 +17,14 @@
 
   czlab.dbddl.drivers
 
-  (:require
-    [czlab.xlib.core :refer [try!]]
-    [czlab.xlib.logging :as log]
-    [czlab.xlib.str
-     :refer [lcase
-             ucase
-             strbf<>
-             strim
-             hgl?
-             addDelim!]]
-    [clojure.string :as cs])
+  (:require [czlab.xlib.logging :as log]
+            [clojure.string :as cs])
 
-  (:use [czlab.dbio.core])
+  (:use [czlab.dbio.core]
+        [czlab.xlib.core]
+        [czlab.xlib.str])
 
-  (:import
-    [czlab.dbio
-     Schema
-     DBAPI
-     DBIOError]))
+  (:import [czlab.dbio Schema DBAPI DBIOError]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;(set! *warn-on-reflection* true)
@@ -94,129 +83,97 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defn gSQLId
-
   "Format SQL identifier"
+  {:tag String}
 
-  ^String
-  [idstr & [quote?]]
-
-  (let [f  (:case-fn *DDL_CFG*)
-        ch (:qstr *DDL_CFG*)
-        id (f idstr)]
-    (if (false? quote?)
-      id
-      (str ch id ch))))
+  ([idstr] (gSQLId idstr nil))
+  ([idstr quote?]
+   (let [f  (:case-fn *DDL_CFG*)
+         ch (:qstr *DDL_CFG*)
+         id (f idstr)]
+     (if (false? quote?)
+       id
+       (str ch id ch)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defn gtable
-
   "Get the table name (quoted) of this model"
+  {:tag String}
 
-  ^String
-  [model & [quote?]]
-  {:pre [(map? model)]}
-
-  (gSQLId (:table model) quote?))
+  ([model] (gtable model nil))
+  ([model quote?]
+   {:pre [(map? model)]}
+   (gSQLId (:table model) quote?)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defn gcolumn
-
   "Get the column name (quoted) of this field"
-  ^String
-  [field & [quote?]]
-  {:pre [(map? field)]}
+  {:tag String}
 
-  (gSQLId (:column field) quote?))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;
-(defn- gcn
-
-  "Get column name"
-  [fields fid]
-
-  (genCol (get fields fid)))
+  ([field] (gcolumn field nil))
+  ([field quote?]
+   {:pre [(map? field)]}
+   (gSQLId (:column field) quote?)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defmacro getNotNull "" ^String [_] "not null")
+(defmacro ^:private gcn
+  "Get column name" [fields fid] `(genCol (get ~fields ~fid)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defmacro getNull "" ^String [_] "null")
+(defmacro getNotNull "" [_] "not null")
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defn getPad
+(defmacro getNull "" [_] "null")
 
-  ""
-  {:no-doc true
-   :tag String}
-
-  [_] "  ")
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
+(defmacro getPad "" {:no-doc true} [_] "  ")
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defmacro nullClause
-
   ""
-  ^String
   [dbtype opt?]
-
   `(let [d# ~dbtype]
-    (if ~opt? (getNull d#) (getNotNull d#))))
+     (if ~opt? (getNull d#) (getNotNull d#))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defmacro genSep
-
-  ""
-  ^String
-  [_]
-
-  `(if (:use-sep? *DDL_CFG*) DDL_SEP ""))
+  "" [_] `(if (:use-sep? *DDL_CFG*) DDL_SEP ""))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defmethod genExec
-
   :default
-
   [dbtype]
-
   (str ";\n" (genSep dbtype)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defmethod genDrop
-
   :default
-
   [dbtype model]
-
   (str "drop table "
        (gtable model) (genExec dbtype) "\n\n"))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defmethod genBegin
-
   :default
-
   [_ model]
-
   (str "create table " (gtable model) " (\n"))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defmethod genEnd
-
   :default
-
   [dbtype model]
-
   (str "\n) " (genExec dbtype) "\n\n"))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -230,11 +187,8 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defmethod genIndex
-
   :default
-
   [model xn]
-
   (gSQLId (str (:table model) "_" xn)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -248,11 +202,9 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defn genColDef
-
   ""
   ^String
   [dbtype typedef field]
-
   (let [dft (first (:dft field))]
     (str (getPad dbtype)
          (genCol field)
@@ -263,36 +215,24 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defmethod genBytes
-
   :default
-
   [dbtype field]
-
   (genColDef dbtype (getBlobKwd dbtype) field))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defmethod genString
-
   :default
-
   [dbtype field]
-
   (genColDef dbtype
-             (str (getStringKwd dbtype)
-                  "(" (:size field) ")")
-             field))
+             (str (getStringKwd dbtype) "(" (:size field) ")") field))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defmethod genInteger
-
   :default
-
   [dbtype field]
-
-  (genColDef dbtype
-             (getIntKwd dbtype) field))
+  (genColDef dbtype (getIntKwd dbtype) field))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -301,35 +241,23 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defmethod genDouble
-
   :default
-
   [dbtype field]
-
-  (genColDef dbtype
-             (getDoubleKwd dbtype) field))
+  (genColDef dbtype (getDoubleKwd dbtype) field))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defmethod genFloat
-
   :default
-
   [dbtype field]
-
-  (genColDef dbtype
-             (getFloatKwd dbtype) field))
+  (genColDef dbtype (getFloatKwd dbtype) field))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defmethod genLong
-
   :default
-
   [dbtype field]
-
-  (genColDef dbtype
-             (getLongKwd dbtype) field))
+  (genColDef dbtype (getLongKwd dbtype) field))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -342,149 +270,115 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defmethod genTimestamp
-
   :default
-
   [dbtype field]
-
-  (genColDef dbtype
-             (getTSKwd dbtype) field))
+  (genColDef dbtype (getTSKwd dbtype) field))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defmethod genDate
-
   :default
-
   [dbtype field]
-
-  (genColDef dbtype
-             (getDateKwd dbtype) field))
+  (genColDef dbtype (getDateKwd dbtype) field))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defmethod genCaldr
-
   :default
-
   [dbtype field]
-
   (genTimestamp dbtype field))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defmethod genBool
-
   :default
-
   [dbtype field]
-
-  (genColDef dbtype
-             (getBoolKwd dbtype) field))
+  (genColDef dbtype (getBoolKwd dbtype) field))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defn- genExIndexes
-
   "Generate external index definitions"
   ^String
   [dbtype schema fields model]
-
-  (str
-    (reduce
-      (fn [b [k v]]
-        (when-not (empty? v)
-          (-> ^StringBuilder
-              b
-              (.append
-                (str "create index "
-                     (genIndex model (name k))
-                     " on "
-                     (genTable model)
-                     " ("
-                     (->> (map #(genCol (fields %)) v)
-                          (cs/join "," ))
-                     ") "
-                     (genExec dbtype) "\n\n"))))
-        b)
-      (strbf<>)
-      (:indexes model))))
+  (sreduce<>
+    (fn [^StringBuilder b [k v]]
+      (when-not (empty? v)
+        (.append b
+          (str "create index "
+               (genIndex model (name k))
+               " on "
+               (genTable model)
+               " ("
+               (->> (map #(genCol (fields %)) v)
+                    (cs/join "," ))
+               ") "
+               (genExec dbtype) "\n\n")))
+      b)
+    (:indexes model)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defn- genUniques
-
   ""
   ^String
   [dbtype schema fields model]
-
-  (str
-    (reduce
-      (fn [b [_ v]]
-        (when-not (empty? v)
-          (addDelim!
-            b
-            ",\n"
-            (str (getPad dbtype)
-                 "unique("
-                 (->> (map #(genCol (fields %)) v)
-                      (cs/join "," ))
-                 ")")))
-        b)
-      (strbf<>)
-      (:uniques model))))
+  (sreduce<>
+    (fn [b [_ v]]
+      (when-not (empty? v)
+        (addDelim!
+          b
+          ",\n"
+          (str (getPad dbtype)
+               "unique("
+               (->> (map #(genCol (fields %)) v)
+                    (cs/join "," ))
+               ")")))
+      b)
+    (:uniques model)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defn- genPKey
-
   ""
   ^String
   [dbtype model pks]
-
   (str (getPad dbtype)
-       "primary key("
-       (cs/join "," (map #(genCol %) pks))
-       ")"))
+       "primary key(" (cs/join "," (map #(genCol %) pks)) ")"))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defn- genBody
-
   ""
   ^String
   [dbtype schema model]
-
   (let
     [fields (:fields model)
      pke (:pkey model)
      bf (strbf<>)
      pkeys
-     (persistent!
-       (reduce
-         (fn [p [k fld]]
-           (->> (case (:domain fld)
-                  :Timestamp (genTimestamp dbtype fld)
-                  :Date (genDate dbtype fld)
-                  :Calendar (genCaldr dbtype fld)
-                  :Boolean (genBool dbtype fld)
-                  :Int (if (:auto? fld)
-                         (genAutoInteger dbtype model fld)
-                         (genInteger dbtype fld))
-                  :Long (if (:auto? fld)
-                          (genAutoLong dbtype model fld)
-                          (genLong dbtype fld))
-                  :Double (genDouble dbtype fld)
-                  :Float (genFloat dbtype fld)
-                  (:Password :String) (genString dbtype fld)
-                  :Bytes (genBytes dbtype fld)
-                  (dberr! "Unsupported field: %s" fld))
-                (addDelim! bf ",\n" ))
-           (if (= pke (:id fld))
-             (conj! p fld)
-             p))
-         (transient [])
-         fields))]
+     (preduce<vec>
+       (fn [p [k fld]]
+         (->>
+           (case (:domain fld)
+             :Timestamp (genTimestamp dbtype fld)
+             :Date (genDate dbtype fld)
+             :Calendar (genCaldr dbtype fld)
+             :Boolean (genBool dbtype fld)
+             :Int (if (:auto? fld)
+                    (genAutoInteger dbtype model fld)
+                    (genInteger dbtype fld))
+             :Long (if (:auto? fld)
+                     (genAutoLong dbtype model fld)
+                     (genLong dbtype fld))
+             :Double (genDouble dbtype fld)
+             :Float (genFloat dbtype fld)
+             (:Password :String) (genString dbtype fld)
+             :Bytes (genBytes dbtype fld)
+             (dberr! "Unsupported field: %s" fld))
+           (addDelim! bf ",\n" ))
+         (if (= pke (:id fld)) (conj! p fld) p))
+       fields)]
     (when (> (.length bf) 0)
       (when-not (empty? pkeys)
         (.append bf (str ",\n"
@@ -498,11 +392,9 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defn- genOneTable
-
   ""
   ^String
   [dbtype schema model]
-
   (let [d (genBody dbtype schema model)
         b (genBegin dbtype model)
         e (genEnd dbtype model)]
@@ -515,27 +407,27 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defn getDDL
-
   "Generate database DDL for this schema"
-  ^String
-  [^Schema schema dbID & [dbver]]
+  {:tag String}
 
-  (binding [*DDL_CFG* {:db-version (strim dbver)
-                       :use-sep? true
-                       :qstr ""
-                       :case-fn clojure.string/upper-case}
-            *DDL_BVS* (atom {})]
-    (let [ms (.models schema)
-          drops (strbf<>)
-          body (strbf<>)]
-      (doseq [[id model] ms
-              :let [tbl (:table model)]
-              :when (and (not (:abstract? model))
-                         (hgl? tbl))]
-        (log/debug "model id: %s, table: %s" (name id) tbl)
-        (.append drops (genDrop dbID model))
-        (.append body (genOneTable dbID schema model)))
-      (str drops body (genEndSQL dbID)))))
+  ([^Schema schema dbID] (getDDL schema dbID nil))
+  ([^Schema schema dbID dbver]
+   (binding [*DDL_CFG* {:db-version (strim dbver)
+                        :use-sep? true
+                        :qstr ""
+                        :case-fn clojure.string/upper-case}
+             *DDL_BVS* (atom {})]
+     (let [ms (.models schema)
+           drops (strbf<>)
+           body (strbf<>)]
+       (doseq [[id model] ms
+               :let [tbl (:table model)]
+               :when (and (not (:abstract? model))
+                          (hgl? tbl))]
+         (log/debug "model id: %s, table: %s" (name id) tbl)
+         (.append drops (genDrop dbID model))
+         (.append body (genOneTable dbID schema model)))
+       (str drops body (genEndSQL dbID))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;EOF
