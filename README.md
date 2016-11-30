@@ -1,2 +1,2 @@
-# dbio
+# horde
 sql orm for clojure

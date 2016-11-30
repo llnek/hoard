@@ -12,35 +12,23 @@
  *
  * Copyright (c) 2013-2016, Kenneth Leung. All rights reserved. */
 
-package czlab.dbio;
+package czlab.horde;
 //////////////////////////////////////////////////////////////////////////////
 //
-
-import java.sql.Driver;
 
 /**
  * @author Kenneth Leung
  */
-public interface JDBCInfo {
+public interface Schema {
 
   /**/
-  public Driver loadDriver();
+  public Object get(Object id);
 
   /**/
-  public String driver();
+  public Iterable<?> models();
 
-  /**/
-  public String url();
-
-  /**/
-  public String user();
-
-  /**/
-  public String passwd();
-
-  /**/
-  public String id();
 
 }
+
 
 

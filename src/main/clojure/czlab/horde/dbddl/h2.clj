@@ -15,17 +15,17 @@
 (ns ^{:doc "DDL functions for H2."
       :author "Kenneth Leung" }
 
-  czlab.dbddl.h2
+  czlab.horde.dbddl.h2
 
   (:require [czlab.xlib.core :refer [test-some test-hgl]]
             [czlab.xlib.logging :as log]
             [clojure.string :as cs]
             [clojure.java.io :as io])
 
-  (:use [czlab.dbddl.drivers]
-        [czlab.dbio.core])
+  (:use [czlab.horde.dbddl.drivers]
+        [czlab.horde.dbio.core])
 
-  (:import [czlab.dbio DBIOError]
+  (:import [czlab.horde DBIOError]
            [java.io File]
            [java.sql DriverManager Connection Statement]))
 

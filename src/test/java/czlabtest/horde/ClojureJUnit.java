@@ -12,7 +12,7 @@
  *
  * Copyright (c) 2013-2016, Kenneth Leung. All rights reserved. */
 
-package czlabtest.dbio;
+package czlabtest.horde;
 
 import mikera.cljunit.ClojureTest;
 import java.util.Arrays;
@@ -25,7 +25,7 @@ public class ClojureJUnit extends ClojureTest {
   @Override
   public List<String> namespaces() {
     return Arrays.asList(new String[] {
-      "czlabtest.dbio.core"
+      "czlabtest.horde.test"
     });
   }
 }

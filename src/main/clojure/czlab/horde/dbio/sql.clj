@@ -15,7 +15,7 @@
 (ns ^{:doc "Low level SQL JDBC functions."
       :author "Kenneth Leung" }
 
-  czlab.dbio.sql
+  czlab.horde.dbio.sql
 
   (:require [czlab.xlib.meta :refer [bytesClass charsClass]]
             [czlab.xlib.io :refer [readChars readBytes]]
@@ -23,15 +23,14 @@
             [clojure.string :as cs]
             [czlab.xlib.dates :refer [gcal<gmt>]])
 
-  (:use [czlab.dbio.core]
+  (:use [czlab.horde.dbio.core]
         [czlab.xlib.core]
         [czlab.xlib.str])
 
   (:import [java.util Calendar TimeZone GregorianCalendar]
-           [czlab.dbio Schema SQLr DBIOError]
+           [czlab.horde DBAPI Schema SQLr DBIOError]
            [java.math BigDecimal BigInteger]
            [java.io Reader InputStream]
-           [czlab.dbio DBAPI]
            [czlab.xlib XData]
            [java.sql
             ResultSet

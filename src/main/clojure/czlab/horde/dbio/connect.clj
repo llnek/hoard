@@ -15,16 +15,16 @@
 (ns ^{:doc "Database connections."
       :author "Kenneth Leung" }
 
-  czlab.dbio.connect
+  czlab.horde.dbio.connect
 
   (:require [czlab.xlib.logging :as log])
 
-  (:use [czlab.dbio.core]
+  (:use [czlab.horde.dbio.core]
         [czlab.xlib.core]
-        [czlab.dbio.sql])
+        [czlab.horde.dbio.sql])
 
   (:import [java.sql Connection]
-           [czlab.dbio
+           [czlab.horde
             DBAPI
             SQLr
             Schema

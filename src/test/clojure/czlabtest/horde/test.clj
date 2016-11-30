@@ -14,20 +14,20 @@
 
 (ns
 
-  czlabtest.dbio.core
+  czlabtest.horde.test
 
   (:require [czlab.xlib.io :refer [writeFile]]
             [clojure.java.io :as io]
             [clojure.string :as cs])
 
-  (:use [czlab.dbddl.drivers]
-        [czlab.dbio.connect]
+  (:use [czlab.horde.dbddl.drivers]
+        [czlab.horde.dbio.connect]
+        [czlab.horde.dbio.core]
         [czlab.xlib.core]
-        [czlab.dbio.core]
-        [czlab.dbddl.h2]
+        [czlab.horde.dbddl.h2]
         [clojure.test])
 
-  (:import [czlab.dbio Transactable JDBCInfo SQLr Schema DBAPI]
+  (:import [czlab.horde Transactable JDBCInfo SQLr Schema DBAPI]
            [java.io File]
            [java.util GregorianCalendar Calendar]))
 
@@ -397,7 +397,7 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(deftest czlabtestdbio-core
+(deftest czlabtesthorde-test
 
   (is (do (initTest nil) true))
 
@@ -528,7 +528,7 @@
 
 
 ;;(use-fixtures :each initTest)
-;;(clojure.test/run-tests 'czlabtest.dbio.core)
+;;(clojure.test/run-tests 'czlabtest.horde.test)
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;EOF
 

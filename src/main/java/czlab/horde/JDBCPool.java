@@ -12,21 +12,27 @@
  *
  * Copyright (c) 2013-2016, Kenneth Leung. All rights reserved. */
 
-package czlab.dbio;
+package czlab.horde;
 //////////////////////////////////////////////////////////////////////////////
 //
+import java.sql.Connection;
 
 /**
  * @author Kenneth Leung
  */
-public interface Schema {
+public interface JDBCPool {
 
   /**/
-  public Object get(Object id);
+  public Connection nextFree();
 
   /**/
-  public Iterable<?> models();
+  public void shutdown();
 
+  /**/
+  public Object vendor();
+
+  /**/
+  public String dbUrl();
 
 }
 

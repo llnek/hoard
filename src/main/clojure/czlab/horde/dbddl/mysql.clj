@@ -15,12 +15,12 @@
 (ns ^{:doc "DDL functions for MySQL."
       :author "Kenneth Leung" }
 
-  czlab.dbddl.mysql
+  czlab.horde.dbddl.mysql
 
   (:require [czlab.xlib.logging :as log])
 
-  (:use [czlab.dbddl.drivers]
-        [czlab.dbio.core]))
+  (:use [czlab.horde.dbddl.drivers]
+        [czlab.horde.dbio.core]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;(set! *warn-on-reflection* true)

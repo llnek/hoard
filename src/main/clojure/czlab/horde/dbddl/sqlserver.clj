@@ -16,13 +16,13 @@
 (ns ^{:doc "DDL functions for SQL Server"
       :author "Kenneth Leung" }
 
-  czlab.dbddl.sqlserver
+  czlab.horde.dbddl.sqlserver
 
   (:require
     [czlab.xlib.logging :as log])
 
-  (:use [czlab.dbddl.drivers]
-        [czlab.dbio.core]))
+  (:use [czlab.horde.dbddl.drivers]
+        [czlab.horde.dbio.core]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;(set! *warn-on-reflection* true)

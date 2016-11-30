@@ -15,14 +15,14 @@
 (ns ^{:doc "DDL functions for Oracle."
       :author "Kenneth Leung" }
 
-  czlab.dbddl.oracle
+  czlab.horde.dbddl.oracle
 
   (:require [czlab.xlib.str :refer [strbf<>]]
             [czlab.xlib.logging :as log])
 
-  (:use [czlab.dbddl.drivers]
+  (:use [czlab.horde.dbddl.drivers]
         [czlab.xlib.core]
-        [czlab.dbio.core]))
+        [czlab.horde.dbio.core]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;(set! *warn-on-reflection* true)

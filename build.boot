@@ -3,7 +3,7 @@
   :license {:name "Apache License 2.0"
             :url "http://www.apache.org/licenses/LICENSE-2.0"}
   :description ""
-  :url "https://github.com/llnek/dbio"
+  :url "https://github.com/llnek/horde"
 
   :dependencies '[
 
@@ -11,7 +11,7 @@
 
     [com.zaxxer/HikariCP "2.5.1"]
 
-    [org.postgresql/postgresql "9.4.1211.jre7" ]
+    [org.postgresql/postgresql "9.4.1212.jre7" ]
     [com.h2database/h2 "1.4.193" ]
 
     ;;[commons-dbutils/commons-dbutils "1.6" ]
@@ -21,17 +21,17 @@
     [org.clojure/clojure "1.8.0" ]
 
     [com.cemerick/pomegranate "0.3.1" :scope "provided"]
-    [net.mikera/cljunit "0.5.0" :scope "provided"]
+    [net.mikera/cljunit "0.6.0" :scope "provided"]
     [junit/junit "4.12"  :scope "provided"]
 
-    [codox/codox "0.10.1" :scope "provided"]
+    [codox/codox "0.10.2" :scope "provided"]
   ]
 
   :source-paths #{"src/main/clojure" "src/main/java"}
-  :test-runner "czlabtest.dbio.ClojureJUnit"
+  :test-runner "czlabtest.horde.ClojureJUnit"
   :version "1.0.0"
   :debug true
-  :project 'czlab/czlab-dbio)
+  :project 'czlab/czlab-horde)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;

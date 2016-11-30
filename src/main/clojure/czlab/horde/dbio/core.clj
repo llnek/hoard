@@ -15,7 +15,7 @@
 (ns ^{:doc "Database and modeling functions."
       :author "Kenneth Leung" }
 
-  czlab.dbio.core
+  czlab.horde.dbio.core
 
   (:require [czlab.xlib.format :refer [writeEdnString]]
             [czlab.xlib.logging :as log]
@@ -38,7 +38,7 @@
             TimeZone
             Properties
             GregorianCalendar]
-           [czlab.dbio
+           [czlab.horde
             DBAPI
             Schema
             DBIOError

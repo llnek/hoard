@@ -15,12 +15,12 @@
 (ns ^{:doc "DDL functions for Postgresql."
       :author "Kenneth Leung" }
 
-  czlab.dbddl.postgresql
+  czlab.horde.dbddl.postgresql
 
   (:require [czlab.xlib.logging :as log])
 
-  (:use [czlab.dbddl.drivers]
-        [czlab.dbio.core :as dbcore]))
+  (:use [czlab.horde.dbddl.drivers]
+        [czlab.horde.dbio.core :as dbcore]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;(set! *warn-on-reflection* true)

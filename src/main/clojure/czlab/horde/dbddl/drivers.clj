@@ -15,16 +15,16 @@
 (ns ^{:doc "Utility functions for DDL generation."
       :author "Kenneth Leung" }
 
-  czlab.dbddl.drivers
+  czlab.horde.dbddl.drivers
 
   (:require [czlab.xlib.logging :as log]
             [clojure.string :as cs])
 
-  (:use [czlab.dbio.core]
+  (:use [czlab.horde.dbio.core]
         [czlab.xlib.core]
         [czlab.xlib.str])
 
-  (:import [czlab.dbio Schema DBAPI DBIOError]))
+  (:import [czlab.horde Schema DBAPI DBIOError]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;(set! *warn-on-reflection* true)

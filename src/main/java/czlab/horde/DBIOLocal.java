@@ -12,29 +12,33 @@
  *
  * Copyright (c) 2013-2016, Kenneth Leung. All rights reserved. */
 
-package czlab.dbio;
+package czlab.horde;
 //////////////////////////////////////////////////////////////////////////////
 //
-import java.sql.Connection;
+
+import java.util.HashMap;
+import java.util.Map;
 
 /**
  * @author Kenneth Leung
  */
-public interface JDBCPool {
+public enum DBIOLocal {
+;
+
+  /**
+  * A cache of { database1 - connection pool , database2 - connection pool , ... }
+  */
+  private static ThreadLocal<Map<Object,JDBCPool>> _cache=new ThreadLocal<Map<Object,JDBCPool>>() {
+    protected Map<Object,JDBCPool> initialValue() {
+      return new HashMap<Object,JDBCPool>();
+    }
+  };
 
   /**/
-  public Connection nextFree();
-
-  /**/
-  public void shutdown();
-
-  /**/
-  public Object vendor();
-
-  /**/
-  public String dbUrl();
+  public static ThreadLocal<Map<Object,JDBCPool>> cache() {
+    return _cache;
+  }
 
 }
-
 
 

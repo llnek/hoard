@@ -12,43 +12,47 @@
  *
  * Copyright (c) 2013-2016, Kenneth Leung. All rights reserved. */
 
-package czlab.dbio;
+package czlab.horde;
 //////////////////////////////////////////////////////////////////////////////
 //
-import java.sql.SQLException;
+import java.sql.Connection;
 
 /**
+ * A sql database interface.
+ *
  * @author Kenneth Leung
  */
-public class DBIOError extends SQLException {
-
-  private static final long serialVersionUID = 113241635256073760L;
-
-  /**/
-  public DBIOError(String msg, Throwable t) {
-    super(msg,t);
-  }
+public interface DBAPI {
 
   /**
-   * @param msg
+   * All operations are done within a transaction.
    */
-  public DBIOError(String msg) {
-    this(msg, null);
-  }
+  public Transactable compositeSQLr();
 
   /**
-   * @param t
+   * Auto commits on each operation.
    */
-  public DBIOError(Throwable t) {
-    this("",t);
-  }
+  public SQLr simpleSQLr();
 
-  /**/
-  public DBIOError() {
-    this("");
-  }
+  /**
+   * Metadata related to the database.
+   */
+  public Schema schema();
 
+  /**
+   * Product information.
+   */
+  public Object vendor();
 
+  /**
+   * Make a connection to the database.
+   */
+  public Connection open();
+
+  /**
+   * Clean up
+   */
+  public void finx();
 }
 
 
