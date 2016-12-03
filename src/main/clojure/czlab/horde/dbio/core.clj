@@ -17,7 +17,7 @@
 
   czlab.horde.dbio.core
 
-  (:require [czlab.xlib.format :refer [writeEdnString]]
+  (:require [czlab.xlib.format :refer [writeEdnStr]]
             [czlab.xlib.logging :as log]
             [clojure.java.io :as io]
             [clojure.string :as cs]
@@ -700,9 +700,9 @@
   (sreduce<>
     #(addDelim! %1
                 "\n"
-                (writeEdnString {:TABLE (:table %2)
-                                 :DEFN %2
-                                 :META (meta %2)}))
+                (writeEdnStr {:TABLE (:table %2)
+                              :DEFN %2
+                              :META (meta %2)}))
     (vals (.models mc))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
