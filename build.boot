@@ -7,7 +7,7 @@
 
   :dependencies '[
 
-    [czlab/czlab-xlib "1.0.0" ]
+    [czlab/czlab-xlib "0.1.0" ]
 
     [com.zaxxer/HikariCP "2.5.1"]
 
@@ -16,7 +16,6 @@
 
     ;;[commons-dbutils/commons-dbutils "1.6" ]
     ;;[com.jolbox/bonecp "0.8.0.RELEASE" ]
-    ;;[com.google.guava/guava "19.0" ]
 
     [org.clojure/clojure "1.8.0" ]
 
@@ -29,7 +28,7 @@
 
   :source-paths #{"src/main/clojure" "src/main/java"}
   :test-runner "czlabtest.horde.ClojureJUnit"
-  :version "1.0.0"
+  :version "0.1.0"
   :debug true
   :project 'czlab/czlab-horde)
 
