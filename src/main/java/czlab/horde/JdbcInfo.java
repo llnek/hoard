@@ -16,28 +16,30 @@ package czlab.horde;
 //////////////////////////////////////////////////////////////////////////////
 //
 
-import java.util.HashMap;
-import java.util.Map;
+import java.sql.Driver;
 
 /**
  * @author Kenneth Leung
  */
-public enum DBIOLocal {
-;
-
-  /**
-  * A cache of { database1 - connection pool , database2 - connection pool , ... }
-  */
-  private static ThreadLocal<Map<Object,JDBCPool>> _cache=new ThreadLocal<Map<Object,JDBCPool>>() {
-    protected Map<Object,JDBCPool> initialValue() {
-      return new HashMap<Object,JDBCPool>();
-    }
-  };
+public interface JdbcInfo {
 
   /**/
-  public static ThreadLocal<Map<Object,JDBCPool>> cache() {
-    return _cache;
-  }
+  public Driver loadDriver();
+
+  /**/
+  public String driver();
+
+  /**/
+  public String url();
+
+  /**/
+  public String user();
+
+  /**/
+  public String passwd();
+
+  /**/
+  public String id();
 
 }
 

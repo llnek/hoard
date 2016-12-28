@@ -25,7 +25,7 @@
   (:use [czlab.horde.dbddl.drivers]
         [czlab.horde.dbio.core])
 
-  (:import [czlab.horde DBIOError]
+  (:import [czlab.horde DbioError]
            [java.io File]
            [java.sql DriverManager Connection Statement]))
 
@@ -34,13 +34,13 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(def H2-SERVER-URL "jdbc:h2:tcp://host/path/db" )
-(def H2-DRIVER "org.h2.Driver" )
+(def h2-server-url "jdbc:h2:tcp://host/path/db" )
+(def h2-driver "org.h2.Driver" )
 
-(def H2-MEM-URL "jdbc:h2:mem:{{dbid}};DB_CLOSE_DELAY=-1" )
-(def H2-FILE-URL "jdbc:h2:{{path}};MVCC=TRUE" )
+(def h2-mem-url "jdbc:h2:mem:{{dbid}};DB_CLOSE_DELAY=-1" )
+(def h2-file-url "jdbc:h2:{{path}};MVCC=TRUE" )
 
-(def H2_MVCC ";MVCC=TRUE" )
+(def h2-mvcc ";MVCC=TRUE" )
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; H2
@@ -103,7 +103,7 @@
 
   (let [url (doto (io/file dbDir dbid) (.mkdirs))
         u (.getCanonicalPath url)
-        dbUrl (cs/replace H2-FILE-URL "{{path}}" u)]
+        dbUrl (cs/replace h2-file-url "{{path}}" u)]
     (log/debug "Creating H2: %s" dbUrl)
     (with-open [c1 (DriverManager/getConnection dbUrl user pwd)]
       (.setAutoCommit c1 true)
@@ -126,7 +126,7 @@
 
   (let [url (io/file dbDir dbid)
         u (.getCanonicalPath url)
-        dbUrl (cs/replace H2-FILE-URL "{{path}}" u)]
+        dbUrl (cs/replace h2-file-url "{{path}}" u)]
     (log/debug "Closing H2: %s" dbUrl)
     (with-open [c1 (DriverManager/getConnection dbUrl user pwd)]
       (.setAutoCommit c1 true)

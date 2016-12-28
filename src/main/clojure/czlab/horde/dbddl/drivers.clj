@@ -24,7 +24,7 @@
         [czlab.xlib.core]
         [czlab.xlib.str])
 
-  (:import [czlab.horde Schema DBAPI DBIOError]))
+  (:import [czlab.horde Schema DbApi DbioError]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;(set! *warn-on-reflection* true)
@@ -88,8 +88,8 @@
 
   ([idstr] (gSQLId idstr nil))
   ([idstr quote?]
-   (let [f  (:case-fn *DDL_CFG*)
-         ch (:qstr *DDL_CFG*)
+   (let [f  (:case-fn *ddl-cfg*)
+         ch (:qstr *ddl-cfg*)
          id (f idstr)]
      (if (false? quote?) id (str ch id ch)))))
 
@@ -143,7 +143,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defmacro genSep
-  "" [_] `(if (:use-sep? *DDL_CFG*) DDL_SEP ""))
+  "" [_] `(if (:use-sep? *ddl-cfg*) ddl-sep ""))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -410,11 +410,11 @@
 
   ([^Schema schema dbID] (getDDL schema dbID nil))
   ([^Schema schema dbID dbver]
-   (binding [*DDL_CFG* {:db-version (strim dbver)
+   (binding [*ddl-cfg* {:db-version (strim dbver)
                         :use-sep? true
                         :qstr ""
                         :case-fn clojure.string/upper-case}
-             *DDL_BVS* (atom {})]
+             *ddl-bvs* (atom {})]
      (let [ms (.models schema)
            drops (strbf<>)
            body (strbf<>)]

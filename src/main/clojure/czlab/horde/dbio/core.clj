@@ -39,12 +39,12 @@
             Properties
             GregorianCalendar]
            [czlab.horde
-            DBAPI
+            DbApi
             Schema
-            DBIOError
+            DbioError
             SQLr
-            JDBCPool
-            JDBCInfo]
+            JdbcPool
+            JdbcInfo]
            [java.sql
             SQLException
             Connection
@@ -61,14 +61,14 @@
 ;;(def ^String COL_CREATED_BY "DBIO_CREATED_BY")
 ;;(def ^String COL_LHS_TYPEID "DBIO_LHS_TYPEID")
 ;;(def ^String COL_RHS_TYPEID "DBIO_RHS_TYPEID")
-(def ^String COL_LHS_ROWID "DBIO_LHS_ROWID")
-(def ^String COL_RHS_ROWID "DBIO_RHS_ROWID")
-(def ^String COL_ROWID "DBIO_ROWID")
+(def ^String col-lhs-rowid "DBIO_LHS_ROWID")
+(def ^String col-rhs-rowid "DBIO_RHS_ROWID")
+(def ^String col-rowid "DBIO_ROWID")
 ;;(def ^String COL_VERID "DBIO_VERID")
-(def DDL_SEP #"-- :")
+(def ddl-sep #"-- :")
 
-(def ^:dynamic *DDL_CFG* nil)
-(def ^:dynamic *DDL_BVS* nil)
+(def ^:dynamic *ddl-cfg* nil)
+(def ^:dynamic *ddl-bvs* nil)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -148,10 +148,10 @@
 ;;
 (defmethod fmtSQLId
 
-  DBAPI
+  DbApi
 
-  ([^DBAPI db idstr] (fmtSQLId db idstr nil))
-  ([^DBAPI db idstr quote?]
+  ([^DbApi db idstr] (fmtSQLId db idstr nil))
+  ([^DbApi db idstr quote?]
    (fmtSQLId (.vendor db) idstr quote?)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -227,11 +227,11 @@
 ;;
 (defn dbspec<>
   "Basic jdbc parameters"
-  ^JDBCInfo
+  ^JdbcInfo
   [cfg]
   {:pre [(map? cfg)]}
   (let [id (juid)]
-    (reify JDBCInfo
+    (reify JdbcInfo
       (url [_] (or (:server cfg) (:url cfg)))
       (id [_]  (or (:id cfg) id))
       (loadDriver [this]
@@ -252,7 +252,7 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(def ^:dynamic *DBTYPES*
+(def ^:dynamic *db-types*
   {SQLServer {:test-string "select count(*) from sysusers" }
    Postgresql {:test-string "select 1" }
    Postgres {:test-string "select 1" }
@@ -263,9 +263,9 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defn dberr!
-  "Throw a DBIOError execption"
+  "Throw a DbioError execption"
   [fmt & more]
-  (trap! DBIOError (str (apply format fmt more))))
+  (trap! DbioError (str (apply format fmt more))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -296,7 +296,7 @@
   ^Keyword
   [^String spec]
   (let [kw (keyword (lcase spec))]
-    (if (contains? *DBTYPES* kw) kw)))
+    (if (contains? *db-types* kw) kw)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -317,7 +317,7 @@
 (def
   ^:private
   PKEY-DEF
-  {:column COL_ROWID
+  {:column col-rowid
    :domain :Long
    :id :rowid
    :auto? true
@@ -376,10 +376,10 @@
   [modelname lhs rhs]
   `(-> (dbdef<> ~modelname)
        (dbfields
-         {:lhs-rowid {:column COL_LHS_ROWID
+         {:lhs-rowid {:column col-lhs-rowid
                       :domain :Long
                       :null? false}
-          :rhs-rowid {:column COL_RHS_ROWID
+          :rhs-rowid {:column col-rhs-rowid
                       :domain :Long
                       :null? false} })
        (dbuniques
@@ -554,10 +554,10 @@
   (with-abstract true)
   (withDBSystem)
   (dbfields
-    {:lhs-rowid {:column COL_LHS_ROWID
+    {:lhs-rowid {:column col-lhs-rowid
                  :domain :Long
                  :null? false}
-     :rhs-rowid {:column COL_RHS_ROWID
+     :rhs-rowid {:column col-rhs-rowid
                  :domain :Long
                  :null? false} })))
 
@@ -710,7 +710,7 @@
 (defn- safeGetConn
   "Safely connect to database referred by this jdbc"
   ^Connection
-  [^JDBCInfo jdbc]
+  [^JdbcInfo jdbc]
   (let
     [user (.user jdbc)
      dv (.driver jdbc)
@@ -736,7 +736,7 @@
 (defn dbconnect<>
   "Connect to database referred by this jdbc"
   ^Connection
-  [^JDBCInfo jdbc]
+  [^JdbcInfo jdbc]
   {:pre [(some? jdbc)]}
   (let
     [url (.url jdbc)
@@ -768,7 +768,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defmethod resolveVendor
-  JDBCInfo
+  JdbcInfo
   [jdbc]
   (with-open
     [conn (dbconnect<> jdbc)]
@@ -800,8 +800,8 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defmethod tableExist?
-  JDBCPool
-  [^JDBCPool pool ^String table]
+  JdbcPool
+  [^JdbcPool pool ^String table]
   (with-open
     [conn (.nextFree pool) ]
     (tableExist? conn table)))
@@ -809,7 +809,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defmethod tableExist?
-  JDBCInfo
+  JdbcInfo
   [jdbc ^String table]
   (with-open
     [conn (dbconnect<> jdbc)]
@@ -840,8 +840,8 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defmethod rowExist?
-  JDBCInfo
-  [^JDBCInfo jdbc ^String table]
+  JdbcInfo
+  [^JdbcInfo jdbc ^String table]
   (with-open
     [conn (dbconnect<> jdbc)]
     (rowExist? conn table)))
@@ -928,11 +928,11 @@
 ;;
 (defn- makePool<>
   ""
-  ^JDBCPool
-  [^JDBCInfo jdbc ^HikariDataSource impl]
+  ^JdbcPool
+  [^JdbcInfo jdbc ^HikariDataSource impl]
   (let [dbv (resolveVendor jdbc)]
     (test-some "database-vendor" dbv)
-    (reify JDBCPool
+    (reify JdbcPool
 
       (shutdown [_]
         (log/debug "shutting down pool impl: %s" impl)
@@ -960,10 +960,10 @@
 ;;
 (defn dbpool<>
   "Create a db connection pool"
-  {:tag JDBCPool}
+  {:tag JdbcPool}
 
   ([jdbc] (dbpool<> jdbc nil))
-  ([^JDBCInfo jdbc options]
+  ([^JdbcInfo jdbc options]
    (let [options (or options {})
          dv (.driver jdbc)
          hc (HikariConfig.) ]
@@ -1003,8 +1003,8 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defmethod uploadDdl
-  JDBCPool
-  [^JDBCPool pool ^String ddl]
+  JdbcPool
+  [^JdbcPool pool ^String ddl]
   (with-open
     [conn (.nextFree pool)]
     (uploadDdl conn ddl)))
@@ -1012,8 +1012,8 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defmethod uploadDdl
-  JDBCInfo
-  [^JDBCInfo jdbc ^String ddl]
+  JdbcInfo
+  [^JdbcInfo jdbc ^String ddl]
   (with-open
     [conn (dbconnect<> jdbc)]
     (uploadDdl conn ddl)))
@@ -1025,7 +1025,7 @@
   [^Connection conn ^String ddl]
   {:pre [(some? conn)] }
   (let
-    [lines (map #(strim %) (cs/split ddl DDL_SEP))
+    [lines (map #(strim %) (cs/split ddl ddl-sep))
      dbn (lcase (-> (.getMetaData conn)
                     (.getDatabaseProductName)))]
     (.setAutoCommit conn true)
@@ -1371,7 +1371,7 @@
             MM
             MM (.fmtId sqlr (dbcol (ka fs)))
             MM (.fmtId sqlr (dbcol (kb fs)))
-            RS (.fmtId sqlr COL_ROWID))
+            RS (.fmtId sqlr col-rowid))
           [ (goid obj) ]))
       (dberr! "Unknown joined model: %s" jon))))
 

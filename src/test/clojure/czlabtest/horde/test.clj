@@ -27,7 +27,7 @@
         [czlab.horde.dbddl.h2]
         [clojure.test])
 
-  (:import [czlab.horde Transactable JDBCInfo SQLr Schema DBAPI]
+  (:import [czlab.horde Transactable JdbcInfo SQLr Schema DbApi]
            [java.io File]
            [java.util GregorianCalendar Calendar]))
 
@@ -35,7 +35,7 @@
 ;;
 (def
   ^:private
-  METAC
+  meta-cc
   (atom
     (dbschema<>
       (dbmodel<> ::Address
@@ -91,7 +91,7 @@
         (dbuniques
           {:u1 #{ :cname } } ))
       (dbjoined<> ::EmpDepts ::Department ::Employee))))
-(def ^:private JDBC (atom nil))
+(def ^:private jdbc-spec (atom nil))
 (def ^:private DB (atom nil))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -101,31 +101,31 @@
   [f]
   (let [url (H2Db (sysTmpDir) (str (now<>)) "sa" "hello")
         jdbc (dbspec<>
-               {:driver H2-DRIVER
+               {:driver h2-driver
                 :url url
                 :user "sa"
                 :passwd "hello"})
-        ddl (getDDL @METAC :h2)]
+        ddl (getDDL @meta-cc :h2)]
     (if false
       (writeFile (io/file (sysTmpDir)
-                          "dbtest.out") (dbgShowSchema @METAC)))
+                          "dbtest.out") (dbgShowSchema @meta-cc)))
     (if false (println "\n\n" ddl))
-    (reset! JDBC jdbc)
+    (reset! jdbc-spec jdbc)
     (uploadDdl jdbc ddl)
-    (reset! DB (dbopen<+> jdbc @METAC ))
-    (if false (println "\n\n" (dbgShowSchema @METAC))))
+    (reset! DB (dbopen<+> jdbc @meta-cc ))
+    (if false (println "\n\n" (dbgShowSchema @meta-cc))))
   (if (fn? f) (f)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defn finxTest "" [] (do->true (.finx ^DBAPI @DB)))
+(defn finxTest "" [] (do->true (.finx ^DbApi @DB)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defn- mkPerson
   ""
   [fname lname sex]
-  (-> (.get ^Schema @METAC ::Person)
+  (-> (.get ^Schema @meta-cc ::Person)
       (dbpojo<>)
       (dbSetFlds*
         {:first_name fname
@@ -139,7 +139,7 @@
 (defn- mkEmp
   ""
   [login]
-  (-> (.get ^Schema @METAC ::Employee)
+  (-> (.get ^Schema @meta-cc ::Employee)
       (dbpojo<>)
       (dbSetFlds*
         {:pic (bytesify "poo")
@@ -153,7 +153,7 @@
 (defn- mkCompany
   ""
   [cname]
-  (-> (.get ^Schema @METAC ::Company)
+  (-> (.get ^Schema @meta-cc ::Company)
       (dbpojo<>)
       (dbSetFlds*
         {:cname cname
@@ -165,7 +165,7 @@
 (defn- mkDept
   ""
   [dname]
-  (-> (.get ^Schema @METAC ::Department)
+  (-> (.get ^Schema @meta-cc ::Department)
       (dbpojo<> )
       (dbSetFld :dname dname)))
 
@@ -174,7 +174,7 @@
 (defn- createEmp
   ""
   [fname lname sex login]
-  (let [sql (.compositeSQLr ^DBAPI @DB)]
+  (let [sql (.compositeSQLr ^DbApi @DB)]
     (->>
       (fn [^SQLr s]
         (let [p (mkPerson fname
@@ -198,7 +198,7 @@
 (defn- fetchAllEmps
   ""
   []
-  (let [sql (.simpleSQLr ^DBAPI @DB)]
+  (let [sql (.simpleSQLr ^DbApi @DB)]
     (.findAll sql ::Employee)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -206,7 +206,7 @@
 (defn- fetch-person
   ""
   [fname lname]
-  (let [sql (.simpleSQLr ^DBAPI @DB)]
+  (let [sql (.simpleSQLr ^DbApi @DB)]
     (.findOne sql
               ::Person
               {:first_name fname :last_name lname})))
@@ -216,7 +216,7 @@
 (defn- fetchEmp
   ""
   [login]
-  (let [sql (.simpleSQLr ^DBAPI @DB)]
+  (let [sql (.simpleSQLr ^DbApi @DB)]
     (.findOne sql
               ::Employee
               {:login login})))
@@ -226,7 +226,7 @@
 (defn- changeEmp
   ""
   [login]
-  (-> (.compositeSQLr ^DBAPI @DB)
+  (-> (.compositeSQLr ^DbApi @DB)
       (.execWith
         (fn [^SQLr s]
           (let [o2 (-> (.findOne s ::Employee {:login login})
@@ -238,7 +238,7 @@
 (defn- deleteEmp
   ""
   [login]
-  (-> (.compositeSQLr ^DBAPI @DB)
+  (-> (.compositeSQLr ^DbApi @DB)
       (.execWith
         (fn [^SQLr s]
           (let [o1 (.findOne s ::Employee {:login login} )]
@@ -251,7 +251,7 @@
   ""
   [fname lname sex]
   (let [p (mkPerson fname lname sex)]
-    (-> (.compositeSQLr ^DBAPI @DB)
+    (-> (.compositeSQLr ^DbApi @DB)
         (.execWith #(.insert ^SQLr % p)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -259,7 +259,7 @@
 (defn- wedlock?
   ""
   []
-  (let [sql (.compositeSQLr ^DBAPI @DB)
+  (let [sql (.compositeSQLr ^DbApi @DB)
         e (createEmp "joe" "blog" "male" "joeb")
         w (createPerson "mary" "lou" "female")]
     (->>
@@ -280,7 +280,7 @@
 (defn- undoWedlock
   ""
   []
-  (let [sql (.compositeSQLr ^DBAPI @DB)]
+  (let [sql (.compositeSQLr ^DbApi @DB)]
     (->>
       (fn [^SQLr s]
         (let
@@ -299,7 +299,7 @@
 (defn- testCompany
   ""
   []
-  (let [sql (.compositeSQLr ^DBAPI @DB)]
+  (let [sql (.compositeSQLr ^DbApi @DB)]
     (->>
       (fn [^SQLr s]
         (let [c (.insert s (mkCompany "acme"))
@@ -329,7 +329,7 @@
 (defn- testM2M
   ""
   []
-  (let [sql (.compositeSQLr ^DBAPI @DB)]
+  (let [sql (.compositeSQLr ^DbApi @DB)]
     (->>
       (fn [^SQLr s]
         (let
@@ -363,7 +363,7 @@
 (defn- undoM2M
   ""
   []
-  (let [sql (.compositeSQLr ^DBAPI @DB)]
+  (let [sql (.compositeSQLr ^DbApi @DB)]
     (->>
       (fn [^SQLr s]
         (let
@@ -382,7 +382,7 @@
 (defn- undoCompany
   ""
   []
-  (let [sql (.compositeSQLr ^DBAPI @DB)]
+  (let [sql (.compositeSQLr ^DbApi @DB)]
     (->>
       (fn [^SQLr s]
         (let
@@ -403,8 +403,8 @@
 
   (is (some? (now<ts>)))
 
-  (is (let [db (dbopen<+> @JDBC @METAC)
-            url (.url ^JDBCInfo @JDBC)
+  (is (let [db (dbopen<+> @jdbc-spec @meta-cc)
+            url (.url ^JdbcInfo @jdbc-spec)
             c (.compositeSQLr db)
             s (.simpleSQLr db)
             h (.schema db)
@@ -433,8 +433,8 @@
             (.close conn)
             (.finx db)))))
 
-  (is (let [db (dbopen<> @JDBC @METAC)
-            url (.url ^JDBCInfo @JDBC)
+  (is (let [db (dbopen<> @jdbc-spec @meta-cc)
+            url (.url ^JdbcInfo @jdbc-spec)
             c (.compositeSQLr db)
             s (.simpleSQLr db)
             h (.schema db)
@@ -463,18 +463,18 @@
             (.close conn)
             (.finx db)))))
 
-  (is (let [c (dbconnect<> @JDBC)]
+  (is (let [c (dbconnect<> @jdbc-spec)]
         (try
           (map? (loadTableMeta c "Person"))
           (finally (.close c)))))
 
-  (is (testConnect? @JDBC))
+  (is (testConnect? @jdbc-spec))
 
-  (is (map? (resolveVendor @JDBC)))
+  (is (map? (resolveVendor @jdbc-spec)))
 
-  (is (tableExist? @JDBC "Person"))
+  (is (tableExist? @jdbc-spec "Person"))
 
-  (is (let [p (dbpool<> @JDBC)]
+  (is (let [p (dbpool<> @jdbc-spec)]
         (try
           (tableExist? p "Person")
           (finally
@@ -487,7 +487,7 @@
             r (:rowid m)]
         (> r 0)))
 
-  (is (rowExist? @JDBC "Person"))
+  (is (rowExist? @jdbc-spec "Person"))
 
   (is (let [m (createEmp "joe" "blog" "male" "joeb")
             r (:rowid m)]

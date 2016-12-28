@@ -69,14 +69,14 @@
 (defn- maybeTrackFields
   ""
   [model field]
-  (if (or (= "12c+" (*DDL_CFG* :db-version))
-          (= "12c" (*DDL_CFG* :db-version)))
+  (if (or (= "12c+" (*ddl-cfg* :db-version))
+          (= "12c" (*ddl-cfg* :db-version)))
     false
-    (let [m (deref *DDL_BVS*)
+    (let [m (deref *ddl-bvs*)
           t (:id model)
           r (or (m t) {})]
       (->> (assoc r (:id field) field)
-           (swap! *DDL_BVS*  assoc t))
+           (swap! *ddl-bvs*  assoc t))
       true)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -111,8 +111,8 @@
 (defmethod genEndSQL
   Oracle
   [dbtype]
-  (if (or (= "12c+" (*DDL_CFG* :db-version))
-          (= "12c" (*DDL_CFG* :db-version)))
+  (if (or (= "12c+" (*ddl-cfg* :db-version))
+          (= "12c" (*ddl-cfg* :db-version)))
     ""
     (sreduce<>
       (fn [bd [model fields]]
@@ -123,7 +123,7 @@
                      (createSeq dbtype model fld)))
           bd
           fields))
-      (deref *DDL_BVS*))))
+      (deref *ddl-bvs*))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;

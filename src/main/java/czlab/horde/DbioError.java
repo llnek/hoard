@@ -20,31 +20,31 @@ import java.sql.SQLException;
 /**
  * @author Kenneth Leung
  */
-public class DBIOError extends SQLException {
+public class DbioError extends SQLException {
 
   private static final long serialVersionUID = 113241635256073760L;
 
   /**/
-  public DBIOError(String msg, Throwable t) {
+  public DbioError(String msg, Throwable t) {
     super(msg,t);
   }
 
   /**
    * @param msg
    */
-  public DBIOError(String msg) {
+  public DbioError(String msg) {
     this(msg, null);
   }
 
   /**
    * @param t
    */
-  public DBIOError(Throwable t) {
+  public DbioError(Throwable t) {
     this("",t);
   }
 
   /**/
-  public DBIOError() {
+  public DbioError() {
     this("");
   }
 

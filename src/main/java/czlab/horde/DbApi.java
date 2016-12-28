@@ -18,22 +18,41 @@ package czlab.horde;
 import java.sql.Connection;
 
 /**
+ * A sql database interface.
+ *
  * @author Kenneth Leung
  */
-public interface JDBCPool {
+public interface DbApi {
 
-  /**/
-  public Connection nextFree();
+  /**
+   * All operations are done within a transaction.
+   */
+  public Transactable compositeSQLr();
 
-  /**/
-  public void shutdown();
+  /**
+   * Auto commits on each operation.
+   */
+  public SQLr simpleSQLr();
 
-  /**/
+  /**
+   * Metadata related to the database.
+   */
+  public Schema schema();
+
+  /**
+   * Product information.
+   */
   public Object vendor();
 
-  /**/
-  public String dbUrl();
+  /**
+   * Make a connection to the database.
+   */
+  public Connection open();
 
+  /**
+   * Clean up
+   */
+  public void finx();
 }
 
 

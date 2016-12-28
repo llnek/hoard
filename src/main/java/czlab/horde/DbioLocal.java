@@ -15,45 +15,30 @@
 package czlab.horde;
 //////////////////////////////////////////////////////////////////////////////
 //
-import java.sql.Connection;
+
+import java.util.HashMap;
+import java.util.Map;
 
 /**
- * A sql database interface.
- *
  * @author Kenneth Leung
  */
-public interface DBAPI {
+public enum DbioLocal {
+;
 
   /**
-   * All operations are done within a transaction.
-   */
-  public Transactable compositeSQLr();
+  * A cache of { database1 - connection pool , database2 - connection pool , ... }
+  */
+  private static ThreadLocal<Map<Object,JdbcPool>> _cache=new ThreadLocal<Map<Object,JdbcPool>>() {
+    protected Map<Object,JdbcPool> initialValue() {
+      return new HashMap<Object,JdbcPool>();
+    }
+  };
 
-  /**
-   * Auto commits on each operation.
-   */
-  public SQLr simpleSQLr();
+  /**/
+  public static ThreadLocal<Map<Object,JdbcPool>> cache() {
+    return _cache;
+  }
 
-  /**
-   * Metadata related to the database.
-   */
-  public Schema schema();
-
-  /**
-   * Product information.
-   */
-  public Object vendor();
-
-  /**
-   * Make a connection to the database.
-   */
-  public Connection open();
-
-  /**
-   * Clean up
-   */
-  public void finx();
 }
-
 
 

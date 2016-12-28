@@ -25,12 +25,12 @@
 
   (:import [java.sql Connection]
            [czlab.horde
-            DBAPI
+            DbApi
             SQLr
             Schema
-            JDBCPool
-            JDBCInfo
-            DBIOLocal
+            JdbcPool
+            JdbcInfo
+            DbioLocal
             Transactable]
            [java.util Map]))
 
@@ -44,7 +44,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;(set! *warn-on-reflection* true)
 
-(def ^:private POOL_CFG
+(def ^:private pool-cfg
   {:connectionTimeout 30000 ;; how long in millis caller will wait
    :idleTimeout 600000 ;; idle time in pool
    :maximumPoolSize 10
@@ -55,15 +55,15 @@
 ;;
 (defn- registerJdbcTL
   "Add a thread-local db pool"
-  ^JDBCPool
-  [^JDBCInfo jdbc options]
+  ^JdbcPool
+  [^JdbcInfo jdbc options]
   (let [^Map
-        c (-> (DBIOLocal/cache)
+        c (-> (DbioLocal/cache)
               (.get))
         hc (.id jdbc)]
     (when-not (.containsKey c hc)
       (log/debug "No db-pool in DBIO-thread-local, creating one")
-      (->> (merge POOL_CFG options)
+      (->> (merge pool-cfg options)
            (dbpool<> jdbc )
            (.put c hc )))
     (.get c hc)))
@@ -73,7 +73,7 @@
 (defn- openDB
   "Connect to a database"
   ^Connection
-  [^DBAPI db cfg]
+  [^DbApi db cfg]
   (let [how (or (:isolation cfg)
                 Connection/TRANSACTION_SERIALIZABLE)
         auto? (not (false? (:auto? cfg)))]
@@ -86,7 +86,7 @@
 (defn- simSQLr
   "Non transactional SQL object"
   ^SQLr
-  [^DBAPI db]
+  [^DbApi db]
   (let [cfg {:isolation Connection/TRANSACTION_SERIALIZABLE}]
     (sqlr<>
       db
@@ -107,7 +107,7 @@
 (defn- txSQLr
   "A composite supports transactions"
   ^Transactable
-  [^DBAPI db]
+  [^DbApi db]
   (reify Transactable
     (execWith [_ cb cfg]
       (with-open
@@ -130,15 +130,15 @@
 ;;
 (defn dbopen<>
   "Open/access to a datasource"
-  {:tag DBAPI}
+  {:tag DbApi}
 
   ([jdbc _schema] (dbopen<> jdbc _schema nil))
-  ([^JDBCInfo jdbc _schema options]
+  ([^JdbcInfo jdbc _schema options]
    (let [v (resolveVendor jdbc)
          s (atom nil)
          t (atom nil)
          db
-         (reify DBAPI
+         (reify DbApi
            (compositeSQLr [this] @t)
            (simpleSQLr [this] @s)
            (schema [_] _schema)
@@ -154,17 +154,17 @@
 ;;
 (defn dbopen<+>
   "Open/access to a datasource using pooled connections"
-  {:tag DBAPI}
+  {:tag DbApi}
 
   ([jdbc _schema] (dbopen<+> jdbc _schema nil))
-  ([^JDBCInfo jdbc _schema options]
-   (let [pool (->> (merge POOL_CFG options)
+  ([^JdbcInfo jdbc _schema options]
+   (let [pool (->> (merge pool-cfg options)
                    (dbpool<> jdbc ))
          v (.vendor pool)
          s (atom nil)
          t (atom nil)
          db
-         (reify DBAPI
+         (reify DbApi
            (compositeSQLr [this] @t)
            (simpleSQLr [this] @s)
            (schema [_] _schema)

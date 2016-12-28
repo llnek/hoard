@@ -28,7 +28,7 @@
         [czlab.xlib.str])
 
   (:import [java.util Calendar TimeZone GregorianCalendar]
-           [czlab.horde DBAPI Schema SQLr DBIOError]
+           [czlab.horde DbApi Schema SQLr DbioError]
            [java.math BigDecimal BigInteger]
            [java.io Reader InputStream]
            [czlab.xlib XData]
@@ -513,7 +513,7 @@
   "Create a SQLr"
   {:tag SQLr
    :no-doc true}
-  [^DBAPI db runc]
+  [^DbApi db runc]
   {:pre [(fn? runc)]}
   (let [schema (.schema db)
         vendor (.vendor db)]
@@ -579,7 +579,7 @@
                         %1
                         sql
                         pms
-                        {:pkey COL_ROWID})))
+                        {:pkey col-rowid})))
 
       (exec [_ sql pms]
         (runc #(doExec vendor %1 sql pms)))

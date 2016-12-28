@@ -15,32 +15,26 @@
 package czlab.horde;
 //////////////////////////////////////////////////////////////////////////////
 //
-
-import java.sql.Driver;
+import java.sql.Connection;
 
 /**
  * @author Kenneth Leung
  */
-public interface JDBCInfo {
+public interface JdbcPool {
 
   /**/
-  public Driver loadDriver();
+  public Connection nextFree();
 
   /**/
-  public String driver();
+  public void shutdown();
 
   /**/
-  public String url();
+  public Object vendor();
 
   /**/
-  public String user();
-
-  /**/
-  public String passwd();
-
-  /**/
-  public String id();
+  public String dbUrl();
 
 }
+
 
 
