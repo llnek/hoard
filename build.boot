@@ -13,6 +13,7 @@
 
     [org.clojure/clojure "1.8.0"]
     [czlab/czlab-xlib "0.1.0" ]
+    [czlab/czlab-pariah "0.1.0" :scope "provided"]
   ]
 
   :source-paths #{"src/main/clojure" "src/main/java"}

@@ -3,7 +3,7 @@ targets/
 target/
 build/
 out/
-#lib/
+lib/
 classes/
 checkouts/
 
