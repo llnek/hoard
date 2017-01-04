@@ -7,17 +7,12 @@
 
   :dependencies '[
 
-    [org.clojure/clojure "1.8.0"]
-    [czlab/czlab-xlib "0.1.0" ]
-
     [org.postgresql/postgresql "9.4.1212.jre7" ]
     [com.zaxxer/HikariCP "2.5.1"]
     [com.h2database/h2 "1.4.193" ]
 
-    [com.cemerick/pomegranate "0.3.1" :scope "provided"]
-    [codox/codox "0.10.2" :scope "provided"]
-    [net.mikera/cljunit "0.6.0" :scope "provided"]
-    [junit/junit "4.12"  :scope "provided"]
+    [org.clojure/clojure "1.8.0"]
+    [czlab/czlab-xlib "0.1.0" ]
   ]
 
   :source-paths #{"src/main/clojure" "src/main/java"}
