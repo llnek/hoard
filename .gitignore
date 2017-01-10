@@ -1,18 +1,15 @@
-node_modules/
-targets/
-target/
-build/
-out/
-lib/
-classes/
-checkouts/
+/node_modules
+/targets
+/target
+/build
+/out
+/lib
+/classes
+/checkouts
+/public
 
-POD-INF/classes/
-POD-INF/lib/
-public/scripts/
-public/styles/
-public/images/
-public/pages/
+pom.xml.asc
+pom.xml
 
 *.class
 *.asc
@@ -20,12 +17,11 @@ public/pages/
 *.zip
 *.gz
 
-.lein-deps-sum
-.lein-failures
-.lein-plugins
-.lein-repl-history
+/.lein-*
+/.nrepl*
+.hgignore
+.hg/
 
-.nrepl*
 
 ._.DS_Store
 .DS_Store

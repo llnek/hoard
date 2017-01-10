@@ -8,24 +8,22 @@
  * You must not remove this notice, or any other, from this software.
  */
 
-package czlab.horde;
+package czlab.test.horde;
+
+import mikera.cljunit.ClojureTest;
+import java.util.Arrays;
+import java.util.List;
 
 /**
  * @author Kenneth Leung
  */
-public interface  Transactable {
-
-  /**
-   * The fn is executed within the context of a transaction.
-   *
-   * param fn Acts like a closure
-   *
-   */
-  public Object execWith(Object fn, Object cfg);
-
-  /**/
-  public Object execWith(Object fn);
-
+public class ClojureJUnit extends ClojureTest {
+  @Override
+  public List<String> namespaces() {
+    return Arrays.asList(new String[] {
+      "czlab.test.horde.test"
+    });
+  }
 }
 
 
