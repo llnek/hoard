@@ -2,11 +2,11 @@
 ;;
 (defproject io.czlab/horde "0.1.0"
 
-  :description "sql orm"
-  :url "https://github.com/llnek/horde"
-
   :license {:name "Eclipse Public License"
             :url "http://www.eclipse.org/legal/epl-v10.html"}
+
+  :description "sql orm"
+  :url "https://github.com/llnek/horde"
 
   :dependencies [[org.postgresql/postgresql "9.4.1212.jre7"]
                  [com.zaxxer/HikariCP "2.5.1"]
@@ -14,8 +14,7 @@
                  [io.czlab/xlib "0.1.0"]]
 
   :plugins [[lein-codox "0.10.2"]
-            [lein-czlab "0.1.0"]]
-  :hooks [leiningen.lein-czlab]
+            [lein-pprint "1.1.2"]]
 
   :profiles {:provided {:dependencies
                         [[net.mikera/cljunit "0.6.0" :scope "test"]
@@ -29,7 +28,7 @@
   :aot :all
 
   ;;:jar-exclusions [#"(?:^|/).svn/"]
-  :root-package "czlab"
+  :coordinate! "czlab"
   :omit-source true
 
   :java-source-paths ["src/main/java" "src/test/java"]
