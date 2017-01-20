@@ -12,7 +12,7 @@
   czlab.horde.dbddl.sqlserver
 
   (:require
-    [czlab.xlib.logging :as log])
+    [czlab.basal.logging :as log])
 
   (:use [czlab.horde.dbddl.drivers]
         [czlab.horde.dbio.core]))

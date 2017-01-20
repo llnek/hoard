@@ -11,8 +11,8 @@
 
   czlab.horde.dbddl.h2
 
-  (:require [czlab.xlib.core :refer [test-some test-hgl]]
-            [czlab.xlib.logging :as log]
+  (:require [czlab.basal.core :refer [test-some test-hgl]]
+            [czlab.basal.logging :as log]
             [clojure.string :as cs]
             [clojure.java.io :as io])
 

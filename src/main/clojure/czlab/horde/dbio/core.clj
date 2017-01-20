@@ -11,16 +11,16 @@
 
   czlab.horde.dbio.core
 
-  (:require [czlab.xlib.format :refer [writeEdnStr]]
-            [czlab.xlib.logging :as log]
+  (:require [czlab.basal.format :refer [writeEdnStr]]
+            [czlab.basal.logging :as log]
             [clojure.java.io :as io]
             [clojure.string :as cs]
             [clojure.set :as cset]
-            [czlab.xlib.meta :refer [forname]])
+            [czlab.basal.meta :refer [forname]])
 
   (:use [flatland.ordered.set]
-        [czlab.xlib.core]
-        [czlab.xlib.str])
+        [czlab.basal.core]
+        [czlab.basal.str])
 
   (:import [com.zaxxer.hikari HikariConfig HikariDataSource]
            [clojure.lang

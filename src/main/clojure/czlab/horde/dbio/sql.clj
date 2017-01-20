@@ -11,21 +11,21 @@
 
   czlab.horde.dbio.sql
 
-  (:require [czlab.xlib.meta :refer [bytesClass charsClass]]
-            [czlab.xlib.io :refer [readChars readBytes]]
-            [czlab.xlib.logging :as log]
+  (:require [czlab.basal.meta :refer [bytesClass charsClass]]
+            [czlab.basal.io :refer [readChars readBytes]]
+            [czlab.basal.logging :as log]
             [clojure.string :as cs]
-            [czlab.xlib.dates :refer [gcal<gmt>]])
+            [czlab.basal.dates :refer [gcal<gmt>]])
 
   (:use [czlab.horde.dbio.core]
-        [czlab.xlib.core]
-        [czlab.xlib.str])
+        [czlab.basal.core]
+        [czlab.basal.str])
 
   (:import [java.util Calendar TimeZone GregorianCalendar]
            [czlab.horde DbApi Schema SQLr DbioError]
            [java.math BigDecimal BigInteger]
            [java.io Reader InputStream]
-           [czlab.xlib XData]
+           [czlab.jasal XData]
            [java.sql
             ResultSet
             Types

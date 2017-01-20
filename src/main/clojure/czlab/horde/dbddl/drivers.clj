@@ -11,12 +11,12 @@
 
   czlab.horde.dbddl.drivers
 
-  (:require [czlab.xlib.logging :as log]
+  (:require [czlab.basal.logging :as log]
             [clojure.string :as cs])
 
   (:use [czlab.horde.dbio.core]
-        [czlab.xlib.core]
-        [czlab.xlib.str])
+        [czlab.basal.core]
+        [czlab.basal.str])
 
   (:import [czlab.horde Schema DbApi DbioError]))
 

@@ -11,11 +11,11 @@
 
   czlab.horde.dbddl.oracle
 
-  (:require [czlab.xlib.str :refer [strbf<>]]
-            [czlab.xlib.logging :as log])
+  (:require [czlab.basal.str :refer [strbf<>]]
+            [czlab.basal.logging :as log])
 
   (:use [czlab.horde.dbddl.drivers]
-        [czlab.xlib.core]
+        [czlab.basal.core]
         [czlab.horde.dbio.core]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

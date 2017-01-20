@@ -8,14 +8,14 @@
 
 (ns czlab.test.horde.test
 
-  (:require [czlab.xlib.io :refer [writeFile]]
+  (:require [czlab.basal.io :refer [writeFile]]
             [clojure.java.io :as io]
             [clojure.string :as cs])
 
   (:use [czlab.horde.dbddl.drivers]
         [czlab.horde.dbio.connect]
         [czlab.horde.dbio.core]
-        [czlab.xlib.core]
+        [czlab.basal.core]
         [czlab.horde.dbddl.h2]
         [clojure.test])
 

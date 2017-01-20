@@ -11,10 +11,10 @@
 
   czlab.horde.dbio.connect
 
-  (:require [czlab.xlib.logging :as log])
+  (:require [czlab.basal.logging :as log])
 
   (:use [czlab.horde.dbio.core]
-        [czlab.xlib.core]
+        [czlab.basal.core]
         [czlab.horde.dbio.sql])
 
   (:import [java.sql Connection]

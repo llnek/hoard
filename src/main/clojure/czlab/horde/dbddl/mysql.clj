@@ -11,7 +11,7 @@
 
   czlab.horde.dbddl.mysql
 
-  (:require [czlab.xlib.logging :as log])
+  (:require [czlab.basal.logging :as log])
 
   (:use [czlab.horde.dbddl.drivers]
         [czlab.horde.dbio.core]))
