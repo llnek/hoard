@@ -401,8 +401,7 @@
                (first %2)
                (into (ordered-set) (last %2)))
       kvs)
-    #(merge (%2 %1) )
-    (interject pojo fld )))
+    (update-in pojo [fld] merge )))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -477,7 +476,7 @@
   {:pre [(map? pojo) (map? fdef)]}
   (let [fd (merge (dftFld<> fid) fdef)
         k (:id fd)]
-    (interject pojo :fields #(assoc (%2 %1) k fd))))
+    (update-in pojo [:fields] assoc k fd)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -500,7 +499,7 @@
           (:O2O :O2M)
           (merge rd {:fkey (fmtfkey (:id pojo) rid) })
           (dberr! "Invalid relation: %s" rid))]
-    (interject pojo :rels #(assoc (%2 %1) rid r2))))
+    (update-in pojo [:rels] assoc rid r2)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
