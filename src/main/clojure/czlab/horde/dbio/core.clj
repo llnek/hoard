@@ -22,16 +22,9 @@
         [czlab.basal.core]
         [czlab.basal.str])
 
-  (:import [com.zaxxer.hikari HikariConfig HikariDataSource]
-           [clojure.lang
-            Keyword
-            APersistentMap
-            APersistentVector]
-           [java.util
-            HashMap
-            TimeZone
-            Properties
-            GregorianCalendar]
+  (:import [java.util HashMap TimeZone Properties GregorianCalendar]
+           [clojure.lang Keyword APersistentMap APersistentVector]
+           [com.zaxxer.hikari HikariConfig HikariDataSource]
            [czlab.horde
             DbApi
             Schema
@@ -60,13 +53,12 @@
 (def ^String col-rowid "DBIO_ROWID")
 ;;(def ^String COL_VERID "DBIO_VERID")
 (def ddl-sep #"-- :")
-
 (def ^:dynamic *ddl-cfg* nil)
 (def ^:dynamic *ddl-bvs* nil)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defmacro now<ts>
+(defmacro tstamp<>
   "A java sql Timestamp"
   []
   `(java.sql.Timestamp. (.getTime (java.util.Date.))))
@@ -91,7 +83,8 @@
   {:no-doc true}
   [obj pkeyValue]
   `(let [o# ~obj
-         pk# (:pkey (gmodel o#))] (assoc o# pk# ~pkeyValue)))
+         pk# (:pkey (gmodel o#))]
+     (if o# (assoc o# pk# ~pkeyValue) o#)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -144,7 +137,7 @@
 
   DbApi
 
-  ([^DbApi db idstr] (fmtSQLId db idstr nil))
+  ([db idstr] (fmtSQLId db idstr nil))
   ([^DbApi db idstr quote?]
    (fmtSQLId (.vendor db) idstr quote?)))
 
@@ -193,8 +186,8 @@
   {:tag Keyword}
   ([model] (:id model))
   ([typeid schema]
-   {:pre [(some? schema)]}
-   (dbtag (.get ^Schema schema typeid))))
+   {:pre [(inst? Schema schema)]}
+   (dbtag (. ^Schema schema get typeid))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -203,8 +196,8 @@
   ^String
   ([model] (:table model))
   ([typeid schema]
-   {:pre [(some? schema)]}
-   (dbtable (.get ^Schema schema typeid))))
+   {:pre [(inst? Schema schema)]}
+   (dbtable (. ^Schema schema get typeid))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -214,8 +207,7 @@
   ([fdef] (:column fdef))
   ([fid model]
    {:pre [(map? model)]}
-   (dbcol (-> (:fields model)
-              (get fid)))))
+   (dbcol (get (:fields model) fid))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -298,7 +290,7 @@
   "From the jdbc url, get the database type"
   ^Keyword
   [^String url]
-  (if-some [ss (.split (str url) ":")]
+  (if-some+ [ss (.split (str url) ":")]
     (if
       (> (alength ss) 1)
       (matchSpec (aget ss 1)))))
@@ -533,10 +525,10 @@
 (defn- checkField?
   ""
   [pojo fld]
-  (boolean
-    (if-some [f (-> (gmodel pojo)
-                    (:fields )
-                    (get fld))]
+  (bool!
+    (if-some+ [f (-> (gmodel pojo)
+                     :fields
+                     (get fld))]
       (not (or (:auto? f)
                (not (:updatable? f)))))))
 
@@ -705,10 +697,10 @@
   ^Connection
   [^JdbcInfo jdbc]
   (let
-    [user (.user jdbc)
+    [d (.loadDriver jdbc)
+     user (.user jdbc)
      dv (.driver jdbc)
      url (.url jdbc)
-     d (.loadDriver jdbc)
      p (Properties.)]
     (if (hgl? user)
       (doto p
@@ -719,8 +711,8 @@
       (dberr! "Can't load Jdbc Url: %s" url))
     (if (and (hgl? dv)
              (not= (-> d
-                       (.getClass)
-                       (.getName)) dv))
+                       .getClass
+                       .getName) dv))
       (log/warn "want %s, got %s" dv (class d)))
     (.connect d url p)))
 
@@ -749,8 +741,7 @@
   "If able to connect to the database, as a test"
   [jdbc]
   (try
-    (do->true
-      (.close (dbconnect<> jdbc)))
+    (do->true (. (dbconnect<> jdbc) close))
     (catch SQLException _ false)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -823,7 +814,7 @@
         [res (.getColumns
                mt nil s
                (fmtSQLId conn table false) "%")]
-        (and (some? res) (.next res))))))
+        (and res (.next res))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -851,7 +842,7 @@
                 (fmtSQLId conn table))]
       (with-open [stmt (.createStatement conn)
                   res (.executeQuery stmt sql)]
-        (and (some? res)
+        (and res
              (.next res)
              (> (.getInt res (int 1)) 0))))))
 
@@ -865,8 +856,7 @@
   (with-local-vars
     [pkeys #{} cms {}]
     (with-open
-      [rs (.getPrimaryKeys
-            mt catalog schema table)]
+      [rs (. mt getPrimaryKeys catalog schema table)]
       (loop [sum (transient #{})
              more (.next rs)]
         (if-not more
@@ -875,8 +865,7 @@
             (conj! sum (.getString rs (int 4)))
             (.next rs)))))
     (with-open
-      [rs (.getColumns
-            mt catalog schema table "%")]
+      [rs (. mt getColumns catalog schema table "%")]
       (loop [sum (transient {})
              more (.next rs)]
         (if-not more
@@ -977,7 +966,7 @@
   ""
   [^String dbn ^Throwable e]
   (let [ee (cast? SQLException (rootCause e))
-        ec (some-> ee (.getErrorCode))]
+        ec (some-> ee .getErrorCode)]
     (if
       (and (embeds? (str dbn) "oracle")
            (some? ec)
@@ -1099,7 +1088,7 @@
 (defn- dbioGetRelation
   "Get the relation definition"
   [model rid kind]
-  (if-some
+  (if-some+
     [r (get (:rels model) rid)]
     (if (= (:kind r) kind) r)))
 
@@ -1119,7 +1108,7 @@
       (= t lf)
       [:lhs-rowid :rhs-rowid rt]
       :else
-      (if (some? obj)
+      (if obj
         (dberr! "Unknown mxm relation for: %s" t)
         [nil nil nil]))))
 
@@ -1137,7 +1126,7 @@
         schema (.metas sqlr)
         rid (:as ctx)
         mcz (gmodel lhsObj)]
-    (if-some
+    (if-some+
       [r (dbioGetRelation mcz rid kind)]
       r
       (dberr! "Unknown relation: %s" rid))))
@@ -1151,14 +1140,14 @@
         schema (.metas sqlr)
         mcz (gmodel lhsObj)
         rid (:as ctx)]
-    (if-some
+    (if-some+
       [r (dbioGetRelation mcz rid kind)]
       (let [fv (goid lhsObj)
             fid (:fkey r)
             y (-> (mockPojo<> rhsObj)
                   (dbSetFld fid fv))
             cnt (.update sqlr y)]
-        [ lhsObj (merge rhsObj y) ])
+        [lhsObj (merge rhsObj y)])
       (dberr! "Unknown relation: %s" rid))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -1167,7 +1156,7 @@
   "One to many assocs"
   [ctx lhsObj]
   {:pre [(map? ctx)(map? lhsObj)]}
-  (if-some
+  (if-some+
     [r (dbioGetO2X ctx lhsObj :O2M)]
     (-> ^SQLr
         (:with ctx)
@@ -1228,7 +1217,7 @@
         schema (.metas sqlr)
         rid (:as ctx)
         mA (gmodel objA)]
-    (if-some
+    (if-some+
       [r (dbioGetRelation mA rid kind)]
       (let [rt (or (:cast ctx)
                    (:other r))
@@ -1288,7 +1277,7 @@
   (let [^SQLr sqlr (:with ctx)
         schema (.metas sqlr)
         jon (:joined ctx)]
-    (if-some
+    (if-some+
       [mm (.get schema jon)]
       (let [ka (selectSide mm objA)
             kb (selectSide mm objB)]
@@ -1309,7 +1298,7 @@
     (let [^SQLr sqlr (:with ctx)
           schema (.metas sqlr)
           jon (:joined ctx)]
-      (if-some
+      (if-some+
         [mm (.get schema jon)]
         (let [fs (:fields mm)
               ka (selectSide mm objA)
@@ -1320,14 +1309,14 @@
                      "delete from %s where %s=?"
                      (.fmtId sqlr (dbtable mm))
                      (.fmtId sqlr (dbcol (fs ka))))
-                   [ (goid objA) ])
+                   [(goid objA)])
             (.exec sqlr
                    (format
                      "delete from %s where %s=? and %s=?"
                      (.fmtId sqlr (dbtable mm))
                      (.fmtId sqlr (dbcol (fs ka)))
                      (.fmtId sqlr (dbcol (fs kb))))
-                   [ (goid objA) (goid objB) ])))
+                   [(goid objA) (goid objB)])))
         (dberr! "Unkown relation: %s" jon)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -1341,7 +1330,7 @@
         MM (.fmtId sqlr "MM")
         schema (.metas sqlr)
         jon (:joined ctx)]
-    (if-some
+    (if-some+
       [mm (.get schema jon)]
       (let [[ka kb t]
             (selectSide+ mm obj)
@@ -1365,7 +1354,7 @@
             MM (.fmtId sqlr (dbcol (ka fs)))
             MM (.fmtId sqlr (dbcol (kb fs)))
             RS (.fmtId sqlr col-rowid))
-          [ (goid obj) ]))
+          [(goid obj)]))
       (dberr! "Unknown joined model: %s" jon))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

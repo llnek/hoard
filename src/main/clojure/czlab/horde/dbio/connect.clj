@@ -51,9 +51,7 @@
   "Add a thread-local db pool"
   ^JdbcPool
   [^JdbcInfo jdbc options]
-  (let [^Map
-        c (-> (DbioLocal/cache)
-              (.get))
+  (let [^Map c (-> (DbioLocal/cache) .get)
         hc (.id jdbc)]
     (when-not (.containsKey c hc)
       (log/debug "No db-pool in DBIO-thread-local, creating one")
@@ -70,7 +68,7 @@
   [^DbApi db cfg]
   (let [how (or (:isolation cfg)
                 Connection/TRANSACTION_SERIALIZABLE)
-        auto? (not (false? (:auto? cfg)))]
+        auto? (!false? (:auto? cfg))]
   (doto (.open db)
     (.setTransactionIsolation (int how))
     (.setAutoCommit auto?))))
@@ -137,7 +135,7 @@
            (simpleSQLr [this] @s)
            (schema [_] _schema)
            (vendor [_] v)
-           (finx [_] )
+           (finz [_] )
            (open [_] (dbconnect<> jdbc)))]
      (test-some "database-vendor" v)
      (reset! s (simSQLr db))
@@ -163,7 +161,7 @@
            (simpleSQLr [this] @s)
            (schema [_] _schema)
            (vendor [_] v)
-           (finx [_] (.shutdown pool))
+           (finz [_] (.shutdown pool))
            (open [_] (.nextFree pool)))]
      (test-some "database-vendor" v)
      (reset! s (simSQLr db))
@@ -172,5 +170,4 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;EOF
-
 

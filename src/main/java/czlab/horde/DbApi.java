@@ -47,7 +47,7 @@ public interface DbApi {
   /**
    * Clean up
    */
-  public void finx();
+  public void finz();
 }
 
 

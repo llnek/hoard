@@ -110,15 +110,15 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defn finxTest "" [] (do->true (.finx ^DbApi @DB)))
+(defn finzTest "" [] (do->true (. ^DbApi @DB finz)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defn- mkPerson
   ""
   [fname lname sex]
-  (-> (.get ^Schema @meta-cc ::Person)
-      (dbpojo<>)
+  (-> (. ^Schema @meta-cc get ::Person)
+      dbpojo<>
       (dbSetFlds*
         {:first_name fname
          :last_name  lname
@@ -131,8 +131,8 @@
 (defn- mkEmp
   ""
   [login]
-  (-> (.get ^Schema @meta-cc ::Employee)
-      (dbpojo<>)
+  (-> (. ^Schema @meta-cc get ::Employee)
+      dbpojo<>
       (dbSetFlds*
         {:pic (bytesify "poo")
          :salary 1000000.00
@@ -145,8 +145,8 @@
 (defn- mkCompany
   ""
   [cname]
-  (-> (.get ^Schema @meta-cc ::Company)
-      (dbpojo<>)
+  (-> (. ^Schema @meta-cc get ::Company)
+      dbpojo<>
       (dbSetFlds*
         {:cname cname
          :revenue 100.00
@@ -157,8 +157,8 @@
 (defn- mkDept
   ""
   [dname]
-  (-> (.get ^Schema @meta-cc ::Department)
-      (dbpojo<> )
+  (-> (. ^Schema @meta-cc get ::Department)
+      dbpojo<>
       (dbSetFld :dname dname)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -166,7 +166,7 @@
 (defn- createEmp
   ""
   [fname lname sex login]
-  (let [sql (.compositeSQLr ^DbApi @DB)]
+  (let [sql (. ^DbApi @DB compositeSQLr)]
     (->>
       (fn [^SQLr s]
         (let [p (mkPerson fname
@@ -183,47 +183,43 @@
                       {:first_name fname
                        :last_name lname}))))
       (.execWith sql)
-      (first))))
+      first)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defn- fetchAllEmps
   ""
   []
-  (let [sql (.simpleSQLr ^DbApi @DB)]
-    (.findAll sql ::Employee)))
+  (-> (. ^DbApi @DB simpleSQLr)
+      (.findAll ::Employee)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defn- fetch-person
   ""
   [fname lname]
-  (let [sql (.simpleSQLr ^DbApi @DB)]
-    (.findOne sql
-              ::Person
-              {:first_name fname :last_name lname})))
+  (-> (. ^DbApi @DB simpleSQLr)
+      (.findOne ::Person
+                {:first_name fname :last_name lname})))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defn- fetchEmp
   ""
   [login]
-  (let [sql (.simpleSQLr ^DbApi @DB)]
-    (.findOne sql
-              ::Employee
-              {:login login})))
+  (-> (. ^DbApi @DB simpleSQLr)
+      (.findOne ::Employee {:login login})))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defn- changeEmp
   ""
   [login]
-  (-> (.compositeSQLr ^DbApi @DB)
+  (-> (. ^DbApi @DB compositeSQLr)
       (.execWith
-        (fn [^SQLr s]
-          (let [o2 (-> (.findOne s ::Employee {:login login})
-                       (dbSetFlds* {:salary 99.9234 :iq 0}))]
-            (if (> (.update s o2) 0) o2 nil))))))
+        #(let [o2 (-> (. ^SQLr % findOne ::Employee {:login login})
+                      (dbSetFlds* {:salary 99.9234 :iq 0}))]
+           (if (> (. ^SQLr % update o2) 0) o2)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -391,9 +387,9 @@
 ;;
 (deftest czlabtesthorde-test
 
-  (is (do (initTest nil) true))
+  (is (do->true (initTest nil)))
 
-  (is (some? (now<ts>)))
+  (is (some? (tstamp<>)))
 
   (testing
     "related to: db api"
@@ -426,7 +422,7 @@
                  (= ks1 ks2))
             (finally
               (.close conn)
-              (.finx db)))))
+              (.finz db)))))
 
     (is (let [db (dbopen<> @jdbc-spec @meta-cc)
               url (.url ^JdbcInfo @jdbc-spec)
@@ -456,7 +452,7 @@
                  (= ks1 ks2))
             (finally
               (.close conn)
-              (.finx db)))))
+              (.finz db)))))
 
     (is (let [c (dbconnect<> @jdbc-spec)]
           (try
@@ -513,10 +509,9 @@
 
   (is (undoCompany))
 
-  (is (finxTest))
+  (is (finzTest))
 
   (is (string? "That's all folks!")))
-
 
 ;;(use-fixtures :each initTest)
 ;;(clojure.test/run-tests 'czlab.test.horde.test)

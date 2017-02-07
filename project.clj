@@ -9,7 +9,7 @@
   :url "https://github.com/llnek/horde"
 
   :dependencies [[org.postgresql/postgresql "9.4.1212.jre7"]
-                 [com.zaxxer/HikariCP "2.5.1"]
+                 [com.zaxxer/HikariCP "2.6.0"]
                  [com.h2database/h2 "1.4.193"]
                  [io.czlab/basal "1.0.0"]]
 
@@ -34,7 +34,7 @@
   :java-source-paths ["src/main/java" "src/test/java"]
   :source-paths ["src/main/clojure"]
   :test-paths ["src/test/clojure"]
-  :resource-paths ["src/main/resources"]
+  ;;:resource-paths ["src/main/resources"]
 
   :jvm-opts ["-Dlog4j.configurationFile=file:attic/log4j2.xml"]
   :javac-options ["-source" "8"

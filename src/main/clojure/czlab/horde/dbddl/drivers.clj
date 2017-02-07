@@ -402,7 +402,7 @@
   "Generate database DDL for this schema"
   {:tag String}
 
-  ([^Schema schema dbID] (getDDL schema dbID nil))
+  ([schema dbID] (getDDL schema dbID nil))
   ([^Schema schema dbID dbver]
    (binding [*ddl-cfg* {:db-version (strim dbver)
                         :use-sep? true

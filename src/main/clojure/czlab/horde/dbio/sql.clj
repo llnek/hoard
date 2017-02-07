@@ -15,7 +15,7 @@
             [czlab.basal.io :refer [readChars readBytes]]
             [czlab.basal.logging :as log]
             [clojure.string :as cs]
-            [czlab.basal.dates :refer [gcal<gmt>]])
+            [czlab.basal.dates :refer [gmt<>]])
 
   (:use [czlab.horde.dbio.core]
         [czlab.basal.core]
@@ -102,7 +102,7 @@
 (defn- readOneCol
   "Read column"
   [sqlType pos ^ResultSet rset]
-  (let [c (gcal<gmt>)
+  (let [c (gmt<>)
         pos (int pos)]
     (condp == (int sqlType)
       Types/TIMESTAMP (.getTimestamp rset pos c)
@@ -115,7 +115,7 @@
   "Row is a transient object"
   [model row cn ct cv]
   ;;if column is not defined in the model, ignore it
-  (if-some
+  (if-some+
     [fdef (-> (:columns (meta model))
               (get (ucase cn)))]
     (assoc! row (:id fdef) cv)
@@ -174,11 +174,11 @@
     Boolean (.setInt ps pos (if p 1 0))
     Double (.setDouble ps pos p)
     Float (.setFloat ps pos p)
-    Timestamp (.setTimestamp ps pos p (gcal<gmt>))
-    Date (.setDate ps pos p (gcal<gmt>))
+    Timestamp (.setTimestamp ps pos p (gmt<>))
+    Date (.setDate ps pos p (gmt<>))
     Calendar (.setTimestamp ps pos
                             (Timestamp. (.getTimeInMillis ^Calendar p))
-                            (gcal<gmt>))
+                            (gmt<>))
     (dberr! "Unsupported param-type: %s" (type p))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -309,8 +309,7 @@
 (defn- sqlExec
   ""
   [vendor conn sql pms]
-  (with-open [s (fmtStmt vendor conn sql pms)]
-    (.executeUpdate s)))
+  (with-open [s (fmtStmt vendor conn sql pms)] (.executeUpdate s)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -324,7 +323,7 @@
      (preduce<vec>
        #(let [[k v] %2
               fd (get flds k)]
-          (if (and (some? fd)
+          (if (and fd
                    (not (:auto? fd))
                    (not (:system? fd)))
             (do
@@ -332,7 +331,7 @@
                          "," (fmtSQLId vendor (dbcol fd)))
               (addDelim! sb2
                          "," (if (nil? v) "null" "?"))
-              (if (some? v) (conj! %1 v) %1))
+              (if v (conj! %1 v) %1))
             %1))
        obj)]
     [(str sb1) (str sb2) ps]))
@@ -348,7 +347,7 @@
      (preduce<vec>
        #(let [[k v] %2
               fd (get flds k)]
-          (if (and (some? fd)
+          (if (and fd
                    (:updatable? fd)
                    (not (:auto? fd))
                    (not (:system? fd)))
@@ -356,7 +355,7 @@
               (addDelim! sb1
                          "," (fmtSQLId vendor (dbcol fd)))
               (.append sb1 (if (nil? v) "=null" "=?"))
-              (if (some? v) (conj! %1 v) %1))
+              (if v (conj! %1 v) %1))
             %1))
        obj)]
     [(str sb1) ps]))
@@ -424,7 +423,7 @@
   ""
   [vendor conn model]
   (let [sql (str "delete from "
-                 (fmtSQLId vendor (dbtable model) ))]
+                 (fmtSQLId vendor (dbtable model)))]
     (sqlExec vendor conn sql [])
     0))
 
