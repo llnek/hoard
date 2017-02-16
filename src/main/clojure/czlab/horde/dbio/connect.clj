@@ -144,15 +144,13 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defn dbopen<+>
+(defn dbapi<>
   "Open/access to a datasource using pooled connections"
   {:tag DbApi}
 
-  ([jdbc _schema] (dbopen<+> jdbc _schema nil))
-  ([^JdbcInfo jdbc _schema options]
-   (let [pool (->> (merge pool-cfg options)
-                   (dbpool<> jdbc ))
-         v (.vendor pool)
+  ([pool _schema] (dbapi<> pool _schema nil))
+  ([^JdbcPool pool _schema options]
+   (let [v (.vendor pool)
          s (atom nil)
          t (atom nil)
          db
@@ -167,6 +165,17 @@
      (reset! s (simSQLr db))
      (reset! t (txSQLr db))
      db)))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
+(defn dbopen<+>
+  "Open/access to a datasource using pooled connections"
+  {:tag DbApi}
+
+  ([jdbc _schema] (dbopen<+> jdbc _schema nil))
+  ([^JdbcInfo jdbc _schema options]
+   (dbapi<> (->> (merge pool-cfg options)
+                 (dbpool<> jdbc )) _schema)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;EOF
