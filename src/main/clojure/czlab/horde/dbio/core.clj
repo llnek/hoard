@@ -31,7 +31,7 @@
             DbioError
             SQLr
             JdbcPool
-            JdbcInfo]
+            JdbcSpec]
            [java.sql
             SQLException
             Connection
@@ -43,15 +43,9 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;(set! *warn-on-reflection* true)
 
-;;(def ^String COL_LASTCHANGED "DBIO_LASTCHANGED")
-;;(def ^String COL_CREATED_ON "DBIO_CREATED_ON")
-;;(def ^String COL_CREATED_BY "DBIO_CREATED_BY")
-;;(def ^String COL_LHS_TYPEID "DBIO_LHS_TYPEID")
-;;(def ^String COL_RHS_TYPEID "DBIO_RHS_TYPEID")
-(def ^String col-lhs-rowid "DBIO_LHS_ROWID")
-(def ^String col-rhs-rowid "DBIO_RHS_ROWID")
-(def ^String col-rowid "DBIO_ROWID")
-;;(def ^String COL_VERID "DBIO_VERID")
+(def ^String col-lhs-rowid "CZLAB_LHS_ROWID")
+(def ^String col-rhs-rowid "CZLAB_RHS_ROWID")
+(def ^String col-rowid "CZLAB_ROWID")
 (def ddl-sep #"-- :")
 (def ^:dynamic *ddl-cfg* nil)
 (def ^:dynamic *ddl-bvs* nil)
@@ -59,68 +53,54 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defmacro tstamp<>
-  "A java sql Timestamp"
-  []
-  `(java.sql.Timestamp. (.getTime (java.util.Date.))))
+  "Sql timestamp" [] `(java.sql.Timestamp. (.getTime (java.util.Date.))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defn- cleanName
-  ""
-  [s]
-  (-> (cs/replace (name s) #"[^a-zA-Z0-9_-]" "")
-      (cs/replace  #"-" "_")))
+  "" [s] (-> (cs/replace (strKW s)
+                         #"[^a-zA-Z0-9_-]" "")
+             (cs/replace  #"-" "_")))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defmacro gmodel
-  "" {:no-doc true} [obj] `(:model (meta ~obj)))
+  "" {:no-doc true} [obj] `(:$model (meta ~obj)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defmacro set-oid
-  ""
-  {:no-doc true}
-  [obj pkeyValue]
+(defmacro setoid!
+  "" {:no-doc true} [obj pkeyValue]
   `(let [o# ~obj
-         pk# (:pkey (gmodel o#))]
-     (if o# (assoc o# pk# ~pkeyValue) o#)))
+         pk# (:pkey (gmodel o#))] (if o#
+                                    (assoc o# pk# ~pkeyValue) o#)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defmacro gtype
-  ""
-  {:no-doc true} [obj] `(:id (gmodel ~obj)))
+(defmacro gtype "Get object's type" [obj] `(:id (gmodel ~obj)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defmacro goid
-  ""
-  {:no-doc true}
-  [obj] `(let [o# ~obj pk# (:pkey (gmodel o#))] (pk# o#)))
+  "Get object's id" [obj] `(let [o# ~obj
+                                 pk# (:pkey (gmodel o#))] (pk# o#)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defn gschema
-  ""
-  {:no-doc true
-   :tag Schema}
-  [model]
-  (:schema (meta model)))
+(defn gschema "Get schema" ^Schema [model] (:schema (meta model)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defmulti fmtSQLId
-  "Format SQL identifier"
-  {:tag String} (fn [a & xs] (class a)))
+(defmulti fmtSqlId
+  "Format SQL identifier" {:tag String} (fn [a & xs] (class a)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defmethod fmtSQLId
+(defmethod fmtSqlId
 
   APersistentMap
 
-  ([info idstr] (fmtSQLId info idstr nil))
+  ([info idstr] (fmtSqlId info idstr nil))
   ([info idstr quote?]
    (let [ch (strim (:qstr info))
          id (cond
@@ -133,21 +113,21 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defmethod fmtSQLId
+(defmethod fmtSqlId
 
   DbApi
 
-  ([db idstr] (fmtSQLId db idstr nil))
+  ([db idstr] (fmtSqlId db idstr nil))
   ([^DbApi db idstr quote?]
-   (fmtSQLId (.vendor db) idstr quote?)))
+   (fmtSqlId (.vendor db) idstr quote?)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defmethod fmtSQLId
+(defmethod fmtSqlId
 
   DatabaseMetaData
 
-  ([mt idstr] (fmtSQLId mt idstr nil))
+  ([mt idstr] (fmtSqlId mt idstr nil))
   ([^DatabaseMetaData mt idstr quote?]
    (let [ch (strim (.getIdentifierQuoteString mt))
          id (cond
@@ -160,13 +140,13 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defmethod fmtSQLId
+(defmethod fmtSqlId
 
   Connection
 
-  ([conn idstr] (fmtSQLId conn idstr nil))
+  ([conn idstr] (fmtSqlId conn idstr nil))
   ([^Connection conn idstr quote?]
-   (fmtSQLId (.getMetaData conn) idstr quote?)))
+   (fmtSqlId (.getMetaData conn) idstr quote?)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; have to be function , not macro as this is passed into another higher
@@ -174,19 +154,16 @@
 (defn- mergeMeta
   "Merge 2 meta maps"
   ^APersistentMap
-  [m1 m2]
-  {:pre [(map? m1)
-         (or (nil? m2)(map? m2))]}
-  (merge m1 m2))
+  [m1 m2] {:pre [(map? m1)
+                 (or (nil? m2)(map? m2))]} (merge m1 m2))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defn dbtag
-  "The id for this model"
-  {:tag Keyword}
+  "The id for this model" {:tag Keyword}
   ([model] (:id model))
   ([typeid schema]
-   {:pre [(inst? Schema schema)]}
+   {:pre [(ist? Schema schema)]}
    (dbtag (. ^Schema schema get typeid))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -196,7 +173,7 @@
   ^String
   ([model] (:table model))
   ([typeid schema]
-   {:pre [(inst? Schema schema)]}
+   {:pre [(ist? Schema schema)]}
    (dbtable (. ^Schema schema get typeid))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -213,11 +190,10 @@
 ;;
 (defn dbspec<>
   "Basic jdbc parameters"
-  ^JdbcInfo
-  [cfg]
-  {:pre [(map? cfg)]}
-  (let [id (juid)]
-    (reify JdbcInfo
+  ^JdbcSpec [cfg] {:pre [(map? cfg)]}
+
+  (let [id (jid<>)]
+    (reify JdbcSpec
       (url [_] (or (:server cfg) (:url cfg)))
       (id [_]  (or (:id cfg) id))
       (loadDriver [this]
@@ -250,14 +226,13 @@
 ;;
 (defn dberr!
   "Throw a DbioError execption"
-  [fmt & more]
-  (trap! DbioError (str (apply format fmt more))))
+  [fmt & more] (trap! DbioError (str (apply format fmt more))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defn- maybeGetVendor
-  "Detect the database vendor"
-  [product]
+  "Detect the database vendor" [product]
+
   (let [fc #(embeds? %2 %1)
         lp (lcase product)]
     (condp fc lp
@@ -272,37 +247,25 @@
 ;;
 (defmacro ^:private fmtfkey
   "For o2o & o2m relations"
-  [tn rn]
-  `(keyword (str "fk_" (name ~tn) "_" (name ~rn))))
+  [tn rn] `(keyword (str "fk_" (strKW ~tn) "_" (strKW ~rn))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defn matchSpec
-  "Ensure the database type is supported"
-  ^Keyword
-  [^String spec]
-  (let [kw (keyword (lcase spec))]
-    (if (contains? *db-types* kw) kw)))
+  "Ensure database type is supported" ^Keyword [^String spec]
+  (let [kw (keyword (lcase spec))] (if (contains? *db-types* kw) kw)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defn matchUrl
-  "From the jdbc url, get the database type"
-  ^Keyword
-  [^String url]
+  "From jdbc url, get database type" ^Keyword [^String url]
+
   (if-some+ [ss (.split (str url) ":")]
-    (if
-      (> (alength ss) 1)
-      (matchSpec (aget ss 1)))))
+    (if (> (alength ss) 1) (matchSpec (aget ss 1)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; DATA MODELING
-;;
-;;(def JOINED-MODEL-MONIKER ::DBIOJoinedModel)
-;;(def BASEMODEL-MONIKER ::DBIOBaseModel)
-(def
-  ^:private
-  PKEY-DEF
+(def ^:private pkey-meta
   {:column col-rowid
    :domain :Long
    :id :rowid
@@ -314,9 +277,8 @@
 ;;
 (defn dbdef<>
   "Define a generic model"
-  ^APersistentMap
-  [modelName]
-  {:pre [(isFQKeyword? modelName)]}
+  ^APersistentMap [modelName] {:pre [(isFQKeyword? modelName)]}
+
   {:table (cleanName (name modelName))
    :id modelName
    :abstract? false
@@ -326,14 +288,13 @@
    :indexes {}
    :uniques {}
    :rels {}
-   :fields {:rowid PKEY-DEF}})
+   :fields {:rowid pkey-meta}})
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defmacro dbmodel<>
   "Define a data model"
-  [modelname & body]
-  `(-> (dbdef<> ~modelname) ~@body))
+  [modelname & body] `(-> (dbdef<> ~modelname) ~@body))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -345,6 +306,7 @@
   [pojo lhs rhs]
   {:pre [(map? pojo)
          (isFQKeyword? lhs) (isFQKeyword? rhs)]}
+
   (let [a2 {:lhs {:kind :MXM
                   :other lhs
                   :fkey :lhs-rowid}
@@ -358,8 +320,8 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defmacro dbjoined<>
-  "Define a joined data model"
-  [modelname lhs rhs]
+  "Define a joined data model" [modelname lhs rhs]
+
   `(-> (dbdef<> ~modelname)
        (dbfields
          {:lhs-rowid {:column col-lhs-rowid
@@ -376,60 +338,51 @@
 ;;
 (defn withTable
   "Set the table name"
-  ^APersistentMap
-  [pojo table]
-  {:pre [(map? pojo)]}
-  (assoc pojo :table (cleanName table)))
+  ^APersistentMap [pojo table]
+  {:pre [(map? pojo)]} (assoc pojo :table (cleanName table)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;
-(defn- withXXXSets
-  ""
-  [pojo kvs fld]
-  ;;merge new stuff onto old stuff
-  (->>
-    (preduce<map>
-      #(assoc! %1
-               (first %2)
-               (into (ordered-set) (last %2)))
-      kvs)
-    (update-in pojo [fld] merge )))
+;;merge new stuff onto old stuff
+(defn- withXXXSets "" [pojo kvs fld]
+  (->> (preduce<map>
+         #(assoc! %1
+                  (first %2)
+                  (into (ordered-set) (last %2))) kvs)
+       (update-in pojo [fld] merge )))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;
+;;indices = { :a #{ :f1 :f2} ] :b #{:f3 :f4} }
 (defn dbindexes
   "Set indexes to the model"
-  ^APersistentMap
-  [pojo indexes]
-  {:pre [(map? pojo) (map? indexes)]}
-  ;;indices = { :a #{ :f1 :f2} ] :b #{:f3 :f4} }
-  (withXXXSets pojo indexes :indexes))
+  ^APersistentMap [pojo indexes]
+  {:pre [(map? pojo) (map? indexes)]} (withXXXSets pojo indexes :indexes))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defn dbkey
   "Declare your own primary key"
-  [pojo pke]
-  {:pre [(map? pojo)(map? pke)]}
-  (let
-    [m (select-keys pke [:domain
-                         :column
-                         :size
-                         :auto?])
-     {:keys [fields pkey]}
-     pojo
-     p (pkey fields)]
-    (assert (some? (:column m)))
-    (assert (some? (:domain m)))
+  [pojo pke] {:pre [(map? pojo)(map? pke)]}
+
+  (let [{:keys [domain id column size auto?]}
+        pke
+        {:keys [fields pkey]}
+        pojo
+        p (pkey fields)
+        oid (or id pkey)
+        fields (dissoc fields pkey)]
+    (assert (some? column))
+    (assert (some? domain))
     (assert (some? p))
+    (assert (= pkey (:id p)))
     (->>
-      (-> (if-not (:auto? m)
+      (-> (if-not auto?
             (dissoc p :auto?)
             (assoc p :auto? true))
-          (assoc :size (or (:size m) 255))
-          (assoc :domain (:domain m))
-          (assoc :column (:column m)))
-      (assoc fields pkey)
+          (assoc :size (or size 255))
+          (assoc :id oid)
+          (assoc :domain domain)
+          (assoc :column column))
+      (assoc fields oid)
       (assoc pojo :fields))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -518,7 +471,7 @@
 (dbmodel<> ::DBIOBaseModel
   (with-abstract true)
   (withDBSystem)
-  (dbfields {:rowid PKEY-DEF })))
+  (dbfields {:rowid pkey-meta })))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -695,7 +648,7 @@
 (defn- safeGetConn
   "Safely connect to database referred by this jdbc"
   ^Connection
-  [^JdbcInfo jdbc]
+  [^JdbcSpec jdbc]
   (let
     [d (.loadDriver jdbc)
      user (.user jdbc)
@@ -721,7 +674,7 @@
 (defn dbconnect<>
   "Connect to database referred by this jdbc"
   ^Connection
-  [^JdbcInfo jdbc]
+  [^JdbcSpec jdbc]
   {:pre [(some? jdbc)]}
   (let
     [url (.url jdbc)
@@ -752,7 +705,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defmethod resolveVendor
-  JdbcInfo
+  JdbcSpec
   [jdbc]
   (with-open
     [conn (dbconnect<> jdbc)]
@@ -774,7 +727,7 @@
          :lcs? (.storesLowerCaseIdentifiers md)
          :ucs? (.storesUpperCaseIdentifiers md)
          :mcs? (.storesMixedCaseIdentifiers md)}]
-    (assoc rc :fmtId (partial fmtSQLId rc))))
+    (assoc rc :fmtId (partial fmtSqlId rc))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -793,7 +746,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defmethod tableExist?
-  JdbcInfo
+  JdbcSpec
   [jdbc ^String table]
   (with-open
     [conn (dbconnect<> jdbc)]
@@ -813,7 +766,7 @@
       (with-open
         [res (.getColumns
                mt nil s
-               (fmtSQLId conn table false) "%")]
+               (fmtSqlId conn table false) "%")]
         (and res (.next res))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -824,8 +777,8 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defmethod rowExist?
-  JdbcInfo
-  [^JdbcInfo jdbc ^String table]
+  JdbcSpec
+  [^JdbcSpec jdbc ^String table]
   (with-open
     [conn (dbconnect<> jdbc)]
     (rowExist? conn table)))
@@ -839,7 +792,7 @@
     false
     (let
       [sql (str "select count(*) from "
-                (fmtSQLId conn table))]
+                (fmtSqlId conn table))]
       (with-open [stmt (.createStatement conn)
                   res (.executeQuery stmt sql)]
         (and res
@@ -901,7 +854,7 @@
         mt (.getMetaData conn)
         catalog nil
         schema (if (= (:id dbv) :oracle) "%")
-        tbl (fmtSQLId conn table false)]
+        tbl (fmtSqlId conn table false)]
     ;; not good, try mixed case... arrrrrrrrrrhhhhhhhhhhhhhh
     ;;rs = m.getTables( catalog, schema, "%", null)
     (loadColumns mt catalog schema tbl)))
@@ -911,7 +864,7 @@
 (defn- makePool<>
   ""
   ^JdbcPool
-  [^JdbcInfo jdbc ^HikariDataSource impl]
+  [^JdbcSpec jdbc ^HikariDataSource impl]
   (let [dbv (resolveVendor jdbc)]
     (test-some "database-vendor" dbv)
     (reify JdbcPool
@@ -945,7 +898,7 @@
   {:tag JdbcPool}
 
   ([jdbc] (dbpool<> jdbc nil))
-  ([^JdbcInfo jdbc options]
+  ([^JdbcSpec jdbc options]
    (let [options (or options {})
          dv (.driver jdbc)
          hc (HikariConfig.) ]
@@ -994,8 +947,8 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defmethod uploadDdl
-  JdbcInfo
-  [^JdbcInfo jdbc ^String ddl]
+  JdbcSpec
+  [^JdbcSpec jdbc ^String ddl]
   (with-open
     [conn (dbconnect<> jdbc)]
     (uploadDdl conn ddl)))

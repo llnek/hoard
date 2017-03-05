@@ -15,7 +15,7 @@ import java.sql.Driver;
 /**
  * @author Kenneth Leung
  */
-public interface JdbcInfo {
+public interface JdbcSpec {
 
   /**/
   public Driver loadDriver();

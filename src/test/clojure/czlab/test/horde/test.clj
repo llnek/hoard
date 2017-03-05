@@ -412,7 +412,7 @@
           (try
             (and (some? c)
                  (some? s)
-                 (inst? Schema h)
+                 (ist? Schema h)
                  (map? v)
                  (some? conn)
                  (= a b)
@@ -442,7 +442,7 @@
           (try
             (and (some? c)
                  (some? s)
-                 (inst? Schema h)
+                 (ist? Schema h)
                  (map? v)
                  (some? conn)
                  (= a b)
