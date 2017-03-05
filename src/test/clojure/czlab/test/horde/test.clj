@@ -19,7 +19,7 @@
         [czlab.horde.dbddl.h2]
         [clojure.test])
 
-  (:import [czlab.horde Transactable JdbcInfo SQLr Schema DbApi]
+  (:import [czlab.horde Transactable JdbcSpec SQLr Schema DbApi]
            [java.io File]
            [java.util GregorianCalendar Calendar]))
 
@@ -395,14 +395,14 @@
     "related to: db api"
 
     (is (let [db (dbopen<+> @jdbc-spec @meta-cc)
-              url (.url ^JdbcInfo @jdbc-spec)
+              url (.url ^JdbcSpec @jdbc-spec)
               c (.compositeSQLr db)
               s (.simpleSQLr db)
               h (.schema db)
               v (.vendor db)
               conn (.open db)
-              a (fmtSQLId db "hello")
-              b (fmtSQLId conn "hello")
+              a (fmtSqlId db "hello")
+              b (fmtSqlId conn "hello")
               id (dbtag ::Person h)
               t (dbtable ::Person h)
               m (.get ^Schema h ::Person)
@@ -425,14 +425,14 @@
               (.finz db)))))
 
     (is (let [db (dbopen<> @jdbc-spec @meta-cc)
-              url (.url ^JdbcInfo @jdbc-spec)
+              url (.url ^JdbcSpec @jdbc-spec)
               c (.compositeSQLr db)
               s (.simpleSQLr db)
               h (.schema db)
               v (.vendor db)
               conn (.open db)
-              a (fmtSQLId db "hello")
-              b (fmtSQLId conn "hello")
+              a (fmtSqlId db "hello")
+              b (fmtSqlId conn "hello")
               id (dbtag ::Person h)
               t (dbtable ::Person h)
               m (.get ^Schema h ::Person)

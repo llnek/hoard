@@ -35,6 +35,10 @@ public interface JdbcSpec {
   /**/
   public String id();
 
+  /**
+   */
+  public Object intern();
+
 }
 
 

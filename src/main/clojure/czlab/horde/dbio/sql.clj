@@ -49,7 +49,7 @@
   ""
   [vendor model]
   (str
-    (fmtSQLId vendor
+    (fmtSqlId vendor
               (dbcol (:pkey model) model)) "=?"))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -68,7 +68,7 @@
              (addDelim!
                %1
                " and "
-               (str (fmtSQLId vendor c)
+               (str (fmtSqlId vendor c)
                     (if (nil? v)
                       " is null " " =? "))))
           filters)]
@@ -328,7 +328,7 @@
                    (not (:system? fd)))
             (do
               (addDelim! sb1
-                         "," (fmtSQLId vendor (dbcol fd)))
+                         "," (fmtSqlId vendor (dbcol fd)))
               (addDelim! sb2
                          "," (if (nil? v) "null" "?"))
               (if v (conj! %1 v) %1))
@@ -353,7 +353,7 @@
                    (not (:system? fd)))
             (do
               (addDelim! sb1
-                         "," (fmtSQLId vendor (dbcol fd)))
+                         "," (fmtSqlId vendor (dbcol fd)))
               (.append sb1 (if (nil? v) "=null" "=?"))
               (if v (conj! %1 v) %1))
             %1))
@@ -365,7 +365,7 @@
 (defn- postFmtModelRow
   ""
   [model obj]
-  (with-meta obj {:model model}))
+  (with-meta obj {:$model model}))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -411,7 +411,7 @@
     [rc (doQuery vendor
                  conn
                  (str "select count(*) from "
-                      (fmtSQLId vendor (dbtable model) ))
+                      (fmtSqlId vendor (dbtable model) ))
                  [])]
     (if (empty? rc)
       0
@@ -423,7 +423,7 @@
   ""
   [vendor conn model]
   (let [sql (str "delete from "
-                 (fmtSQLId vendor (dbtable model)))]
+                 (fmtSqlId vendor (dbtable model)))]
     (sqlExec vendor conn sql [])
     0))
 
@@ -438,7 +438,7 @@
             conn
             (str "delete from "
                  (->> (dbtable mcz)
-                      (fmtSQLId vendor ))
+                      (fmtSqlId vendor ))
                  " where "
                  (fmtUpdateWhere vendor mcz))
             [(goid obj)])
@@ -460,7 +460,7 @@
                     conn
                     (str "insert into "
                          (->> (dbtable mcz)
-                              (fmtSQLId vendor ))
+                              (fmtSqlId vendor ))
                          " (" s1 ") values (" s2 ")")
                     pms
                     {:pkey (dbcol pke mcz)})]
@@ -489,7 +489,7 @@
                 conn
                 (str "update "
                      (->> (dbtable mcz)
-                          (fmtSQLId vendor ))
+                          (fmtSqlId vendor ))
                      " set " sb1 " where "
                      (fmtUpdateWhere vendor mcz))
                 (conj pms (goid obj)))
@@ -529,7 +529,7 @@
         (if-some [mcz (.get schema typeid)]
           (runc
             #(let [s (str "select * from "
-                          (fmtSQLId vendor (:table mcz)))
+                          (fmtSqlId vendor (:table mcz)))
                    [wc pms]
                    (sqlFilterClause vendor mcz filters)]
                (doQuery+
@@ -542,7 +542,7 @@
                  pms mcz)))
           (dberr! "Unknown model: %s" typeid)))
 
-      (fmtId [_ s] (fmtSQLId vendor s))
+      (fmtId [_ s] (fmtSqlId vendor s))
 
       (metas [_] schema)
 

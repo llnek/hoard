@@ -23,7 +23,7 @@
             SQLr
             Schema
             JdbcPool
-            JdbcInfo
+            JdbcSpec
             DbioLocal
             Transactable]
            [java.util Map]))
@@ -49,8 +49,8 @@
 ;;
 (defn- registerJdbcTL
   "Add a thread-local db pool"
-  ^JdbcPool
-  [^JdbcInfo jdbc options]
+  ^JdbcPool [^JdbcSpec jdbc options]
+
   (let [^Map c (-> (DbioLocal/cache) .get)
         hc (.id jdbc)]
     (when-not (.containsKey c hc)
@@ -63,26 +63,22 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defn- openDB
-  "Connect to a database"
-  ^Connection
-  [^DbApi db cfg]
+  "Connect to db" ^Connection [db cfg]
+
   (let [how (or (:isolation cfg)
                 Connection/TRANSACTION_SERIALIZABLE)
         auto? (!false? (:auto? cfg))]
-  (doto (.open db)
+  (doto (. ^DbApi db open)
     (.setTransactionIsolation (int how))
     (.setAutoCommit auto?))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defn- simSQLr
-  "Non transactional SQL object"
-  ^SQLr
-  [^DbApi db]
-  (let [cfg {:isolation Connection/TRANSACTION_SERIALIZABLE}]
-    (sqlr<>
-      db
-      #(with-open [c2 (openDB db cfg)] (% c2)))))
+(defn- simSQLr "" ^SQLr [db]
+
+  (let [cfg {:isolation
+             Connection/TRANSACTION_SERIALIZABLE}]
+    (sqlr<> db #(with-open [c2 (openDB db cfg)] (% c2)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -96,10 +92,8 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defn- txSQLr
-  "A composite supports transactions"
-  ^Transactable
-  [^DbApi db]
+(defn- txSQLr "" ^Transactable [db]
+
   (reify Transactable
     (execWith [_ cb cfg]
       (with-open
@@ -111,21 +105,19 @@
             [rc (cb (sqlr<> db #(% c)))]
             (commit c)
             rc)
-          (catch Throwable e#
-            (undo c)
-            (log/warn e# "")
-            (throw e#)))))
+          (catch Throwable _
+            (undo c) (log/warn _ "") (throw _)))))
+
     (execWith [this cb]
-      (.execWith this cb {}))))
+      (.execWith this cb nil))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defn dbopen<>
-  "Open/access to a datasource"
-  {:tag DbApi}
+  "Open/access to a datasource" {:tag DbApi}
 
   ([jdbc _schema] (dbopen<> jdbc _schema nil))
-  ([^JdbcInfo jdbc _schema options]
+  ([^JdbcSpec jdbc _schema options]
    (let [v (resolveVendor jdbc)
          s (atom nil)
          t (atom nil)
@@ -145,8 +137,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defn dbapi<>
-  "Open/access to a datasource using pooled connections"
-  {:tag DbApi}
+  "Open/access to a datasource (pooled)" {:tag DbApi}
 
   ([pool _schema] (dbapi<> pool _schema nil))
   ([^JdbcPool pool _schema options]
@@ -169,11 +160,10 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defn dbopen<+>
-  "Open/access to a datasource using pooled connections"
-  {:tag DbApi}
+  "Open/access to a datasource (pooled)" {:tag DbApi}
 
   ([jdbc _schema] (dbopen<+> jdbc _schema nil))
-  ([^JdbcInfo jdbc _schema options]
+  ([^JdbcSpec jdbc _schema options]
    (dbapi<> (->> (merge pool-cfg options)
                  (dbpool<> jdbc )) _schema)))
 
