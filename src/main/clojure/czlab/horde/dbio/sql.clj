@@ -11,8 +11,13 @@
 
   czlab.horde.dbio.sql
 
-  (:require [czlab.basal.meta :refer [bytesClass charsClass]]
-            [czlab.basal.io :refer [readChars readBytes]]
+  (:require [czlab.basal.io :refer [readChars readBytes]]
+            [czlab.basal.meta
+             :refer
+             [instBytes?
+              instChars?
+              bytesClass
+              charsClass]]
             [czlab.basal.logging :as log]
             [clojure.string :as cs]
             [czlab.basal.dates :refer [gmt<>]])
@@ -46,11 +51,8 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defn- fmtUpdateWhere
-  ""
-  [vendor model]
-  (str
-    (fmtSqlId vendor
-              (dbcol (:pkey model) model)) "=?"))
+  "Filter on primary key" [vendor model]
+  (str (fmtSqlId vendor (dbcol (:pkey model) model)) "=?"))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -70,15 +72,14 @@
                " and "
                (str (fmtSqlId vendor c)
                     (if (nil? v)
-                      " is null " " =? "))))
-          filters)]
+                      " is null " " =? ")))) filters)]
+    ;;returns the where clause and parameters
     [wc (flatnil (vals filters))]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defn- readCol
   "Read column value, handling blobs"
-  ^Object
   [pos ^ResultSet rset]
   (let
     [obj (.getObject rset (int pos))
@@ -115,7 +116,7 @@
   "Row is a transient object"
   [model row cn ct cv]
   ;;if column is not defined in the model, ignore it
-  (if-some+
+  (if-some
     [fdef (-> (:columns (meta model))
               (get (ucase cn)))]
     (assoc! row (:id fdef) cv)
@@ -147,15 +148,26 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defmacro ^:private insert?
-  ""
-  [sql]
-  `(.startsWith (lcase (strim ~sql)) "insert"))
+  "" [sql] `(.startsWith (lcase (strim ~sql)) "insert"))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
+(declare setBindVar)
+(defn- onXData
+  "" [^PreparedStatement ps pos ^XData x]
+
+  (let [c (.content x)]
+    (->>
+      (if (or (string? c)
+              (instBytes? c)
+              (instChars? c)) c (.stream x))
+      (setBindVar ps pos ))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defn- setBindVar
-  ""
-  [^PreparedStatement ps pos p]
+  "" [^PreparedStatement ps pos p]
+
   (condp instance? p
     String (.setString ps pos p)
     Long (.setLong ps pos p)
@@ -170,7 +182,7 @@
     Clob (.setClob ps ^long pos ^Clob p)
     (charsClass) (.setString ps pos (String. ^chars p))
     (bytesClass) (.setBytes ps pos ^bytes p)
-    XData (.setBinaryStream ps pos (.stream ^XData p))
+    XData (onXData ps pos p)
     Boolean (.setInt ps pos (if p 1 0))
     Double (.setDouble ps pos p)
     Float (.setFloat ps pos p)
@@ -184,8 +196,8 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defn- mssqlTweakSqlstr
-  ""
-  [^String sqlstr token cmd]
+  "" [^String sqlstr token cmd]
+
   (loop [target (sname token)
          start 0
          stop false
@@ -211,9 +223,8 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defn- jiggleSQL
-  ""
-  ^String
-  [vendor ^String sqlstr]
+  "" ^String [vendor ^String sqlstr]
+
   (let [sql (strim sqlstr)
         lcs (lcase sql)]
     (if (= SQLServer (:id vendor))
@@ -230,17 +241,16 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defn- fmtStmt
-  ""
-  ^PreparedStatement
+  "" ^PreparedStatement
   [vendor ^Connection conn sqlstr params]
-  (let
-    [sql (jiggleSQL vendor sqlstr)
-     ps (if (insert? sql)
-          (.prepareStatement
-            conn
-            sql
-            Statement/RETURN_GENERATED_KEYS)
-          (.prepareStatement conn sql))]
+
+  (let [sql (jiggleSQL vendor sqlstr)
+        ps (if (insert? sql)
+             (.prepareStatement
+               conn
+               sql
+               Statement/RETURN_GENERATED_KEYS)
+             (.prepareStatement conn sql))]
     (log/debug "SQLStmt: %s" sql)
     (doseq [n (range 0 (count params))]
       (setBindVar ps (inc n) (nth params n)))
@@ -249,8 +259,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defn- handleGKeys
-  ""
-  [^ResultSet rs cnt args]
+  "" [^ResultSet rs cnt args]
   {:1 (if (== cnt 1)
         (.getObject rs 1)
         (.getLong rs
@@ -259,8 +268,8 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defn- sqlExecWithOutput
-  ""
-  [vendor conn sql pms args]
+  "" [vendor conn sql pms args]
+
   (with-open
     [s (fmtStmt vendor conn sql pms)]
     (if (> (.executeUpdate s) 0)
@@ -362,10 +371,7 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defn- postFmtModelRow
-  ""
-  [model obj]
-  (with-meta obj {:$model model}))
+(defmacro ^:private postFmtModelRow "" [obj model] `(bindModel ~obj ~model))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -393,7 +399,7 @@
               pms
               (partial row2Obj
                        (partial modelInjtor model))
-              #(postFmtModelRow model %)))
+              #(postFmtModelRow % model)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;

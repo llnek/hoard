@@ -933,12 +933,16 @@
         (try (.executeUpdate s ln)
              (catch SQLException _ (maybeOK? dbn _)))))))
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
+(defn bindModel
+  "Internal" [pojo model]
+  {:pre [(map? pojo)(map? model)]} (with-meta pojo {:$model model}))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defn dbpojo<>
-  "Create an object of some type"
-  ^APersistentMap
-  [model] {:pre [(map? model)]} (with-meta {} {:$model model} ))
+  "Create object of type" ^APersistentMap [model] (bindModel {} model))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
