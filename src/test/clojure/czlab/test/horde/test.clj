@@ -54,8 +54,8 @@
           {:i1 #{ :first_name :last_name }
            :i2 #{ :bday } })
         (dbassocs
-          {:addrs {:kind :O2M :other ::Address :cascade? true}
-           :spouse {:kind :O2O :other ::Person } }))
+          {:addrs {:kind :o2m :other ::Address :cascade? true}
+           :spouse {:kind :o2o :other ::Person } }))
       (dbmodel<> ::Employee
         (dbfields
           {:salary { :domain :Float :null? false }
@@ -65,7 +65,7 @@
            :login {:null? false} })
         (dbindexes {:i1 #{ :login } } )
         (dbassocs
-          {:person {:kind :O2O :other ::Person } }))
+          {:person {:kind :o2o :other ::Person } }))
       (dbmodel<> ::Department
         (dbfields
           {:dname { :null? false } })
@@ -77,9 +77,9 @@
            :cname { :null? false }
            :logo { :domain :Bytes } })
         (dbassocs
-          {:depts {:kind :O2M :other ::Department :cascade? true}
-           :emps {:kind :O2M :other ::Employee :cascade? true}
-           :hq {:kind :O2O :other ::Address :cascade? true}})
+          {:depts {:kind :o2m :other ::Department :cascade? true}
+           :emps {:kind :o2m :other ::Employee :cascade? true}
+           :hq {:kind :o2o :other ::Address :cascade? true}})
         (dbuniques
           {:u1 #{ :cname } } ))
       (dbjoined<> ::EmpDepts ::Department ::Employee))))
@@ -97,7 +97,7 @@
                 :url url
                 :user "sa"
                 :passwd "hello"})
-        ddl (getDDL @meta-cc :h2)]
+        ddl (getDdl @meta-cc :h2)]
     (if false
       (writeFile (io/file (sysTmpDir)
                           "dbtest.out") (dbgShowSchema @meta-cc)))
@@ -110,7 +110,7 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defn finzTest "" [] (do->true (. ^DbApi @DB finz)))
+(defn finzTest "" [] (do->true (. ^DbApi @DB dispose)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -422,7 +422,7 @@
                  (= ks1 ks2))
             (finally
               (.close conn)
-              (.finz db)))))
+              (.dispose db)))))
 
     (is (let [db (dbopen<> @jdbc-spec @meta-cc)
               url (.url ^JdbcSpec @jdbc-spec)
@@ -452,7 +452,7 @@
                  (= ks1 ks2))
             (finally
               (.close conn)
-              (.finz db)))))
+              (.dispose db)))))
 
     (is (let [c (dbconnect<> @jdbc-spec)]
           (try

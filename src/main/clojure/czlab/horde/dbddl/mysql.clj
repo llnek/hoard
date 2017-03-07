@@ -32,8 +32,7 @@
 ;;
 (defmethod genEnd
   MySQL
-  [dbtype model]
-  (str "\n) type=InnoDB" (genExec dbtype) "\n\n"))
+  [dbtype model] (str "\n) type=InnoDB" (genExec dbtype) "\n\n"))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;

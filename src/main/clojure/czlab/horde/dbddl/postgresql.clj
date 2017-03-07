@@ -21,7 +21,7 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(def postgresql-url "jdbc:postgresql://{{host}}:{{port}}/{{db}}" )
+(def postgresql-url "jdbc:postgresql://{{host}}:{{port}}/{{db}}")
 (def postgresql-driver "org.postgresql.Driver")
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

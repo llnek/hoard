@@ -10,6 +10,7 @@
 
 package czlab.horde;
 
+import czlab.jasal.Disposable;
 import java.sql.Connection;
 
 /**
@@ -17,7 +18,7 @@ import java.sql.Connection;
  *
  * @author Kenneth Leung
  */
-public interface DbApi {
+public interface DbApi extends Disposable {
 
   /**
    * All operations are done within a transaction.
@@ -44,10 +45,6 @@ public interface DbApi {
    */
   public Connection open();
 
-  /**
-   * Clean up
-   */
-  public void finz();
 }
 
 

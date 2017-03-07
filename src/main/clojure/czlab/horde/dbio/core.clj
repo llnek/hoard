@@ -312,10 +312,10 @@
   {:pre [(map? pojo)
          (isFQKeyword? lhs) (isFQKeyword? rhs)]}
 
-  (let [a2 {:lhs {:kind :MXM
+  (let [a2 {:lhs {:kind :mxm
                   :other lhs
                   :fkey :lhs-rowid}
-            :rhs {:kind :MXM
+            :rhs {:kind :mxm
                   :other rhs
                   :fkey :rhs-rowid} }]
     (-> pojo
@@ -444,7 +444,7 @@
   (let
     [rd (merge {:cascade? false :fkey nil} rel)
      r2 (case (:kind rd)
-          (:O2O :O2M)
+          (:o2o :o2m)
           (merge rd {:fkey (fmtfkey (:id pojo) rid) })
           (dberr! "Invalid relation: %s" rid))]
     (update-in pojo [:rels] assoc rid r2)))
@@ -523,7 +523,7 @@
                        (not (empty? rs)))]
       (doseq [[_ r] rs
               :let [{:keys [other kind fkey]} r]
-              :when (or (= :O2O kind)(= :O2M kind))]
+              :when (or (= :o2o kind)(= :o2m kind))]
         (var-set
           phd
           (assoc! @phd
@@ -1056,7 +1056,7 @@
   {:pre [(map? ctx)(map? lhsObj)]}
 
   (if-some
-    [r (dbioGetO2X ctx lhsObj :O2M)]
+    [r (dbioGetO2X ctx lhsObj :o2m)]
     (-> ^SQLr
         (:with ctx)
         (.findSome (or (:cast ctx)
@@ -1068,13 +1068,13 @@
 (defn dbSetO2M
   "" [ctx lhsObj rhsObj]
   {:pre [(map? ctx)
-         (map? lhsObj)(map? rhsObj)]} (dbioSetO2X ctx lhsObj rhsObj :O2M))
+         (map? lhsObj)(map? rhsObj)]} (dbioSetO2X ctx lhsObj rhsObj :o2m))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defn dbSetO2M*
   "" ^APersistentVector [ctx lhsObj & rhsObjs]
-  (preduce<vec> #(conj! %1 (last (dbioSetO2X ctx lhsObj %2 :O2M))) rhsObjs))
+  (preduce<vec> #(conj! %1 (last (dbioSetO2X ctx lhsObj %2 :o2m))) rhsObjs))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -1085,7 +1085,7 @@
   {:pre [(map? ctx) (map? lhsObj)]}
 
   (if-some
-    [r (dbioGetO2X ctx lhsObj :O2O)]
+    [r (dbioGetO2X ctx lhsObj :o2o)]
     (-> ^SQLr
         (:with ctx)
         (.findOne (or (:cast ctx)
@@ -1098,7 +1098,7 @@
   "Set One to one relation"
   [ctx lhsObj rhsObj]
   {:pre [(map? ctx)
-         (map? lhsObj) (map? rhsObj)]} (dbioSetO2X ctx lhsObj rhsObj :O2O))
+         (map? lhsObj) (map? rhsObj)]} (dbioSetO2X ctx lhsObj rhsObj :o2o))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -1135,13 +1135,13 @@
 ;;
 (defn dbClrO2M
   "Clear one to many relation" [ctx lhsObj]
-  {:pre [(map? ctx) (map? lhsObj)]} (dbioClrO2X ctx lhsObj :O2M))
+  {:pre [(map? ctx) (map? lhsObj)]} (dbioClrO2X ctx lhsObj :o2m))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defn dbClrO2O
   "Clear one to one relation" [ctx lhsObj]
-  {:pre [(map? ctx) (map? lhsObj)]} (dbioClrO2X ctx lhsObj :O2O))
+  {:pre [(map? ctx) (map? lhsObj)]} (dbioClrO2X ctx lhsObj :o2o))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;

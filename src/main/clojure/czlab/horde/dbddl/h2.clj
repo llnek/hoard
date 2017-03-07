@@ -73,8 +73,7 @@
 ;;
 (defmethod genBegin
   H2
-  [_ model]
-  (str "create cached table " (gtable model) " (\n" ))
+  [_ model] (str "create cached table " (gtable model) " (\n" ))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;

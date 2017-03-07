@@ -127,7 +127,7 @@
            (simpleSQLr [this] @s)
            (schema [_] _schema)
            (vendor [_] v)
-           (finz [_] )
+           (dispose [_] )
            (open [_] (dbconnect<> jdbc)))]
      (test-some "database-vendor" v)
      (reset! s (simSQLr db))
@@ -150,7 +150,7 @@
            (simpleSQLr [this] @s)
            (schema [_] _schema)
            (vendor [_] v)
-           (finz [_] (.shutdown pool))
+           (dispose [_] (.shutdown pool))
            (open [_] (.nextFree pool)))]
      (test-some "database-vendor" v)
      (reset! s (simSQLr db))
