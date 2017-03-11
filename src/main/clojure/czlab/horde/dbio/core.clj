@@ -633,11 +633,12 @@
         (.intern jdbc)
         p (Properties.)
         d (.loadDriver jdbc)]
-    (if (hgl? user)
+    (when (hgl? user)
       (doto p
-        (.put "password" passwd)
         (.put "user" user)
-        (.put "username" user)))
+        (.put "username" user))
+      (if (hgl? passwd)
+        (.put p "password" passwd)))
     (if (nil? d)
       (dberr! "Can't load Jdbc Url: %s" url))
     (if (and (hgl? driver)
