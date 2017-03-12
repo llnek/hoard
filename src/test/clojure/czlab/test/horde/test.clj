@@ -134,7 +134,7 @@
   (-> (. ^Schema @meta-cc get ::Employee)
       dbpojo<>
       (dbSetFlds*
-        {:pic (bytesify "poo")
+        {:pic (bytesit "poo")
          :salary 1000000.00
          :passcode "secret"
          :desc "idiot"
@@ -150,7 +150,7 @@
       (dbSetFlds*
         {:cname cname
          :revenue 100.00
-         :logo (bytesify "hi")})))
+         :logo (bytesit "hi")})))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
