@@ -30,7 +30,7 @@ public interface JdbcSpec {
   public String user();
 
   /**/
-  public String passwd();
+  public char[] passwd();
 
   /**/
   public String id();

@@ -188,15 +188,15 @@
                (dissoc cfg
                        :id  :passwd
                        :url :server))
-        pwd (str (:passwd cfg))]
+        pwd (:passwd cfg)]
     (->> (or (:server cfg)
              (:url cfg))
          (.setv impl :url))
     (->> (or (:id cfg)
              (jid<>))
          (.setv impl :id))
-    (if (hgl? pwd)
-      (.setv impl :passwd pwd))
+    (if (some? pwd)
+      (.setv impl :passwd (charsit pwd)))
     (reify JdbcSpec
       (url [_] (.getv impl :url))
       (id [_]  (.getv impl :id))
@@ -637,8 +637,8 @@
       (doto p
         (.put "user" user)
         (.put "username" user))
-      (if (hgl? passwd)
-        (.put p "password" passwd)))
+      (if (some? passwd)
+        (.put p "password" (strit passwd))))
     (if (nil? d)
       (dberr! "Can't load Jdbc Url: %s" url))
     (if (and (hgl? driver)
@@ -874,8 +874,9 @@
      (if (hgl? driver) (forname driver))
      (.setJdbcUrl hc url)
      (when (hgl? user)
-       (.setPassword hc passwd)
-       (.setUsername hc user))
+       (.setUsername hc user)
+       (if (some? passwd)
+         (.setPassword hc (strit passwd))))
      (log/debug "[hikari]\n%s" (str hc))
      (makePool<> jdbc (HikariDataSource. hc)))))
 

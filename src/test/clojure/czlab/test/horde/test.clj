@@ -96,7 +96,7 @@
                {:driver h2-driver
                 :url url
                 :user "sa"
-                :passwd "hello"})
+                :passwd (charsit "hello")})
         ddl (getDdl @meta-cc :h2)]
     (if false
       (writeFile (io/file (sysTmpDir)
