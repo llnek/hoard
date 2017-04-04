@@ -27,7 +27,7 @@
         [czlab.basal.str])
 
   (:import [java.util Calendar TimeZone GregorianCalendar]
-           [czlab.horde DbApi Schema SQLr DbioError]
+           [czlab.horde DbApi DbioError]
            [java.math BigDecimal BigInteger]
            [java.io Reader InputStream]
            [czlab.jasal XData]
@@ -479,93 +479,112 @@
 ;;
 (defn- doExtraSQL "" ^String [^String sql extra] sql)
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
+(defprotocol ISQLr
+  ""
+  (findSome [_ modeldef filters]
+            [_ modeldef filters extras] "")
+  (findAll [_ modeldef]
+           [_ modeldef extras] "")
+  (findOne [_ modeldef filters] "")
+  (update [_ obj] "")
+  (delete [_ obj] "")
+  (insert [_ obj] "")
+  (select [_ modeldef sql params] [_ sql params] "")
+  (execWithOutput [_ sql params] "")
+  (exec [_ sql params] "")
+  (countAll [_ modeldef] "")
+  (purge [_ modeldef] "")
+  (^Schema metas [_] "")
+  (^String fmtId [_ s] ""))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
+(defstateful SQLr
+  ISQLr
+  (findSome [me typeid filters]
+    (.findSome me typeid filters _empty-map_))
+  (findAll [me typeid extra]
+    (.findSome me typeid _empty-map_ extra))
+  (findAll [me typeid]
+    (.findAll me typeid _empty-map_))
+  (findOne [me typeid filters]
+    (let [rs (.findSome me typeid filters)]
+      (if-not (empty? rs) (first rs))))
+  (findSome [_ typeid filters extraSQL]
+    (let [{:keys [vendor models runc]} @data]
+      (if-some [mcz (models typeid)]
+        (runc
+          #(let [s (str "select * from "
+                        (fmtSqlId vendor (:table mcz)))
+                 [wc pms]
+                 (sqlFilterClause vendor mcz filters)]
+             (doQuery+
+               vendor
+               %1
+               (doExtraSQL
+                 (if (hgl? wc)
+                   (str s " where " wc) s)
+                 extraSQL)
+               pms mcz)))
+        (dberr! "Unknown model: %s" typeid))))
+  (fmtId [_ s] (fmtSqlId (:vendor @data) s))
+  (metas [_] (:schema @data))
+  (update [_ obj]
+    (let [{:keys [vendor runc]}]
+      (runc #(doUpdate vendor %1 obj))))
+  (delete [_ obj]
+    (let [{:keys [vendor runc]}]
+      (runc #(doDelete vendor %1 obj))))
+  (insert [_ obj]
+    (let [{:keys [vendor runc]}]
+      (runc #(doInsert vendor %1 obj))))
+  (select [_ typeid sql params]
+    (let [{:keys [models vendor]}]
+      (if-some [m (models typeid)]
+        (runc #(doQuery+ vendor %1 sql params m))
+        (dberr! "Unknown model: %s" typeid))))
+  (select [_ sql params]
+    (let [{:keys [vendor runc]}]
+      (runc #(doQuery vendor %1 sql params))))
+  (execWithOutput [_ sql pms]
+    (let [{:keys [vendor runc]}]
+      (runc #(doExec+ vendor %1 sql pms {:pkey col-rowid}))))
+  (exec [_ sql pms]
+    (let [{:keys [vendor runc]}]
+      (runc #(doExec vendor %1 sql pms))))
+  (countAll [_ typeid]
+    (let [{:keys [models vendor runc]}]
+      (if-some [m (models typeid)]
+        (runc #(doCount vendor %1 m))
+        (dberr! "Unknown model: %s" typeid))))
+  (purge [_ typeid]
+    (let [{:keys [models vendor runc]}]
+      (if-some [m (models typeid)]
+        (runc #(doPurge vendor %1 m))
+        (dberr! "Unknown model: %s" typeid)))))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defn sqlr<>
-  "Create a SQLr"
-  {:tag SQLr
-   :no-doc true} [^DbApi db runc] {:pre [(fn? runc)]}
+(defn sqlr<> ""
+  ^czlab.horde.dbio.sql.SQLr
+  [db runc]
+  {:pre [(fn? runc)]}
 
-  (let [schema (.schema db)
-        vendor (.vendor db)]
-    (reify SQLr
+  (let [{:keys [schema vendor]} @db]
+    (entity<> SQLr
+              {:models (:models @schema)
+               :schema schema :vendor vendor :runc runc})))
 
-      (findSome [me typeid filters]
-        (.findSome me typeid filters {} ))
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
+(defprotocol ITransactable
+  ""
+  (execWith [_ func cfg] "")
+  (execWith [_ func]))
 
-      (findAll [me typeid extra]
-        (.findSome me typeid {} extra))
-
-      (findAll [me typeid]
-        (.findAll me typeid {}))
-
-      (findOne [me typeid filters]
-        (let [rs (.findSome me typeid filters)]
-          (if-not (empty? rs) (first rs))))
-
-      (findSome [_ typeid filters extraSQL]
-        (if-some [mcz (.get schema typeid)]
-          (runc
-            #(let [s (str "select * from "
-                          (fmtSqlId vendor (:table mcz)))
-                   [wc pms]
-                   (sqlFilterClause vendor mcz filters)]
-               (doQuery+
-                 vendor
-                 %1
-                 (doExtraSQL
-                   (if (hgl? wc)
-                     (str s " where " wc) s)
-                   extraSQL)
-                 pms mcz)))
-          (dberr! "Unknown model: %s" typeid)))
-
-      (fmtId [_ s] (fmtSqlId vendor s))
-
-      (metas [_] schema)
-
-      (update [_ obj]
-        (runc #(doUpdate vendor %1 obj)))
-
-      (delete [_ obj]
-        (runc #(doDelete vendor %1 obj)))
-
-      (insert [_ obj]
-        (runc #(doInsert vendor %1 obj)))
-
-      (select [_ typeid sql params]
-        (if-some [m (.get schema typeid)]
-          (runc #(doQuery+ vendor
-                           %1
-                           sql
-                           params
-                           m))
-          (dberr! "Unknown model: %s" typeid)))
-
-      (select [_ sql params]
-        (runc #(doQuery vendor %1 sql params)))
-
-      (execWithOutput [_ sql pms]
-        (runc #(doExec+ vendor
-                        %1
-                        sql
-                        pms
-                        {:pkey col-rowid})))
-
-      (exec [_ sql pms]
-        (runc #(doExec vendor %1 sql pms)))
-
-      (countAll [_ typeid]
-        (if-some [m (.get schema typeid)]
-          (runc #(doCount vendor %1 m))
-          (dberr! "Unknown model: %s" typeid)))
-
-      (purge [_ typeid]
-        (if-some [m (.get schema typeid)]
-          (runc #(doPurge vendor %1 m))
-          (dberr! "Unknown model: %s" typeid))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;EOF
-
 

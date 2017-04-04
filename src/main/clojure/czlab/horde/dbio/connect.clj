@@ -19,11 +19,6 @@
 
   (:import [java.sql Connection]
            [czlab.horde
-            DbApi
-            SQLr
-            Schema
-            JdbcPool
-            JdbcSpec
             DbioLocal
             Transactable]
            [java.util Map]))
@@ -49,10 +44,11 @@
 ;;
 (defn- registerJdbcTL
   "Add a thread-local db pool"
-  ^JdbcPool [^JdbcSpec jdbc options]
+  ^czlab.horde.dbio.core.JdbcPool
+  [jdbc options]
 
   (let [^Map c (-> (DbioLocal/cache) .get)
-        hc (.id jdbc)]
+        hc (:id @jdbc)]
     (when-not (.containsKey c hc)
       (log/debug "No db-pool in DBIO-thread-local, creating one")
       (->> (merge pool-cfg options)
@@ -92,10 +88,10 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defn- txSQLr "" ^Transactable [db]
-
-  (reify Transactable
-    (execWith [_ cb cfg]
+(defstateful Transactable
+  ITransactable
+  (execWith [_ cb cfg]
+    (let [{:keys [db]} @data]
       (with-open
         [c (openDB db
                    (->> {:auto? false}
@@ -106,64 +102,93 @@
             (commit c)
             rc)
           (catch Throwable _
-            (undo c) (log/warn _ "") (throw _)))))
+            (undo c) (log/warn _ "") (throw _))))))
+  (execWith [me cb]
+    (.execWith me cb _empty-map_)))
 
-    (execWith [this cb]
-      (.execWith this cb nil))))
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
+(defn- txSQLr "" [db]
+  (entity<> Transactable {:db db}))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
+(defprotocol IDbApi
+  ""
+  (compositeSQLr [_] "")
+  (simpleSQLr [_] "")
+  (schema [_] "")
+  (vendor [_] "")
+  (open [_] ""))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
+(defstateful DbApi
+  Disposable
+  (dispose [_] (if-fn? [f (:finz @data)] (f @data)))
+  IDbApi
+  (compositeSQLr [_] @t)
+  (simpleSQLr [_] @s)
+  (schema [_] (:schema @data))
+  (vendor [_] (:vendor @data))
+  (open [_] (if-fn? [f (:open @data)] (f @data))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defn dbopen<>
-  "Open/access to a datasource" {:tag DbApi}
+  "Open/access to a datasource"
+  {:tag czlab.horde.dbio.connect.DbApi}
 
-  ([jdbc _schema] (dbopen<> jdbc _schema nil))
-  ([^JdbcSpec jdbc _schema options]
+  ([jdbc _schema]
+   (dbopen<> jdbc _schema nil))
+
+  ([jdbc _schema options]
    (let [v (resolveVendor jdbc)
-         s (atom nil)
-         t (atom nil)
-         db
-         (reify DbApi
-           (compositeSQLr [this] @t)
-           (simpleSQLr [this] @s)
-           (schema [_] _schema)
-           (vendor [_] v)
-           (dispose [_] )
-           (open [_] (dbconnect<> jdbc)))]
-     (test-some "database-vendor" v)
-     (reset! s (simSQLr db))
-     (reset! t (txSQLr db))
-     db)))
+         _ (test-some "db-vendor" v)
+         db (entity<> DbApi
+               {:open #(dbconnect<> (:jdbc %))
+                :schema _schema
+                :jdbc jdbc
+                :sim nil
+                :tx nil
+                :vendor v})]
+     (doto db
+       (.update {:sim (simSQLr db) :tx (txSQLr db)})))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defn dbapi<>
-  "Open/access to a datasource (pooled)" {:tag DbApi}
+  "Open/access to a datasource (pooled)"
+  ^czlab.horde.dbio.connect.DbApi
 
-  ([pool _schema] (dbapi<> pool _schema nil))
-  ([^JdbcPool pool _schema options]
-   (let [v (.vendor pool)
-         s (atom nil)
-         t (atom nil)
+  ([pool _schema]
+   (dbapi<> pool _schema _empty-map_))
+
+  ([pool _schema options]
+   (let [v (:vendor @pool)
+         _ (test-some "db-vendor" v)
          db
-         (reify DbApi
-           (compositeSQLr [this] @t)
-           (simpleSQLr [this] @s)
-           (schema [_] _schema)
-           (vendor [_] v)
-           (dispose [_] (.shutdown pool))
-           (open [_] (.nextFree pool)))]
-     (test-some "database-vendor" v)
-     (reset! s (simSQLr db))
-     (reset! t (txSQLr db))
-     db)))
+         (entity<> DbApi
+                   {:finz #(.shutdown ^czlab.horde.dbio.core.JdbcPool (:pool %))
+                    :open #(.nextFree ^czlab.horde.dbio.core.JdbcPool (:pool %))
+                    :schema _schema
+                    :vendor v
+                    :pool pool
+                    :sim nil
+                    :tx nil})]
+     (doto db
+       (.update {:sim (simSQLr db) :tx (txSQLr db)})))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defn dbopen<+>
-  "Open/access to a datasource (pooled)" {:tag DbApi}
+  "Open/access to a datasource (pooled)"
+  ^czlab.horde.dbio.connect.DbApi
 
-  ([jdbc _schema] (dbopen<+> jdbc _schema nil))
-  ([^JdbcSpec jdbc _schema options]
+  ([jdbc _schema]
+   (dbopen<+> jdbc _schema _empty-map_))
+
+  ([jdbc _schema options]
    (dbapi<> (->> (merge pool-cfg options)
                  (dbpool<> jdbc )) _schema)))
 

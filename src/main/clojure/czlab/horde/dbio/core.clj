@@ -27,11 +27,9 @@
            [com.zaxxer.hikari HikariConfig HikariDataSource]
            [czlab.horde
             DbApi
-            Schema
             DbioError
-            SQLr
-            JdbcPool
-            JdbcSpec]
+            SQLr]
+           [czlab.basal Stateful]
            [java.sql
             SQLException
             Connection
@@ -178,35 +176,31 @@
    {:pre [(map? model)]}
    (dbcol (get (:fields model) fid))))
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
+(defstateful JdbcSpec)
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defn dbspec<>
   "Basic jdbc parameters"
-  ^JdbcSpec [cfg] {:pre [(map? cfg)]}
+  ^czlab.horde.dbio.core.JdbcSpec [cfg]
+  {:pre [(map? cfg)]}
 
-  (let [impl (muble<>
-               (dissoc cfg
-                       :id  :passwd
-                       :url :server))
-        pwd (:passwd cfg)]
-    (->> (or (:server cfg)
-             (:url cfg))
-         (.setv impl :url))
-    (->> (or (:id cfg)
-             (jid<>))
-         (.setv impl :id))
-    (if (some? pwd)
-      (.setv impl :passwd (charsit pwd)))
-    (reify JdbcSpec
-      (url [_] (.getv impl :url))
-      (id [_]  (.getv impl :id))
-      (intern [_] (.intern impl))
-      (loadDriver [me]
-        (if-some+ [s (.url me)]
-          (DriverManager/getDriver s)))
-      (driver [_] (.getv impl :driver))
-      (user [_] (.getv impl :user))
-      (passwd [_] (.getv impl :passwd)))))
+  (let [pwd (:passwd cfg)]
+    (entity<> JdbcSpec
+              (-> (dissoc cfg :server)
+                  (assoc
+                    :url (or (:server cfg)
+                             (:url cfg))
+                    :id (or (:id cfg)
+                            (jid<>))
+                    :passwd (charsit pwd))))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
+(defn loadDriver [spec]
+  (if-some+ [s (:url @spec)] (DriverManager/getDriver s)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -591,24 +585,31 @@
             (assoc! %1 k)))
     metas))
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
+(dbstateful Schema)
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defn dbschema<>
-  "Stores metadata for all models" ^Schema [& models]
+  "Stores metadata for all models"
+  ^czlab.horde.dbio.core.Schema
+  [& models]
 
-  (let [data (atom {})
-        sch (reify Schema
-              (get [_ id] (@data id))
-              (models [_] @data))
-        ms (if-not (empty? models)
+  (let [ms (if-not (empty? models)
              (preduce<map>
                #(assoc! %1 (:id %2) %2) models))
         m2 (if (empty? ms)
              {}
-             (-> (resolveAssocs ms)
-                 resolveMXMs
-                 (metaModels sch)))]
-    (reset! data m2)
+             (-> ms resolveAssocs resolveMXMs (metaModels nil)))
+        ^Stateful
+        sch (entity<> Schema {:models m2})]
+    (->>
+      (preduce<map>
+        #(let [[k m] %2]
+           (assoc! %1 k (vary-meta m assoc :schema sch)))
+        (:models @sch))
+      (.reset sch))
     sch))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -826,59 +827,71 @@
     ;;rs = m.getTables( catalog, schema, "%", null)
     (loadColumns mt catalog schema tbl)))
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defn- makePool<>
-  "" ^JdbcPool [^JdbcSpec jdbc
-                ^HikariDataSource impl]
+(defprotocol IJdbcPool
+  ""
+  (^Connection nextFree [_] "")
+  (shutdown [_] "")
+  (^Object vendor [_] "")
+  (^String dbUrl [_] ""))
 
-  (let [dbv (resolveVendor jdbc)]
-    (test-some "database-vendor" dbv)
-    (reify JdbcPool
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
+(defstateful JdbcPool
+  IJdbcPool
+  (shutdown [_]
+    (log/debug "shutting: %s" (:impl @data))
+    (-> ^HikariDataSource (:impl @data) .close))
+  (nextFree [_]
+    (try
+      (-> ^HikariDataSource
+          (:impl @data) .getConnection)
+      (catch Throwable e#
+        (log/error e# "")
+        (dberr! "No free connection"))))
+  (vendor [_] (:dbv @data))
+  (dbUrl [_] (:url @(:jdbc @data))))
 
-      (shutdown [_]
-        (log/debug "shutting down pool impl: %s" impl)
-        (.close impl))
-
-      (dbUrl [_] (.url jdbc))
-      (vendor [_] dbv)
-
-      (nextFree [_]
-        (try
-            (.getConnection impl)
-          (catch Throwable e#
-            (log/error e# "")
-            (dberr! "No free connection")))))))
-
-      ;;Object
-      ;;Clojure CLJ-1347
-      ;;finalize won't work *correctly* in reified objects - document
-      ;;(finalize [this]
-        ;;(try!
-          ;;(log/debug "DbPool finalize() called.")
-          ;;(.shutdown this)))
-
+;;Object
+;;Clojure CLJ-1347
+;;finalize won't work *correctly* in reified objects - document
+;;(finalize [this]
+;;(try!
+;;(log/debug "DbPool finalize() called.")
+;;(.shutdown this)))
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defn dbpool<>
-  "Create a db connection pool" {:tag JdbcPool}
+  "Create a db connection pool"
+  {:tag czlab.horde.dbio.core.JdbcPool}
 
   ([jdbc] (dbpool<> jdbc nil))
-  ([^JdbcSpec jdbc options]
-   (let [{:keys [driver url passwd user]}
-         (.intern jdbc)
+  ([jdbc options]
+   (let [dbv (resolveVendor jdbc)
+         {:keys [driver
+                 server
+                 url
+                 passwd user]}
+         @jdbc
          options (or options {})
          hc (HikariConfig.)]
-     ;;(log/debug "jdbc: %s" (.intern jdbc))
-     ;;(log/debug "options: %s" options)
+     ;;(log/debug "pool-options: %s" options)
+     ;;(log/debug "pool-jdbc: %s" @jdbc)
      (if (hgl? driver) (forname driver))
-     (.setJdbcUrl hc url)
+     (test-some "database-vendor" dbv)
+     (.setJdbcUrl hc
+                  ^String
+                  (or server url))
      (when (hgl? user)
-       (.setUsername hc user)
+       (.setUsername hc ^String user)
        (if (some? passwd)
          (.setPassword hc (strit passwd))))
      (log/debug "[hikari]\n%s" (str hc))
-     (makePool<> jdbc (HikariDataSource. hc)))))
+     (entity<> JdbcPool
+               {:impl (HikariDataSource. hc)
+                :jdbc jdbc
+                :dbv dbv}))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
