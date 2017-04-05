@@ -19,8 +19,7 @@
   (:use [czlab.horde.dbddl.drivers]
         [czlab.horde.dbio.core])
 
-  (:import [czlab.horde DbioError]
-           [java.io File]
+  (:import [java.io File]
            [java.sql DriverManager Connection Statement]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

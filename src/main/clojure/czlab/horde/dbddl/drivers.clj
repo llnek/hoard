@@ -18,7 +18,7 @@
         [czlab.basal.core]
         [czlab.basal.str])
 
-  (:import [czlab.horde Schema DbApi DbioError]))
+  (:import [czlab.basal Stateful]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;(set! *warn-on-reflection* true)
@@ -358,13 +358,13 @@
   for this schema" {:tag String}
 
   ([schema dbID] (getDdl schema dbID nil))
-  ([^Schema schema dbID dbver]
+  ([schema dbID dbver]
    (binding [*ddl-cfg* {:db-version (strim dbver)
                         :use-sep? true
                         :qstr ""
                         :case-fn clojure.string/upper-case}
              *ddl-bvs* (atom {})]
-     (let [ms (.models schema)
+     (let [ms (:models @schema)
            drops (strbf<>)
            body (strbf<>)]
        (doseq [[id model] ms

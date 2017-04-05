@@ -27,7 +27,6 @@
         [czlab.basal.str])
 
   (:import [java.util Calendar TimeZone GregorianCalendar]
-           [czlab.horde DbApi DbioError]
            [java.math BigDecimal BigInteger]
            [java.io Reader InputStream]
            [czlab.jasal XData]
@@ -479,30 +478,11 @@
 ;;
 (defn- doExtraSQL "" ^String [^String sql extra] sql)
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;
-(defprotocol ISQLr
-  ""
-  (findSome [_ modeldef filters]
-            [_ modeldef filters extras] "")
-  (findAll [_ modeldef]
-           [_ modeldef extras] "")
-  (findOne [_ modeldef filters] "")
-  (update [_ obj] "")
-  (delete [_ obj] "")
-  (insert [_ obj] "")
-  (select [_ modeldef sql params] [_ sql params] "")
-  (execWithOutput [_ sql params] "")
-  (exec [_ sql params] "")
-  (countAll [_ modeldef] "")
-  (purge [_ modeldef] "")
-  (^Schema metas [_] "")
-  (^String fmtId [_ s] ""))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defstateful SQLr
-  ISQLr
+  czlab.horde.dbio.core.ISQLr
   (findSome [me typeid filters]
     (.findSome me typeid filters _empty-map_))
   (findAll [me typeid extra]
@@ -530,37 +510,36 @@
                pms mcz)))
         (dberr! "Unknown model: %s" typeid))))
   (fmtId [_ s] (fmtSqlId (:vendor @data) s))
-  (metas [_] (:schema @data))
-  (update [_ obj]
-    (let [{:keys [vendor runc]}]
+  (modify [_ obj]
+    (let [{:keys [vendor runc]} @data]
       (runc #(doUpdate vendor %1 obj))))
   (delete [_ obj]
-    (let [{:keys [vendor runc]}]
+    (let [{:keys [vendor runc]} @data]
       (runc #(doDelete vendor %1 obj))))
   (insert [_ obj]
-    (let [{:keys [vendor runc]}]
+    (let [{:keys [vendor runc]} @data]
       (runc #(doInsert vendor %1 obj))))
   (select [_ typeid sql params]
-    (let [{:keys [models vendor]}]
+    (let [{:keys [runc models vendor]} @data]
       (if-some [m (models typeid)]
         (runc #(doQuery+ vendor %1 sql params m))
         (dberr! "Unknown model: %s" typeid))))
   (select [_ sql params]
-    (let [{:keys [vendor runc]}]
+    (let [{:keys [vendor runc]} @data]
       (runc #(doQuery vendor %1 sql params))))
   (execWithOutput [_ sql pms]
-    (let [{:keys [vendor runc]}]
-      (runc #(doExec+ vendor %1 sql pms {:pkey col-rowid}))))
+    (let [{:keys [vendor runc]} @data]
+      (runc #(doExec+ vendor %1 sql pms {:pkey *col-rowid*}))))
   (exec [_ sql pms]
-    (let [{:keys [vendor runc]}]
+    (let [{:keys [vendor runc]} @data]
       (runc #(doExec vendor %1 sql pms))))
   (countAll [_ typeid]
-    (let [{:keys [models vendor runc]}]
+    (let [{:keys [models vendor runc]} @data]
       (if-some [m (models typeid)]
         (runc #(doCount vendor %1 m))
         (dberr! "Unknown model: %s" typeid))))
   (purge [_ typeid]
-    (let [{:keys [models vendor runc]}]
+    (let [{:keys [models vendor runc]} @data]
       (if-some [m (models typeid)]
         (runc #(doPurge vendor %1 m))
         (dberr! "Unknown model: %s" typeid)))))
@@ -576,14 +555,6 @@
     (entity<> SQLr
               {:models (:models @schema)
                :schema schema :vendor vendor :runc runc})))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;
-(defprotocol ITransactable
-  ""
-  (execWith [_ func cfg] "")
-  (execWith [_ func]))
-
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;EOF

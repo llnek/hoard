@@ -19,7 +19,7 @@
         [czlab.horde.dbddl.h2]
         [clojure.test])
 
-  (:import [czlab.horde Transactable JdbcSpec SQLr Schema DbApi]
+  (:import [czlab.jasal Disposable]
            [java.io File]
            [java.util GregorianCalendar Calendar]))
 
@@ -28,61 +28,60 @@
 (def
   ^:private
   meta-cc
-  (atom
-    (dbschema<>
-      (dbmodel<> ::Address
-        (dbfields
-          {:addr1 {:size 200 :null? false}
-           :addr2 {:size 64}
-           :city {:null? false}
-           :state {:null? false}
-           :zip {:null? false}
-           :country {:null? false}})
-        (dbindexes
-          {:i1 #{:city :state :country }
-           :i2 #{:zip :country }
-           :i3 #{:state }
-           :i4 #{:zip } }))
-      (dbmodel<> ::Person
-        (dbfields
-          {:first_name {:null? false }
-           :last_name {:null? false }
-           :iq {:domain :Int}
-           :bday {:domain :Calendar :null? false}
-           :sex {:null? false} })
-        (dbindexes
-          {:i1 #{ :first_name :last_name }
-           :i2 #{ :bday } })
-        (dbassocs
-          {:addrs {:kind :o2m :other ::Address :cascade? true}
-           :spouse {:kind :o2o :other ::Person } }))
-      (dbmodel<> ::Employee
-        (dbfields
-          {:salary { :domain :Float :null? false }
-           :passcode { :domain :Password }
-           :pic { :domain :Bytes }
-           :descr {}
-           :login {:null? false} })
-        (dbindexes {:i1 #{ :login } } )
-        (dbassocs
-          {:person {:kind :o2o :other ::Person } }))
-      (dbmodel<> ::Department
-        (dbfields
-          {:dname { :null? false } })
-        (dbuniques
-          {:u1 #{ :dname }} ))
-      (dbmodel<> ::Company
-        (dbfields
-          {:revenue { :domain :Double :null? false }
-           :cname { :null? false }
-           :logo { :domain :Bytes } })
-        (dbassocs
-          {:depts {:kind :o2m :other ::Department :cascade? true}
-           :emps {:kind :o2m :other ::Employee :cascade? true}
-           :hq {:kind :o2o :other ::Address :cascade? true}})
-        (dbuniques
-          {:u1 #{ :cname } } ))
-      (dbjoined<> ::EmpDepts ::Department ::Employee))))
+  (dbschema<>
+    (dbmodel<> ::Address
+      (dbfields
+        {:addr1 {:size 200 :null? false}
+         :addr2 {:size 64}
+         :city {:null? false}
+         :state {:null? false}
+         :zip {:null? false}
+         :country {:null? false}})
+      (dbindexes
+        {:i1 #{:city :state :country }
+         :i2 #{:zip :country }
+         :i3 #{:state }
+         :i4 #{:zip } }))
+    (dbmodel<> ::Person
+      (dbfields
+        {:first_name {:null? false }
+         :last_name {:null? false }
+         :iq {:domain :Int}
+         :bday {:domain :Calendar :null? false}
+         :sex {:null? false} })
+      (dbindexes
+        {:i1 #{ :first_name :last_name }
+         :i2 #{ :bday } })
+      (dbassocs
+        {:addrs {:kind :o2m :other ::Address :cascade? true}
+         :spouse {:kind :o2o :other ::Person } }))
+    (dbmodel<> ::Employee
+      (dbfields
+        {:salary { :domain :Float :null? false }
+         :passcode { :domain :Password }
+         :pic { :domain :Bytes }
+         :descr {}
+         :login {:null? false} })
+      (dbindexes {:i1 #{ :login } } )
+      (dbassocs
+        {:person {:kind :o2o :other ::Person } }))
+    (dbmodel<> ::Department
+      (dbfields
+        {:dname { :null? false } })
+      (dbuniques
+        {:u1 #{ :dname }} ))
+    (dbmodel<> ::Company
+      (dbfields
+        {:revenue { :domain :Double :null? false }
+         :cname { :null? false }
+         :logo { :domain :Bytes } })
+      (dbassocs
+        {:depts {:kind :o2m :other ::Department :cascade? true}
+         :emps {:kind :o2m :other ::Employee :cascade? true}
+         :hq {:kind :o2o :other ::Address :cascade? true}})
+      (dbuniques
+        {:u1 #{ :cname } } ))
+    (dbjoined<> ::EmpDepts ::Department ::Employee)))
 (def ^:private jdbc-spec (atom nil))
 (def ^:private DB (atom nil))
 
@@ -97,27 +96,27 @@
                 :url url
                 :user "sa"
                 :passwd (charsit "hello")})
-        ddl (getDdl @meta-cc :h2)]
+        ddl (getDdl meta-cc :h2)]
     (if false
       (writeFile (io/file (sysTmpDir)
-                          "dbtest.out") (dbgShowSchema @meta-cc)))
+                          "dbtest.out") (dbgShowSchema meta-cc)))
     (if false (println "\n\n" ddl))
     (reset! jdbc-spec jdbc)
     (uploadDdl jdbc ddl)
-    (reset! DB (dbopen<+> jdbc @meta-cc ))
-    (if false (println "\n\n" (dbgShowSchema @meta-cc))))
+    (reset! DB (dbopen<+> jdbc meta-cc ))
+    (if false (println "\n\n" (dbgShowSchema meta-cc))))
   (if (fn? f) (f)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defn finzTest "" [] (do->true (. ^DbApi @DB dispose)))
+(defn finzTest "" [] (do->true (.dispose ^Disposable @DB)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defn- mkPerson
   ""
   [fname lname sex]
-  (-> (. ^Schema @meta-cc get ::Person)
+  (-> (get (:models @meta-cc) ::Person)
       dbpojo<>
       (dbSetFlds*
         {:first_name fname
@@ -131,7 +130,7 @@
 (defn- mkEmp
   ""
   [login]
-  (-> (. ^Schema @meta-cc get ::Employee)
+  (-> (get (:models @meta-cc) ::Employee)
       dbpojo<>
       (dbSetFlds*
         {:pic (bytesit "poo")
@@ -145,7 +144,7 @@
 (defn- mkCompany
   ""
   [cname]
-  (-> (. ^Schema @meta-cc get ::Company)
+  (-> (get (:models @meta-cc) ::Company)
       dbpojo<>
       (dbSetFlds*
         {:cname cname
@@ -157,7 +156,7 @@
 (defn- mkDept
   ""
   [dname]
-  (-> (. ^Schema @meta-cc get ::Department)
+  (-> (get (:models @meta-cc) ::Department)
       dbpojo<>
       (dbSetFld :dname dname)))
 
@@ -166,7 +165,7 @@
 (defn- createEmp
   ""
   [fname lname sex login]
-  (let [sql (. ^DbApi @DB compositeSQLr)]
+  (let [sql (. ^czlab.horde.dbio.connect.DbApi @DB compositeSQLr)]
     (->>
       (fn [^SQLr s]
         (let [p (mkPerson fname
@@ -190,7 +189,8 @@
 (defn- fetchAllEmps
   ""
   []
-  (-> (. ^DbApi @DB simpleSQLr)
+  (-> ^czlab.horde.dbio.sql.SQLr
+      (. ^czlab.horde.dbio.connect.DbApi @DB simpleSQLr)
       (.findAll ::Employee)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -198,7 +198,8 @@
 (defn- fetch-person
   ""
   [fname lname]
-  (-> (. ^DbApi @DB simpleSQLr)
+  (-> ^czlab.horde.dbio.sql.SQLr
+      (. ^czlab.horde.dbio.connect.DbApi @DB simpleSQLr)
       (.findOne ::Person
                 {:first_name fname :last_name lname})))
 
@@ -207,7 +208,8 @@
 (defn- fetchEmp
   ""
   [login]
-  (-> (. ^DbApi @DB simpleSQLr)
+  (-> ^czlab.horde.dbio.sql.SQLr
+      (. ^czlab.horde.dbio.connect.DbApi @DB simpleSQLr)
       (.findOne ::Employee {:login login})))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -215,20 +217,26 @@
 (defn- changeEmp
   ""
   [login]
-  (-> (. ^DbApi @DB compositeSQLr)
+  (-> ^czlab.horde.dbio.sql.ITransactable
+      (. ^czlab.horde.dbio.connect.DbApi @DB compositeSQLr)
       (.execWith
-        #(let [o2 (-> (. ^SQLr % findOne ::Employee {:login login})
+        #(let [o2 (-> (. ^czlab.horde.dbio.sql.SQLr
+                         %
+                         findOne ::Employee {:login login})
                       (dbSetFlds* {:salary 99.9234 :iq 0}))]
-           (if (> (. ^SQLr % update o2) 0) o2)))))
+           (if (> (. ^czlab.horde.dbio.sql.SQLr
+                     %
+                     update o2) 0) o2)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defn- deleteEmp
   ""
   [login]
-  (-> (.compositeSQLr ^DbApi @DB)
+  (-> ^czlab.horde.dbio.sql.ITransactable
+      (.compositeSQLr ^DbApi @DB)
       (.execWith
-        (fn [^SQLr s]
+        (fn [^czlab.horde.dbio.sql.SQLr s]
           (let [o1 (.findOne s ::Employee {:login login} )]
             (.delete s o1)
             (.countAll s ::Employee))))))
@@ -239,19 +247,22 @@
   ""
   [fname lname sex]
   (let [p (mkPerson fname lname sex)]
-    (-> (.compositeSQLr ^DbApi @DB)
-        (.execWith #(.insert ^SQLr % p)))))
+    (-> ^czlab.horde.dbio.sql.ITransactable
+        (.compositeSQLr ^DbApi @DB)
+        (.execWith
+          #(.insert ^czlab.horde.dbio.sql.SQLr % p)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defn- wedlock?
   ""
   []
-  (let [sql (.compositeSQLr ^DbApi @DB)
+  (let [^czlab.horde.dbio.sql.ITransactable
+        sql (.compositeSQLr ^DbApi @DB)
         e (createEmp "joe" "blog" "male" "joeb")
         w (createPerson "mary" "lou" "female")]
     (->>
-      (fn [^SQLr s]
+      (fn [^czlab.horde.dbio.sql.SQLr s]
         (let
           [pm (dbGetO2O {:with s :as :person} e)
            [p1 w1]
@@ -268,9 +279,10 @@
 (defn- undoWedlock
   ""
   []
-  (let [sql (.compositeSQLr ^DbApi @DB)]
+  (let [^czlab.horde.dbio.sql.ITransactable
+        sql (.compositeSQLr ^DbApi @DB)]
     (->>
-      (fn [^SQLr s]
+      (fn [^czlab.horde.dbio.sql.SQLr s]
         (let
           [e (fetchEmp "joeb")
            pm (dbGetO2O {:with s :as :person} e)
@@ -287,9 +299,10 @@
 (defn- testCompany
   ""
   []
-  (let [sql (.compositeSQLr ^DbApi @DB)]
+  (let [^czlab.horde.dbio.sql.ITransactable
+        sql (.compositeSQLr ^DbApi @DB)]
     (->>
-      (fn [^SQLr s]
+      (fn [^czlab.horde.dbio.sql.SQLr s]
         (let [c (.insert s (mkCompany "acme"))
               _ (dbSetO2M
                   {:as :depts :with s }
@@ -317,9 +330,10 @@
 (defn- testM2M
   ""
   []
-  (let [sql (.compositeSQLr ^DbApi @DB)]
+  (let [^czlab.horde.dbio.sql.ITransactable
+        sql (.compositeSQLr ^DbApi @DB)]
     (->>
-      (fn [^SQLr s]
+      (fn [^czlab.horde.dbio.sql.SQLr s]
         (let
           [c (.findOne s ::Company {:cname "acme"})
            ds (dbGetO2M {:as :depts :with s} c)
@@ -351,9 +365,10 @@
 (defn- undoM2M
   ""
   []
-  (let [sql (.compositeSQLr ^DbApi @DB)]
+  (let [^czlab.horde.dbio.sql.ITransactable
+        sql (.compositeSQLr ^DbApi @DB)]
     (->>
-      (fn [^SQLr s]
+      (fn [^czlab.horde.dbio.sql.SQLr s]
         (let
           [d2 (.findOne s ::Department {:dname "d2"})
            e2 (.findOne s ::Employee {:login "e2"})
@@ -370,9 +385,10 @@
 (defn- undoCompany
   ""
   []
-  (let [sql (.compositeSQLr ^DbApi @DB)]
+  (let [^czlab.horde.dbio.sql.ITransactable
+        sql (.compositeSQLr ^DbApi @DB)]
     (->>
-      (fn [^SQLr s]
+      (fn [^czlab.horde.dbio.sql.SQLr s]
         (let
           [c (.findOne s ::Company {:cname "acme"})
            _ (dbClrO2M {:as :depts :with s} c)
@@ -394,8 +410,10 @@
   (testing
     "related to: db api"
 
-    (is (let [db (dbopen<+> @jdbc-spec @meta-cc)
-              url (.url ^JdbcSpec @jdbc-spec)
+    (is (let [^czlab.horde.dbio.connect.DbApi
+              db
+              (dbopen<+> @jdbc-spec meta-cc)
+              url (:url (.deref @jdbc-spec))
               c (.compositeSQLr db)
               s (.simpleSQLr db)
               h (.schema db)
@@ -405,14 +423,14 @@
               b (fmtSqlId conn "hello")
               id (dbtag ::Person h)
               t (dbtable ::Person h)
-              m (.get ^Schema h ::Person)
+              m (get (:models @h) ::Person)
               cn (dbcol :iq m)
               ks1 (matchSpec "h2")
               ks2 (matchUrl url)]
           (try
             (and (some? c)
                  (some? s)
-                 (ist? Schema h)
+                 (ist? czlab.horde.dbio.core.Schema h)
                  (map? v)
                  (some? conn)
                  (= a b)
@@ -422,10 +440,12 @@
                  (= ks1 ks2))
             (finally
               (.close conn)
-              (.dispose db)))))
+              (.dispose ^Disposable db)))))
 
-    (is (let [db (dbopen<> @jdbc-spec @meta-cc)
-              url (.url ^JdbcSpec @jdbc-spec)
+    (is (let [^czlab.horde.dbio.connect.DbApi
+              db
+              (dbopen<> @jdbc-spec meta-cc)
+              url (:url (.deref @jdbc-spec))
               c (.compositeSQLr db)
               s (.simpleSQLr db)
               h (.schema db)
@@ -435,14 +455,14 @@
               b (fmtSqlId conn "hello")
               id (dbtag ::Person h)
               t (dbtable ::Person h)
-              m (.get ^Schema h ::Person)
+              m (get (:models @h) ::Person)
               cn (dbcol :iq m)
               ks1 (matchSpec "h2")
               ks2 (matchUrl url)]
           (try
             (and (some? c)
                  (some? s)
-                 (ist? Schema h)
+                 (ist? czlab.horde.dbio.core.Schema h)
                  (map? v)
                  (some? conn)
                  (= a b)
@@ -452,7 +472,7 @@
                  (= ks1 ks2))
             (finally
               (.close conn)
-              (.dispose db)))))
+              (.dispose ^Disposable db)))))
 
     (is (let [c (dbconnect<> @jdbc-spec)]
           (try
