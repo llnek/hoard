@@ -59,15 +59,15 @@
   (findAll [_ modeldef]
            [_ modeldef extras] "")
   (findOne [_ modeldef filters] "")
-  (updateObj [_ obj] "")
-  (deleteObj [_ obj] "")
-  (insertObj [_ obj] "")
-  (selectSQL [_ modeldef sql params] [_ sql params] "")
+  (modObj [_ obj] "")
+  (delObj [_ obj] "")
+  (insObj [_ obj] "")
+  (selectSQL [_ sql params]
+             [_ modeldef sql params] "")
   (execWithOutput [_ sql params] "")
   (execSQL [_ sql params] "")
   (countObjs [_ modeldef] "")
   (purgeObjs [_ modeldef] "")
-  ;;(^Schema metas [_] "")
   (^String fmtId [_ s] ""))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -124,6 +124,12 @@
 (defmacro lookupField
   "Get field-def from model"
   [model fieldid] `(get (:fields ~model) ~fieldid))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
+(defmacro lookupAssoc
+  "Get assoc-def from model"
+  [model relid] `(get (:rels ~model) ~relid))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -215,12 +221,15 @@
 (defstateful JdbcPool
   IJdbcPool
   (shutdown [_]
-    (log/debug "shutting: %s" (:impl @data))
-    (.close ^HikariDataSource (:impl @data)))
+    (do->nil
+      (doto->> ^HikariDataSource
+               (:impl @data)
+               (log/debug "shutting: %s" )
+               (.close ))))
   (nextFree [_]
     (try
-      (.getConnection ^HikariDataSource
-                      (:impl @data))
+      (-> ^HikariDataSource
+          (:impl @data) .getConnection)
       (catch Throwable e#
         (log/error e# "")
         (dberr! "No free connection")))))
@@ -233,7 +242,8 @@
 ;;
 (defn dbspec<>
   "Basic jdbc parameters"
-  ^czlab.horde.dbio.core.JdbcSpec [cfg]
+  ^czlab.horde.dbio.core.JdbcSpec
+  [cfg]
   {:pre [(map? cfg)]}
 
   (let [pwd (:passwd cfg)]
@@ -662,6 +672,7 @@
         #(let [[k m] %2]
            (assoc! %1 k (vary-meta m assoc :schema sch)))
         (:models @sch))
+      (assoc nil :models)
       (.reset sch))
     sch))
 
@@ -775,7 +786,7 @@
 (defmethod tableExist?
   czlab.horde.dbio.core.JdbcSpec
   [jdbc ^String table]
-  (with-open [^Connection conn (dbconnect<> jdbc)] (tableExist? conn table)))
+  (with-open [conn (dbconnect<> jdbc)] (tableExist? conn table)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -953,7 +964,7 @@
 (defmethod uploadDdl
   czlab.horde.dbio.core.JdbcSpec
   [jdbc ^String ddl]
-  (with-open [^Connection conn (dbconnect<> jdbc)] (uploadDdl conn ddl)))
+  (with-open [conn (dbconnect<> jdbc)] (uploadDdl conn ddl)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -1037,7 +1048,7 @@
 (defn- dbioGetRelation
   "Get the relation definition"
   [model rid kind]
-  (if-some [r (get (:rels model) rid)] (if (= (:kind r) kind) r)))
+  (if-some [r (lookupAssoc model rid)] (if (= (:kind r) kind) r)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -1091,7 +1102,7 @@
             fid (:fkey r)
             y (-> (mockPojo<> rhsObj)
                   (dbSetFld fid fv))
-            cnt (.modify sqlr y)]
+            cnt (.modObj sqlr y)]
         [lhsObj (merge rhsObj y)])
       (dberr! "Unknown relation: %s" rid))))
 
@@ -1115,13 +1126,18 @@
 (defn dbSetO2M
   "" [ctx lhsObj rhsObj]
   {:pre [(map? ctx)
-         (map? lhsObj)(map? rhsObj)]} (dbioSetO2X ctx lhsObj rhsObj :o2m))
+         (map? lhsObj)
+         (map? rhsObj)]}
+  (dbioSetO2X ctx lhsObj rhsObj :o2m))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defn dbSetO2M*
-  "" ^APersistentVector [ctx lhsObj & rhsObjs]
-  (preduce<vec> #(conj! %1 (last (dbioSetO2X ctx lhsObj %2 :o2m))) rhsObjs))
+(defn dbSetO2M* ""
+  ^APersistentVector
+  [ctx lhsObj & rhsObjs]
+  (preduce<vec>
+    #(conj! %1
+            (last (dbioSetO2X ctx lhsObj %2 :o2m))) rhsObjs))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -1145,11 +1161,14 @@
   "Set One to one relation"
   [ctx lhsObj rhsObj]
   {:pre [(map? ctx)
-         (map? lhsObj) (map? rhsObj)]} (dbioSetO2X ctx lhsObj rhsObj :o2o))
+         (map? lhsObj)
+         (map? rhsObj)]}
+  (dbioSetO2X ctx lhsObj rhsObj :o2o))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defn- dbioClrO2X "" [ctx objA kind]
+(defn- dbioClrO2X
+  "" [ctx objA kind]
 
   (let [^czlab.horde.dbio.core.ISQLr
         sqlr (:with ctx)
@@ -1159,10 +1178,10 @@
     (if-some
       [r (dbioGetRelation mA rid kind)]
       (let [rt (or (:cast ctx) (:other r))
-            mB (get (:models @schema) rt)
+            mB (lookupModel schema rt)
             tn (dbtable mB)
             cn (dbcol (:fkey r) mB)]
-        (.exec
+        (.execSQL
           sqlr
           (if-not (:cascade? r)
             (format
@@ -1181,14 +1200,18 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defn dbClrO2M
-  "Clear one to many relation" [ctx lhsObj]
-  {:pre [(map? ctx) (map? lhsObj)]} (dbioClrO2X ctx lhsObj :o2m))
+  "Clear one to many relation"
+  [ctx lhsObj]
+  {:pre [(map? ctx)
+         (map? lhsObj)]} (dbioClrO2X ctx lhsObj :o2m))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defn dbClrO2O
-  "Clear one to one relation" [ctx lhsObj]
-  {:pre [(map? ctx) (map? lhsObj)]} (dbioClrO2X ctx lhsObj :o2o))
+  "Clear one to one relation"
+  [ctx lhsObj]
+  {:pre [(map? ctx)
+         (map? lhsObj)]} (dbioClrO2X ctx lhsObj :o2o))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -1202,22 +1225,24 @@
 ;;
 (defn dbSetM2M
   "Set many to many relations"
-  ^APersistentMap [ctx objA objB]
-  {:pre [(map? ctx) (map? objA) (map? objB)]}
+  ^APersistentMap
+  [ctx objA objB]
+  {:pre [(map? ctx)
+         (map? objA) (map? objB)]}
 
   (let [^czlab.horde.dbio.core.ISQLr
         sqlr (:with ctx)
         schema (:schema @sqlr)
         jon (:joined ctx)]
     (if-some
-      [mm (get (:models @schema) jon)]
+      [mm (lookupModel schema jon)]
       (let [ka (selectSide mm objA)
             kb (selectSide mm objB)]
         (->> (-> (dbpojo<> mm)
                  (setMxMFlds*
                    ka (goid objA)
                    kb (goid objB)))
-             (.insert sqlr )))
+             (.insObj sqlr )))
       (dberr! "Unkown relation: %s" jon))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -1233,31 +1258,32 @@
           schema (:schema @sqlr)
           jon (:joined ctx)]
       (if-some
-        [mm (get (:models @schema) jon)]
+        [mm (lookupModel schema jon)]
         (let [fs (:fields mm)
               ka (selectSide mm objA)
               kb (selectSide mm objB)]
           (if (nil? objB)
-            (.exec sqlr
-                   (format
-                     "delete from %s where %s=?"
-                     (.fmtId sqlr (dbtable mm))
-                     (.fmtId sqlr (dbcol (fs ka))))
-                   [(goid objA)])
-            (.exec sqlr
-                   (format
-                     "delete from %s where %s=? and %s=?"
-                     (.fmtId sqlr (dbtable mm))
-                     (.fmtId sqlr (dbcol (fs ka)))
-                     (.fmtId sqlr (dbcol (fs kb))))
-                   [(goid objA) (goid objB)])))
+            (.execSQL sqlr
+                      (format
+                        "delete from %s where %s=?"
+                        (.fmtId sqlr (dbtable mm))
+                        (.fmtId sqlr (dbcol (fs ka))))
+                      [(goid objA)])
+            (.execSQL sqlr
+                      (format
+                        "delete from %s where %s=? and %s=?"
+                        (.fmtId sqlr (dbtable mm))
+                        (.fmtId sqlr (dbcol (fs ka)))
+                        (.fmtId sqlr (dbcol (fs kb))))
+                      [(goid objA) (goid objB)])))
         (dberr! "Unkown relation: %s" jon)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defn dbGetM2M
   "" [ctx obj]
-  {:pre [(map? ctx)(map? obj)]}
+  {:pre [(map? ctx)
+         (map? obj)]}
 
   (let [^czlab.horde.dbio.core.ISQLr
         sqlr (:with ctx)
@@ -1266,15 +1292,15 @@
         schema (:schema @sqlr)
         jon (:joined ctx)]
     (if-some
-      [mm (get (:models @schema) jon)]
+      [mm (lookupModel schema jon)]
       (let [[ka kb t]
             (selectSide+ mm obj)
             t2 (or (:cast ctx) t)
             fs (:fields mm)
-            tm (get (:models @schema) t2)]
+            tm (lookupModel schema t2)]
         (if (nil? tm)
           (dberr! "Unknown model: %s" t2))
-        (.select
+        (.selectSQL
           sqlr
           t2
           (format

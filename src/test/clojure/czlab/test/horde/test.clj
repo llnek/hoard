@@ -116,7 +116,7 @@
 (defn- mkPerson
   ""
   [fname lname sex]
-  (-> (get (:models @meta-cc) ::Person)
+  (-> (lookupModel meta-cc ::Person)
       dbpojo<>
       (dbSetFlds*
         {:first_name fname

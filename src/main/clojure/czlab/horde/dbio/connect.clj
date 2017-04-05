@@ -28,8 +28,6 @@
   ""
   (compositeSQLr [_] "")
   (simpleSQLr [_] "")
-  (schema [_] "")
-  (vendor [_] "")
   (open [_] ""))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -40,8 +38,6 @@
   IDbApi
   (compositeSQLr [_] (:tx @data))
   (simpleSQLr [_] (:sim @data))
-  (schema [_] (:schema @data))
-  (vendor [_] (:vendor @data))
   (open [_] (if-fn? [f (:open @data)] (f @data))))
 
 ;;The calculation of pool size in order to avoid deadlock is a
@@ -155,11 +151,11 @@
          ^Stateful
          db (entity<> DbApi
                {:open #(dbconnect<> (:jdbc %))
-                :schema schema
-                :jdbc jdbc
                 :sim nil
                 :tx nil
-                :vendor v})]
+                :vendor v
+                :jdbc jdbc
+                :schema schema})]
      (doto db
        (.update {:sim (simSQLr db) :tx (txSQLr db)})))))
 
@@ -173,17 +169,16 @@
    (dbapi<> pool schema _empty-map_))
 
   ([pool schema options]
-   (let [v (:vendor @pool)
-         _ (test-some "db-vendor" v)
-         ^Stateful
+   (let [^Stateful
          db
          (entity<> DbApi
                    {:finz #(.shutdown
                              ^czlab.horde.dbio.core.JdbcPool (:pool %))
                     :open #(.nextFree
                              ^czlab.horde.dbio.core.JdbcPool (:pool %))
+                    :vendor (:vendor @pool)
+                    :jdbc (:jdbc @pool)
                     :schema schema
-                    :vendor v
                     :pool pool
                     :sim nil
                     :tx nil})]

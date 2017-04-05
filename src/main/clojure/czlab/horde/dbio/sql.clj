@@ -50,7 +50,8 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defn- fmtUpdateWhere
-  "Filter on primary key" [vendor model]
+  "Filter on primary key"
+  [vendor model]
   (str (fmtSqlId vendor (dbcol (:pkey model) model)) "=?"))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -301,13 +302,16 @@
 ;;
 (defn- sqlSelect
   "" [vendor conn sql pms]
-  (sqls+ vendor conn sql pms (partial row2Obj stdInjtor) identity))
+  (sqls+ vendor
+         conn
+         sql pms (partial row2Obj stdInjtor) identity))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defn- sqlExec
   "" [vendor conn sql pms]
-  (with-open [s (fmtStmt vendor conn sql pms)] (.executeUpdate s)))
+  (with-open [s (fmtStmt vendor
+                         conn sql pms)] (.executeUpdate s)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -330,7 +334,6 @@
                             "," (if (nil? v) "null" "?"))
                  (if v (conj! %1 v) %1))
                %1)) obj)]
-
     [(str sb1) (str sb2) ps]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -357,7 +360,8 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defmacro ^:private postFmtModelRow "" [obj model] `(bindModel ~obj ~model))
+(defmacro ^:private
+  postFmtModelRow "" [obj model] `(bindModel ~obj ~model))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -375,12 +379,12 @@
 (defn- doQuery+
   "" [vendor conn sql pms model]
   (sqls+ vendor
-              conn
-              sql
-              pms
-              (partial row2Obj
-                       (partial modelInjtor model))
-              #(postFmtModelRow % model)))
+         conn
+         sql
+         pms
+         (partial row2Obj
+                  (partial modelInjtor model))
+         #(postFmtModelRow % model)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -403,7 +407,8 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defn- doPurge
-  "" [vendor conn model]
+  ""
+  [vendor conn model]
   (let [sql (str "delete from "
                  (fmtSqlId vendor (dbtable model)))]
     (sqlExec vendor conn sql [])
@@ -412,7 +417,8 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defn- doDelete
-  "" ^long [vendor conn obj]
+  ""
+  ^long [vendor conn obj]
 
   (if-some [mcz (gmodel obj)]
     (doExec vendor
@@ -427,8 +433,8 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defn- doInsert
-  "" ^Object [vendor conn obj]
+(defn- doInsert ""
+  ^Object [vendor conn obj]
 
   (if-some [mcz (gmodel obj)]
     (let [pke (:pkey mcz)
@@ -455,8 +461,8 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defn- doUpdate
-  "" ^long [vendor conn obj]
+(defn- doUpdate ""
+  ^long [vendor conn obj]
 
   (if-some [mcz (gmodel obj)]
     (let [[sb1 pms]
@@ -477,7 +483,6 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defn- doExtraSQL "" ^String [^String sql extra] sql)
-
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -510,35 +515,37 @@
                pms mcz)))
         (dberr! "Unknown model: %s" typeid))))
   (fmtId [_ s] (fmtSqlId (:vendor @data) s))
-  (modify [_ obj]
+  (modObj [_ obj]
     (let [{:keys [vendor runc]} @data]
       (runc #(doUpdate vendor %1 obj))))
-  (delete [_ obj]
+  (delObj [_ obj]
     (let [{:keys [vendor runc]} @data]
       (runc #(doDelete vendor %1 obj))))
-  (insert [_ obj]
+  (insObj [_ obj]
     (let [{:keys [vendor runc]} @data]
       (runc #(doInsert vendor %1 obj))))
-  (select [_ typeid sql params]
+  (selectSQL [_ typeid sql params]
     (let [{:keys [runc models vendor]} @data]
       (if-some [m (models typeid)]
         (runc #(doQuery+ vendor %1 sql params m))
         (dberr! "Unknown model: %s" typeid))))
-  (select [_ sql params]
+  (selectSQL [_ sql params]
     (let [{:keys [vendor runc]} @data]
       (runc #(doQuery vendor %1 sql params))))
   (execWithOutput [_ sql pms]
     (let [{:keys [vendor runc]} @data]
-      (runc #(doExec+ vendor %1 sql pms {:pkey *col-rowid*}))))
-  (exec [_ sql pms]
+      (runc #(doExec+ vendor
+                      %1
+                      sql pms {:pkey *col-rowid*}))))
+  (execSQL [_ sql pms]
     (let [{:keys [vendor runc]} @data]
       (runc #(doExec vendor %1 sql pms))))
-  (countAll [_ typeid]
+  (countObjs [_ typeid]
     (let [{:keys [models vendor runc]} @data]
       (if-some [m (models typeid)]
         (runc #(doCount vendor %1 m))
         (dberr! "Unknown model: %s" typeid))))
-  (purge [_ typeid]
+  (purgeObjs [_ typeid]
     (let [{:keys [models vendor runc]} @data]
       (if-some [m (models typeid)]
         (runc #(doPurge vendor %1 m))
