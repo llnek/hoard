@@ -28,7 +28,7 @@
   ""
   (compositeSQLr [_] "")
   (simpleSQLr [_] "")
-  (open [_] ""))
+  (^Connection open [_] ""))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -90,7 +90,9 @@
   (let [how (or (:isolation cfg)
                 Connection/TRANSACTION_SERIALIZABLE)
         auto? (!false? (:auto? cfg))]
-  (doto (.open ^czlab.horde.dbio.connect.DbApi db)
+  (doto
+    ^Connection
+    (.open ^czlab.horde.dbio.connect.DbApi db)
     (.setTransactionIsolation (int how))
     (.setAutoCommit auto?))))
 
@@ -114,7 +116,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defstateful Transactable
-  czlab.horde.dbio.sql.ITransactable
+  czlab.horde.dbio.core.ITransactable
   (execWith [_ cb cfg]
     (let [{:keys [db]} @data]
       (with-open

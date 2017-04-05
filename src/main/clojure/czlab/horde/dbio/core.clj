@@ -246,15 +246,13 @@
   [cfg]
   {:pre [(map? cfg)]}
 
-  (let [pwd (:passwd cfg)]
-    (entity<> JdbcSpec
-              (-> (dissoc cfg :server)
-                  (assoc
-                    :url (or (:server cfg)
-                             (:url cfg))
-                    :id (or (:id cfg)
-                            (str "jdbc#" (seqint2)))
-                    :passwd (charsit pwd))))))
+  (entity<> JdbcSpec
+            (-> (dissoc cfg :server)
+                (assoc :url (or (:server cfg)
+                                (:url cfg)))
+                (assoc :passwd (charsit (:passwd cfg)))
+                (assoc :id (or (:id cfg)
+                                (str "jdbc#" (seqint2)))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -974,7 +972,7 @@
   {:pre [(some? conn)]}
 
   (let [lines (mapv #(strim %)
-                    (cs/split ddlstr ddl-sep))
+                    (cs/split ddlstr (re-pattern ddl-sep)))
         dbn (lcase (-> conn
                        .getMetaData
                        .getDatabaseProductName))]
