@@ -159,7 +159,7 @@
                 :jdbc jdbc
                 :schema schema})]
      (doto db
-       (.update {:sim (simSQLr db) :tx (txSQLr db)})))))
+       (alterStateful assoc :sim (simSQLr db) :tx (txSQLr db))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -185,7 +185,7 @@
                     :sim nil
                     :tx nil})]
      (doto db
-       (.update {:sim (simSQLr db) :tx (txSQLr db)})))))
+       (alterStateful assoc :sim (simSQLr db) :tx (txSQLr db))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;

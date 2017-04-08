@@ -671,7 +671,7 @@
            (assoc! %1 k (vary-meta m assoc :schema sch)))
         (:models @sch))
       (assoc nil :models)
-      (.reset sch))
+      (resetStateful sch))
     sch))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
