@@ -487,7 +487,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defstateful SQLr
-  czlab.horde.dbio.core.ISQLr
+  czlab.horde.core.ISQLr
   (findSome [me typeid filters]
     (.findSome me typeid filters _empty-map_))
   (findAll [me typeid extra]
@@ -554,7 +554,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defn sqlr<> ""
-  ^czlab.horde.dbio.sql.SQLr
+  ^czlab.horde.sql.SQLr
   [db runc]
   {:pre [(fn? runc)]}
 

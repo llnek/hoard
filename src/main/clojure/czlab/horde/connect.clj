@@ -69,7 +69,7 @@
 ;;
 (defn- registerJdbcTL
   "Add a thread-local db pool"
-  ^czlab.horde.dbio.core.JdbcPool
+  ^czlab.horde.core.JdbcPool
   [jdbc options]
 
   (let [^Map c (-> (TLocalMap/cache) .get)
@@ -92,7 +92,7 @@
         auto? (!false? (:auto? cfg))]
   (doto
     ^Connection
-    (.open ^czlab.horde.dbio.connect.DbApi db)
+    (.open ^czlab.horde.connect.DbApi db)
     (.setTransactionIsolation (int how))
     (.setAutoCommit auto?))))
 
@@ -116,7 +116,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defstateful Transactable
-  czlab.horde.dbio.core.ITransactable
+  czlab.horde.core.ITransactable
   (execWith [_ cb cfg]
     (let [{:keys [db]} @data]
       (with-open
@@ -142,7 +142,7 @@
 ;;
 (defn dbopen<>
   "Open/access to a datasource"
-  {:tag czlab.horde.dbio.connect.DbApi}
+  {:tag czlab.horde.connect.DbApi}
 
   ([jdbc schema]
    (dbopen<> jdbc schema nil))
@@ -165,7 +165,7 @@
 ;;
 (defn dbapi<>
   "Open/access to a datasource (pooled)"
-  ^czlab.horde.dbio.connect.DbApi
+  ^czlab.horde.connect.DbApi
 
   ([pool schema]
    (dbapi<> pool schema _empty-map_))
@@ -175,9 +175,9 @@
          db
          (entity<> DbApi
                    {:finz #(.shutdown
-                             ^czlab.horde.dbio.core.JdbcPool (:pool %))
+                             ^czlab.horde.core.JdbcPool (:pool %))
                     :open #(.nextFree
-                             ^czlab.horde.dbio.core.JdbcPool (:pool %))
+                             ^czlab.horde.core.JdbcPool (:pool %))
                     :vendor (:vendor @pool)
                     :jdbc (:jdbc @pool)
                     :schema schema
@@ -191,7 +191,7 @@
 ;;
 (defn dbopen<+>
   "Open/access to a datasource (pooled)"
-  ^czlab.horde.dbio.connect.DbApi
+  ^czlab.horde.connect.DbApi
 
   ([jdbc schema]
    (dbopen<+> jdbc schema _empty-map_))

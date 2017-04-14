@@ -242,7 +242,7 @@
 ;;
 (defn dbspec<>
   "Basic jdbc parameters"
-  ^czlab.horde.dbio.core.JdbcSpec
+  ^czlab.horde.core.JdbcSpec
   [cfg]
   {:pre [(map? cfg)]}
 
@@ -264,6 +264,7 @@
 (def Postgresql :postgresql)
 (def Postgres :postgres)
 (def SQLServer :sqlserver)
+;;(def SQLServer :mssql)
 (def Oracle :oracle)
 (def MySQL :mysql)
 (def H2 :h2)
@@ -654,7 +655,7 @@
 ;;
 (defn dbschema<>
   "Stores metadata for all models"
-  ^czlab.horde.dbio.core.Schema
+  ^czlab.horde.core.Schema
   [& models]
 
   (let [ms (if-not (empty? models)
@@ -747,7 +748,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defmethod resolveVendor
-  czlab.horde.dbio.core.JdbcSpec
+  czlab.horde.core.JdbcSpec
   [jdbc] (with-open [conn (dbconnect<> jdbc)] (resolveVendor conn)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -775,14 +776,14 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defmethod tableExist?
-  czlab.horde.dbio.core.JdbcPool
-  [^czlab.horde.dbio.core.JdbcPool pool ^String table]
+  czlab.horde.core.JdbcPool
+  [^czlab.horde.core.JdbcPool pool ^String table]
   (with-open [^Connection conn (.nextFree pool) ] (tableExist? conn table)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defmethod tableExist?
-  czlab.horde.dbio.core.JdbcSpec
+  czlab.horde.core.JdbcSpec
   [jdbc ^String table]
   (with-open [conn (dbconnect<> jdbc)] (tableExist? conn table)))
 
@@ -813,7 +814,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defmethod rowExist?
-  czlab.horde.dbio.core.JdbcSpec
+  czlab.horde.core.JdbcSpec
   [jdbc ^String table]
   (with-open [conn (dbconnect<> jdbc)] (rowExist? conn table)))
 
@@ -904,7 +905,7 @@
 ;;
 (defn dbpool<>
   "Create a db connection pool"
-  {:tag czlab.horde.dbio.core.JdbcPool}
+  {:tag czlab.horde.core.JdbcPool}
 
   ([jdbc] (dbpool<> jdbc nil))
   ([jdbc options]
@@ -953,14 +954,14 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defmethod uploadDdl
-  czlab.horde.dbio.core.JdbcPool
-  [^czlab.horde.dbio.core.JdbcPool pool ^String ddl]
+  czlab.horde.core.JdbcPool
+  [^czlab.horde.core.JdbcPool pool ^String ddl]
   (with-open [^Connection conn (.nextFree pool)] (uploadDdl conn ddl)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defmethod uploadDdl
-  czlab.horde.dbio.core.JdbcSpec
+  czlab.horde.core.JdbcSpec
   [jdbc ^String ddl]
   (with-open [conn (dbconnect<> jdbc)] (uploadDdl conn ddl)))
 
@@ -1090,7 +1091,7 @@
 (defn- dbioSetO2X
   "" [ctx lhsObj rhsObj kind]
 
-  (let [^czlab.horde.dbio.core.ISQLr
+  (let [^czlab.horde.core.ISQLr
         sqlr (:with ctx)
         mcz (gmodel lhsObj)
         rid (:as ctx)]
@@ -1113,7 +1114,7 @@
 
   (if-some
     [r (dbioGetO2X ctx lhsObj :o2m)]
-    (-> ^czlab.horde.dbio.core.ISQLr
+    (-> ^czlab.horde.core.ISQLr
         (:with ctx)
         (.findSome (or (:cast ctx)
                        (:other r))
@@ -1147,7 +1148,7 @@
 
   (if-some
     [r (dbioGetO2X ctx lhsObj :o2o)]
-    (-> ^czlab.horde.dbio.core.ISQLr
+    (-> ^czlab.horde.core.ISQLr
         (:with ctx)
         (.findOne (or (:cast ctx)
                       (:other r))
@@ -1168,7 +1169,7 @@
 (defn- dbioClrO2X
   "" [ctx objA kind]
 
-  (let [^czlab.horde.dbio.core.ISQLr
+  (let [^czlab.horde.core.ISQLr
         sqlr (:with ctx)
         schema (:schema @sqlr)
         rid (:as ctx)
@@ -1228,7 +1229,7 @@
   {:pre [(map? ctx)
          (map? objA) (map? objB)]}
 
-  (let [^czlab.horde.dbio.core.ISQLr
+  (let [^czlab.horde.core.ISQLr
         sqlr (:with ctx)
         schema (:schema @sqlr)
         jon (:joined ctx)]
@@ -1251,7 +1252,7 @@
   ([ctx obj] (dbClrM2M ctx obj nil))
   ([ctx objA objB]
    {:pre [(some? objA)]}
-    (let [^czlab.horde.dbio.core.ISQLr
+    (let [^czlab.horde.core.ISQLr
           sqlr (:with ctx)
           schema (:schema @sqlr)
           jon (:joined ctx)]
@@ -1283,7 +1284,7 @@
   {:pre [(map? ctx)
          (map? obj)]}
 
-  (let [^czlab.horde.dbio.core.ISQLr
+  (let [^czlab.horde.core.ISQLr
         sqlr (:with ctx)
         RS (.fmtId sqlr "RES")
         MM (.fmtId sqlr "MM")
