@@ -9,7 +9,7 @@
 (ns ^{:doc "Low level SQL JDBC functions."
       :author "Kenneth Leung"}
 
-  czlab.horde.dbio.sql
+  czlab.horde.sql
 
   (:require [czlab.basal.io :refer [readChars readBytes]]
             [czlab.basal.meta
@@ -22,7 +22,7 @@
             [clojure.string :as cs]
             [czlab.basal.dates :refer [gmt<>]])
 
-  (:use [czlab.horde.dbio.core]
+  (:use [czlab.horde.core]
         [czlab.basal.core]
         [czlab.basal.str])
 

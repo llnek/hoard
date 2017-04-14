@@ -9,7 +9,7 @@
 (ns ^{:doc "Database and modeling functions."
       :author "Kenneth Leung"}
 
-  czlab.horde.dbio.core
+  czlab.horde.core
 
   (:require [czlab.basal.format :refer [writeEdnStr]]
             [czlab.basal.logging :as log]

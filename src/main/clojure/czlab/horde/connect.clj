@@ -9,13 +9,13 @@
 (ns ^{:doc "Database connections."
       :author "Kenneth Leung"}
 
-  czlab.horde.dbio.connect
+  czlab.horde.connect
 
   (:require [czlab.basal.logging :as log])
 
-  (:use [czlab.horde.dbio.core]
+  (:use [czlab.horde.core]
         [czlab.basal.core]
-        [czlab.horde.dbio.sql])
+        [czlab.horde.sql])
 
   (:import [java.sql SQLException Connection]
            [czlab.jasal Disposable TLocalMap]
