@@ -97,14 +97,14 @@
                 :user "sa"
                 :passwd "hello"})
         ddl (getDdl meta-cc :h2)]
-    (if false
+    (when false
       (writeFile (io/file (sysTmpDir)
-                          "dbtest.out") (dbgShowSchema meta-cc)))
+                          "dbtest.out") (dbgShowSchema meta-cc))
+      (println "\n\n" (dbgShowSchema meta-cc)))
     (if false (println "\n\n" ddl))
     (reset! jdbc-spec jdbc)
     (uploadDdl jdbc ddl)
-    (reset! DB (dbopen<+> jdbc meta-cc ))
-    (if false (println "\n\n" (dbgShowSchema meta-cc))))
+    (reset! DB (dbopen<+> jdbc meta-cc )))
   (if (fn? f) (f)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

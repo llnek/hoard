@@ -19,7 +19,8 @@
         [czlab.basal.core]
         [czlab.basal.str])
 
-  (:import [java.io File]
+  (:import [clojure.lang Var]
+           [java.io File]
            [czlab.basal Stateful]
            [java.sql DriverManager Connection Statement]))
 
@@ -67,7 +68,7 @@
 
   (let [dft (first (:dft field))]
     (str (rvtbl vt :getPad db)
-         (rvtbl vt :genCol field)
+         (rvtbl vt :genCol db field)
          (str " " typedef " ")
          (rvtbl vt :nullClause db (:null? field))
          (if (hgl? dft) (str " default " dft) ""))))
@@ -83,11 +84,11 @@
       (when-not (empty? v)
         (.append b
           (str "create index "
-               (rvtbl vt :genIndex model (name k))
+               (rvtbl vt :genIndex db model (name k))
                " on "
-               (rvtbl vt :genTable model)
+               (rvtbl vt :genTable db model)
                " ("
-               (->> (map #(rvtbl vt :genCol (fields %)) v)
+               (->> (map #(rvtbl vt :genCol db (fields %)) v)
                     (cs/join "," ))
                ") "
                (rvtbl vt :genExec db) "\n\n")))
@@ -107,7 +108,7 @@
           ",\n"
           (str (rvtbl vt :getPad db)
                "unique("
-               (->> (map #(rvtbl vt :genCol (fields %)) v)
+               (->> (map #(rvtbl vt :genCol db (fields %)) v)
                     (cs/join "," ))
                ")")))
       b)
@@ -119,7 +120,7 @@
   "" ^String [vt db model pks]
   (str (rvtbl vt :getPad db)
        "primary key("
-       (cs/join "," (map #(rvtbl vt :genCol %) pks)) ")"))
+       (cs/join "," (map #(rvtbl vt :genCol db %) pks)) ")"))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -170,7 +171,7 @@
 
   (let [d (genBody vt db schema model)
         b (rvtbl vt :genBegin db model)
-        e (rvtbl vt :genEnd db model)]
+        e (rvtbl vt :genEnd db)]
     (str b
          (first d) e (last d)
          (rvtbl vt :genGrant db model))))
@@ -276,10 +277,12 @@
 ;; H2
 (defvtbl** ddl-h2 ddl-base
 
-  :getDateKwd (fn [_ db] "timestamp")
-  :getDoubleKwd (fn [_ db] "double")
-  :getBlobKwd (fn [_ db] "blob")
-  :getFloatKwd  (fn [_ db] "float")
+  :id :h2
+
+  :getDateKwd  "timestamp"
+  :getDoubleKwd  "double"
+  :getBlobKwd  "blob"
+  :getFloatKwd   "float"
 
   :genAutoInteger
   (fn [vt db model field]
@@ -299,14 +302,12 @@
          (if (:pkey field)
            " identity(1) " " auto_increment(1) ")))
   :genBegin
-  (fn [vt db m]
-    (str "create cached table " (gtable m) " (\n" ))
+  #(str "create cached table " (gtable %3) " (\n" )
   :genDrop
-  (fn [vt db m]
-    (str "drop table "
-         (gtable m)
-         " if exists cascade"
-         (rvtbl vt :genExec db) "\n\n")))
+  #(str "drop table "
+        (gtable %3)
+        " if exists cascade"
+        (rvtbl %1 :genExec %2) "\n\n"))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -355,6 +356,9 @@
 (def ^:dynamic *mysql-driver* "com.mysql.jdbc.Driver")
 
 (defvtbl** ddl-mysql ddl-base
+
+  :id :mysql
+
   :getBlobKwd "longblob"
   :getTSKwd "timestamp"
   :getDoubleKwd "double"
@@ -362,12 +366,12 @@
   :genEnd #(str "\n) type=InnoDB"
                 (rvtbl %1 :genExec %2) "\n\n")
   :genAutoInteger #(str (rvtbl %1 :getPad %2)
-                        (rvtbl %1 :genCol %3)
+                        (rvtbl %1 :genCol %2 %3)
                         " "
                         (rvtbl %1 :getIntKwd %2)
                         " not null auto_increment")
   :genAutoLong #(str (rvtbl %1 :getPad %2)
-                     (rvtbl %1 :genCol %3)
+                     (rvtbl %1 :genCol %2 %3)
                      " "
                      (rvtbl %1 :getLongKwd %2)
                      " not null auto_increment")
@@ -381,17 +385,20 @@
 (def ^:dynamic *postgresql-driver* "org.postgresql.Driver")
 
 (defvtbl** ddl-postgres ddl-base
+
+  :id :postgres
+
   :getTSKwd "timestamp with time zone"
   :getBlobKwd "bytea"
   :getDoubleKwd "double precision"
   :getFloatKwd "real"
   :genCaldr #(rvtbl %1 :genTimestamp %2 %3)
   :genAutoInteger #(str (rvtbl %1 :getPad %2)
-                        (rvtbl %1 :genCol %3)
+                        (rvtbl %1 :genCol %2 %3)
                         " serial"
                         " not null auto_increment")
   :genAutoLong #(str (rvtbl %1 :getPad %2)
-                     (rvtbl %1 :genCol %3)
+                     (rvtbl %1 :genCol %2 %3)
                      " bigserial"
                      " not null auto_increment")
   :genDrop #(str "drop table if exists "
@@ -402,19 +409,22 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; SQLServer
 (defvtbl** ddl-sqlserver ddl-base
+
+  :id :sqlserver
+
   :getDoubleKwd "float(53)"
   :getFloatKwd "float(53)"
   :getBlobKwd "image"
   :getTSKwd "datetime"
   :genAutoInteger #(str (rvtbl %1 :getPad %2)
-                        (rvtbl %1 :genCol %3)
+                        (rvtbl %1 :genCol %2 %3)
                         " "
                         (rvtbl %1 :getIntKwd %2)
                         (if (:pkey %3)
                           " identity (1,1) "
                           " autoincrement "))
   :genAutoLong #(str (rvtbl %1 :getPad %2)
-                     (rvtbl %1 :genCol %3)
+                     (rvtbl %1 :genCol %2 %3)
                      " "
                      (rvtbl %1 :getLongKwd %2)
                      (if (:pkey %3)
@@ -474,13 +484,16 @@
 (defn- autoXXX
   "" [vt db model fld]
   (str (rvtbl vt :getPad db)
-       (rvtbl vt :genCol fld)
+       (rvtbl vt :genCol db fld)
        " "
        "number generated by default on null as identity"))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defvtbl** ddl-oracle ddl-base
+
+  :id :oracle
+
   :getTSDefault "default systimestamp"
   :getStringKwd "varchar2"
   :getLongKwd "number(38)"
@@ -513,7 +526,11 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defn- findVtbl "" [dbID]
-  (some->> (name dbID) (str "ddl-") symbol resolve ,deref))
+  (let [nsp "czlab.horde.drivers/ddl-"
+        v (-> (str nsp
+                   (name dbID))
+              symbol resolve)]
+    (.deref ^Var v)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -521,15 +538,18 @@
   "Generate database DDL
   for this schema" {:tag String}
 
-  ([schema dbID] (getDdl schema dbID nil))
-  ([schema dbID dbver]
+  ([schema db] (getDdl schema db nil))
+  ([schema db dbver]
    (binding [*ddl-cfg* {:db-version (strim dbver)
                         :use-sep? true
                         :qstr ""
                         :case-fn clojure.string/upper-case}
              *ddl-bvs* (atom {})]
      (let [ms (:models @schema)
-           vt (findVtbl dbID)
+           vt (if (keyword? db)
+                (findVtbl db)
+                (do (assert (map? db)) db))
+           dbID (:id vt)
            drops (strbf<>)
            body (strbf<>)]
        (doseq [[id model] ms
