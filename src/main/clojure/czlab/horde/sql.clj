@@ -486,8 +486,8 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defstateful SQLr
-  czlab.horde.core.ISQLr
+(defobject SQLrObj
+  czlab.horde.core.SQLr
   (findSome [me typeid filters]
     (.findSome me typeid filters _empty-map_))
   (findAll [me typeid extra]
@@ -497,8 +497,8 @@
   (findOne [me typeid filters]
     (let [rs (.findSome me typeid filters)]
       (if-not (empty? rs) (first rs))))
-  (findSome [_ typeid filters extraSQL]
-    (let [{:keys [vendor models runc]} @data]
+  (findSome [me typeid filters extraSQL]
+    (let [{:keys [vendor models runc]} @me]
       (if-some [mcz (models typeid)]
         (runc
           #(let [s (str "select * from "
@@ -514,39 +514,39 @@
                  extraSQL)
                pms mcz)))
         (dberr! "Unknown model: %s" typeid))))
-  (fmtId [_ s] (fmtSqlId (:vendor @data) s))
-  (modObj [_ obj]
-    (let [{:keys [vendor runc]} @data]
+  (fmtId [me s] (fmtSqlId (:vendor @me) s))
+  (modObj [me obj]
+    (let [{:keys [vendor runc]} @me]
       (runc #(doUpdate vendor %1 obj))))
-  (delObj [_ obj]
-    (let [{:keys [vendor runc]} @data]
+  (delObj [me obj]
+    (let [{:keys [vendor runc]} @me]
       (runc #(doDelete vendor %1 obj))))
-  (insObj [_ obj]
-    (let [{:keys [vendor runc]} @data]
+  (insObj [me obj]
+    (let [{:keys [vendor runc]} @me]
       (runc #(doInsert vendor %1 obj))))
-  (selectSQL [_ typeid sql params]
-    (let [{:keys [runc models vendor]} @data]
+  (selectSQL [me typeid sql params]
+    (let [{:keys [runc models vendor]} @me]
       (if-some [m (models typeid)]
         (runc #(doQuery+ vendor %1 sql params m))
         (dberr! "Unknown model: %s" typeid))))
-  (selectSQL [_ sql params]
-    (let [{:keys [vendor runc]} @data]
+  (selectSQL [me sql params]
+    (let [{:keys [vendor runc]} @me]
       (runc #(doQuery vendor %1 sql params))))
-  (execWithOutput [_ sql pms]
-    (let [{:keys [vendor runc]} @data]
+  (execWithOutput [me sql pms]
+    (let [{:keys [vendor runc]} @me]
       (runc #(doExec+ vendor
                       %1
                       sql pms {:pkey *col-rowid*}))))
-  (execSQL [_ sql pms]
-    (let [{:keys [vendor runc]} @data]
+  (execSQL [me sql pms]
+    (let [{:keys [vendor runc]} @me]
       (runc #(doExec vendor %1 sql pms))))
-  (countObjs [_ typeid]
-    (let [{:keys [models vendor runc]} @data]
+  (countObjs [me typeid]
+    (let [{:keys [models vendor runc]} @me]
       (if-some [m (models typeid)]
         (runc #(doCount vendor %1 m))
         (dberr! "Unknown model: %s" typeid))))
-  (purgeObjs [_ typeid]
-    (let [{:keys [models vendor runc]} @data]
+  (purgeObjs [me typeid]
+    (let [{:keys [models vendor runc]} @me]
       (if-some [m (models typeid)]
         (runc #(doPurge vendor %1 m))
         (dberr! "Unknown model: %s" typeid)))))
@@ -554,13 +554,13 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defn sqlr<> ""
-  ^czlab.horde.sql.SQLr
+  ^czlab.horde.core.SQLr
   [db runc]
   {:pre [(fn? runc)]}
 
   (let [{:keys [schema vendor]} @db]
-    (entity<> SQLr
-              {:models (:models @schema)
+    (object<> SQLrObj
+              {:models (dbmodels schema)
                :schema schema :vendor vendor :runc runc})))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

@@ -179,7 +179,9 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defvtbl* ddl-base
+(def ^:private ddl-base
+
+  (defvtbl*
 
   :genExec #(str ";\n" (rvtbl %1 :genSep %2))
 
@@ -263,7 +265,7 @@
   :getDateKwd "date"
   :getBoolKwd "integer"
   :getLongKwd "bigint"
-  :getBlobKwd "blob")
+  :getBlobKwd "blob"))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;H2 database
@@ -275,7 +277,9 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; H2
-(defvtbl** ddl-h2 ddl-base
+(def ^:private ddl-h2
+
+  (defvtbl** ddl-base
 
   :id :h2
 
@@ -307,7 +311,7 @@
   #(str "drop table "
         (gtable %3)
         " if exists cascade"
-        (rvtbl %1 :genExec %2) "\n\n"))
+        (rvtbl %1 :genExec %2) "\n\n")))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -355,7 +359,8 @@
 ;;MySQL
 (def ^:dynamic *mysql-driver* "com.mysql.jdbc.Driver")
 
-(defvtbl** ddl-mysql ddl-base
+(def ^:private ddl-mysql
+  (defvtbl** ddl-base
 
   :id :mysql
 
@@ -377,14 +382,15 @@
                      " not null auto_increment")
   :genDrop #(str "drop table if exists "
                  (gtable %3)
-                 (rvtbl %1 :genExec %2) "\n\n"))
+                 (rvtbl %1 :genExec %2) "\n\n")))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;PostgreSQL
 (def ^:dynamic *postgresql-url* "jdbc:postgresql://{{host}}:{{port}}/{{db}}")
 (def ^:dynamic *postgresql-driver* "org.postgresql.Driver")
 
-(defvtbl** ddl-postgres ddl-base
+(def ^:private ddl-postgres
+  (defvtbl** ddl-base
 
   :id :postgres
 
@@ -404,11 +410,13 @@
   :genDrop #(str "drop table if exists "
                  (gtable %3)
                  " cascade "
-                 (rvtbl %1 :genExec %2) "\n\n"))
+                 (rvtbl %1 :genExec %2) "\n\n")))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; SQLServer
-(defvtbl** ddl-sqlserver ddl-base
+
+(def ^:private ddl-sqlserver
+  (defvtbl** ddl-base
 
   :id :sqlserver
 
@@ -435,7 +443,7 @@
                  (gtable %3 false)
                  "')) drop table "
                  (gtable %3)
-                 (rvtbl %1 :genExec %2) "\n\n"))
+                 (rvtbl %1 :genExec %2) "\n\n")))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;Oracle
@@ -490,7 +498,8 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defvtbl** ddl-oracle ddl-base
+(def ^:private ddl-oracle
+  (defvtbl** ddl-base
 
   :id :oracle
 
@@ -521,7 +530,7 @@
   :genDrop #(str "drop table "
                  (gtable %3)
                  " cascade constraints purge"
-                 (rvtbl %1 :genExec %2) "\n\n"))
+                 (rvtbl %1 :genExec %2) "\n\n")))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -545,7 +554,7 @@
                         :qstr ""
                         :case-fn clojure.string/upper-case}
              *ddl-bvs* (atom {})]
-     (let [ms (:models @schema)
+     (let [ms (dbmodels schema)
            vt (if (keyword? db)
                 (findVtbl db)
                 (do (assert (map? db)) db))

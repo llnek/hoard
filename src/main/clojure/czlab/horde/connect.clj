@@ -32,13 +32,13 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defstateful DbApi
+(defcontext DbApi
   Disposable
-  (dispose [_] (if-fn? [f (:finz @data)] (f @data)))
+  (dispose [me] (if-fn? [f (:finz @me)] (f @me)))
   IDbApi
-  (compositeSQLr [_] (:tx @data))
-  (simpleSQLr [_] (:sim @data))
-  (open [_] (if-fn? [f (:open @data)] (f @data))))
+  (compositeSQLr [me] (.getv (.getx me) :tx))
+  (simpleSQLr [me] (.getv (.getx me) :sm))
+  (open [me] (if-fn? [f (:open @me)] (f @me))))
 
 ;;The calculation of pool size in order to avoid deadlock is a
 ;;fairly simple resource allocation formula:
@@ -115,10 +115,10 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defstateful Transactable
-  czlab.horde.core.ITransactable
-  (execWith [_ cb cfg]
-    (let [{:keys [db]} @data]
+(defobject TransactableObj
+  czlab.horde.core.Transactable
+  (execWith [me cb cfg]
+    (let [{:keys [db]} @me]
       (with-open
         [c (openDB db
                    (->> {:auto? false}
@@ -136,7 +136,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defn- txSQLr "" [db]
-  (entity<> Transactable {:db db}))
+  (object<> TransactableObj {:db db}))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -150,16 +150,15 @@
   ([jdbc schema options]
    (let [v (resolveVendor jdbc)
          _ (test-some "db-vendor" v)
-         ^Stateful
-         db (entity<> DbApi
-               {:open #(dbconnect<> (:jdbc %))
-                :sim nil
-                :tx nil
-                :vendor v
-                :jdbc jdbc
-                :schema schema})]
-     (doto db
-       (alterStateful assoc :sim (simSQLr db) :tx (txSQLr db))))))
+         db (context<> DbApi
+                       {:open #(dbconnect<> (:jdbc %))
+                        :vendor v
+                        :jdbc jdbc
+                        :schema schema})
+         cx (.getx db)]
+     (.setv cx :sm (simSQLr db))
+     (.setv cx :tx (txSQLr db))
+     db)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -171,21 +170,20 @@
    (dbapi<> pool schema _empty-map_))
 
   ([pool schema options]
-   (let [^Stateful
-         db
-         (entity<> DbApi
-                   {:finz #(.shutdown
-                             ^czlab.horde.core.JdbcPool (:pool %))
-                    :open #(.nextFree
-                             ^czlab.horde.core.JdbcPool (:pool %))
-                    :vendor (:vendor @pool)
-                    :jdbc (:jdbc @pool)
-                    :schema schema
-                    :pool pool
-                    :sim nil
-                    :tx nil})]
-     (doto db
-       (alterStateful assoc :sim (simSQLr db) :tx (txSQLr db))))))
+   (let [db
+         (context<> DbApi
+                    {:finz #(.shutdown
+                              ^czlab.horde.core.JdbcPool (:pool %))
+                     :open #(.nextFree
+                              ^czlab.horde.core.JdbcPool (:pool %))
+                     :vendor (:vendor @pool)
+                     :jdbc (:jdbc @pool)
+                     :schema schema
+                     :pool pool})
+         cx (.getx db)]
+     (.setv cx :sm (simSQLr db))
+     (.setv cx :tx (txSQLr db))
+     db)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;

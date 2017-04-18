@@ -25,7 +25,7 @@
   (:import [java.util HashMap TimeZone Properties GregorianCalendar]
            [clojure.lang Keyword APersistentMap APersistentVector]
            [com.zaxxer.hikari HikariConfig HikariDataSource]
-           [czlab.basal Stateful]
+           [czlab.basal Context Stateful]
            [java.sql
             SQLException
             Connection
@@ -46,13 +46,19 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defprotocol ITransactable
+(defprotocol Schema
+  ""
+  (dbmodels [_] ""))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
+(defprotocol Transactable
   ""
   (execWith [_ func] [_ func cfg] ""))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defprotocol ISQLr
+(defprotocol SQLr
   ""
   (findSome [_ modeldef filters]
             [_ modeldef filters extras] "")
@@ -72,7 +78,7 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defprotocol IJdbcPool
+(defprotocol JdbcPool
   ""
   (^Connection nextFree [_] "")
   (shutdown [_] ""))
@@ -117,7 +123,7 @@
 ;;
 (defmacro lookupModel
   "Get model from schema"
-  [schema typeid] `(get (:models @~schema) ~typeid))
+  [schema typeid] `(get (dbmodels ~schema) ~typeid))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -218,25 +224,25 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defstateful JdbcPool
-  IJdbcPool
-  (shutdown [_]
+(defobject JdbcPoolObj
+  JdbcPool
+  (shutdown [me]
     (do->nil
       (doto->> ^HikariDataSource
-               (:impl @data)
+               (:impl @me)
                (log/debug "shutting: %s" )
                (.close ))))
-  (nextFree [_]
+  (nextFree [me]
     (try
       (-> ^HikariDataSource
-          (:impl @data) .getConnection)
+          (:impl @me) .getConnection)
       (catch Throwable e#
         (log/error e# "")
         (dberr! "No free connection")))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;Stores jdbc info
-(defstateful JdbcSpec)
+(defobject JdbcSpec)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -246,7 +252,7 @@
   [cfg]
   {:pre [(map? cfg)]}
 
-  (entity<> JdbcSpec
+  (object<> JdbcSpec
             (-> (dissoc cfg :server)
                 (assoc :url (or (:server cfg)
                                 (:url cfg)))
@@ -649,7 +655,9 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defstateful Schema)
+(defcontext SchemaObj
+  Schema
+  (dbmodels [me] (.getv (.getx me) :ms)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -664,15 +672,14 @@
         m2 (if (empty? ms)
              {}
              (-> ms resolveAssocs resolveMXMs (metaModels nil)))
-        ^Stateful
-        sch (entity<> Schema {:models m2})]
+        ^Context
+        sch (context<> SchemaObj {})]
     (->>
       (preduce<map>
         #(let [[k m] %2]
            (assoc! %1 k (vary-meta m assoc :schema sch)))
-        (:models @sch))
-      (assoc nil :models)
-      (resetStateful sch))
+        m2)
+      (.setv (.getx sch) :ms))
     sch))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -686,7 +693,7 @@
                 "\n"
                 (writeEdnStr {:TABLE (:table %2)
                               :DEFN %2
-                              :META (meta %2)})) (vals (:models @schema))))
+                              :META (meta %2)})) (vals (dbmodels schema))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -925,7 +932,7 @@
        (if (some? passwd)
          (.setPassword hc (strit passwd))))
      (log/debug "[hikari]\n%s" (str hc))
-     (entity<> JdbcPool
+     (object<> JdbcPoolObj
                {:impl (HikariDataSource. hc)
                 :jdbc jdbc
                 :vendor dbv}))))
@@ -1091,7 +1098,7 @@
 (defn- dbioSetO2X
   "" [ctx lhsObj rhsObj kind]
 
-  (let [^czlab.horde.core.ISQLr
+  (let [^czlab.horde.core.SQLr
         sqlr (:with ctx)
         mcz (gmodel lhsObj)
         rid (:as ctx)]
@@ -1114,7 +1121,7 @@
 
   (if-some
     [r (dbioGetO2X ctx lhsObj :o2m)]
-    (-> ^czlab.horde.core.ISQLr
+    (-> ^czlab.horde.core.SQLr
         (:with ctx)
         (.findSome (or (:cast ctx)
                        (:other r))
@@ -1148,7 +1155,7 @@
 
   (if-some
     [r (dbioGetO2X ctx lhsObj :o2o)]
-    (-> ^czlab.horde.core.ISQLr
+    (-> ^czlab.horde.core.SQLr
         (:with ctx)
         (.findOne (or (:cast ctx)
                       (:other r))
@@ -1169,7 +1176,7 @@
 (defn- dbioClrO2X
   "" [ctx objA kind]
 
-  (let [^czlab.horde.core.ISQLr
+  (let [^czlab.horde.core.SQLr
         sqlr (:with ctx)
         schema (:schema @sqlr)
         rid (:as ctx)
@@ -1229,7 +1236,7 @@
   {:pre [(map? ctx)
          (map? objA) (map? objB)]}
 
-  (let [^czlab.horde.core.ISQLr
+  (let [^czlab.horde.core.SQLr
         sqlr (:with ctx)
         schema (:schema @sqlr)
         jon (:joined ctx)]
@@ -1252,7 +1259,7 @@
   ([ctx obj] (dbClrM2M ctx obj nil))
   ([ctx objA objB]
    {:pre [(some? objA)]}
-    (let [^czlab.horde.core.ISQLr
+    (let [^czlab.horde.core.SQLr
           sqlr (:with ctx)
           schema (:schema @sqlr)
           jon (:joined ctx)]
@@ -1284,7 +1291,7 @@
   {:pre [(map? ctx)
          (map? obj)]}
 
-  (let [^czlab.horde.core.ISQLr
+  (let [^czlab.horde.core.SQLr
         sqlr (:with ctx)
         RS (.fmtId sqlr "RES")
         MM (.fmtId sqlr "MM")
