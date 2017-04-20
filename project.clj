@@ -8,20 +8,18 @@
   :description "sql orm"
   :url "https://github.com/llnek/horde"
 
-  :dependencies [[org.postgresql/postgresql "42.0.0.jre7"]
-                 [com.zaxxer/HikariCP "2.6.0"]
-                 [com.h2database/h2 "1.4.193"]
+  :dependencies [[org.postgresql/postgresql "42.0.0"]
+                 [com.zaxxer/HikariCP "2.6.1"]
+                 [com.h2database/h2 "1.4.194"]
                  [io.czlab/basal "1.0.0"]]
 
   :plugins [[cider/cider-nrepl "0.14.0"]
-            [lein-javadoc "0.3.0"]
+            ;;[lein-javadoc "0.3.0"]
             [lein-codox "0.10.3"]
             [lein-cprint "1.2.0"]]
 
   :profiles {:provided {:dependencies
-                        [[org.clojure/clojure "1.8.0" :scope "provided"]
-                         [net.mikera/cljunit "0.6.0" :scope "test"]
-                         [junit/junit "4.12" :scope "test"]]}
+                        [[org.clojure/clojure "1.8.0" :scope "provided"]]}
              :uberjar {:aot :all}}
 
   :javadoc-opts {:package-names ["czlab.horde"]
