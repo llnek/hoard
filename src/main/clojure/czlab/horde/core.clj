@@ -25,7 +25,6 @@
   (:import [java.util HashMap TimeZone Properties GregorianCalendar]
            [clojure.lang Keyword APersistentMap APersistentVector]
            [com.zaxxer.hikari HikariConfig HikariDataSource]
-           [czlab.basal Context Stateful]
            [java.sql
             SQLException
             Connection
@@ -43,12 +42,6 @@
 (def ^:dynamic *ddl-cfg* nil)
 (def ^:dynamic *ddl-bvs* nil)
 (def ddl-sep "-- :")
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;
-(defprotocol Schema
-  ""
-  (dbmodels [_] ""))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -123,7 +116,7 @@
 ;;
 (defmacro lookupModel
   "Get model from schema"
-  [schema typeid] `(get (dbmodels ~schema) ~typeid))
+  [schema typeid] `(get (:models ~@schema) ~typeid))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -229,13 +222,13 @@
   (shutdown [me]
     (do->nil
       (doto->> ^HikariDataSource
-               (:impl @me)
+               (:impl me)
                (log/debug "shutting: %s" )
                (.close ))))
   (nextFree [me]
     (try
       (-> ^HikariDataSource
-          (:impl @me) .getConnection)
+          (:impl me) .getConnection)
       (catch Throwable e#
         (log/error e# "")
         (dberr! "No free connection")))))
@@ -263,7 +256,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defn loadDriver ^Driver [spec]
-  (if-some+ [s (:url @spec)] (DriverManager/getDriver s)))
+  (if-some+ [s (:url spec)] (DriverManager/getDriver s)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -655,9 +648,7 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defcontext SchemaObj
-  Schema
-  (dbmodels [me] (.getv (.getx me) :ms)))
+(defcontext Schema)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -672,14 +663,13 @@
         m2 (if (empty? ms)
              {}
              (-> ms resolveAssocs resolveMXMs (metaModels nil)))
-        ^Context
-        sch (context<> SchemaObj {})]
+        ^Settable sch (context<> Schema {})]
     (->>
       (preduce<map>
         #(let [[k m] %2]
            (assoc! %1 k (vary-meta m assoc :schema sch)))
         m2)
-      (.setv (.getx sch) :ms))
+      (.setv sch :models))
     sch))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -693,7 +683,7 @@
                 "\n"
                 (writeEdnStr {:TABLE (:table %2)
                               :DEFN %2
-                              :META (meta %2)})) (vals (dbmodels schema))))
+                              :META (meta %2)})) (vals (:models @schema))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -963,7 +953,7 @@
 (defmethod uploadDdl
   czlab.horde.core.JdbcPool
   [^czlab.horde.core.JdbcPool pool ^String ddl]
-  (with-open [^Connection conn (.nextFree pool)] (uploadDdl conn ddl)))
+  (with-open [^Connection conn (nextFree pool)] (uploadDdl conn ddl)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;

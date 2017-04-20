@@ -17,18 +17,17 @@
         [czlab.basal.core]
         [czlab.horde.sql])
 
-  (:import [java.sql SQLException Connection]
-           [czlab.jasal Disposable TLocalMap]
-           [czlab.basal Stateful]
+  (:import [czlab.jasal Settable Disposable TLocalMap]
+           [java.sql SQLException Connection]
            [java.util Map]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defprotocol IDbApi
   ""
-  (compositeSQLr [_] "")
-  (simpleSQLr [_] "")
-  (^Connection open [_] ""))
+  (^czlab.horde.core.Transactable compositeSQLr [_] "")
+  (^czlab.horde.core.SQLr simpleSQLr [_] "")
+  (^Connection opendb [_] ""))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -36,9 +35,9 @@
   Disposable
   (dispose [me] (if-fn? [f (:finz @me)] (f @me)))
   IDbApi
-  (compositeSQLr [me] (.getv (.getx me) :tx))
-  (simpleSQLr [me] (.getv (.getx me) :sm))
-  (open [me] (if-fn? [f (:open @me)] (f @me))))
+  (compositeSQLr [me] (:tx @me))
+  (simpleSQLr [me] (:sm @me))
+  (opendb [me] (if-fn? [f (:open @me)] (f @me))))
 
 ;;The calculation of pool size in order to avoid deadlock is a
 ;;fairly simple resource allocation formula:
@@ -72,18 +71,16 @@
   ^czlab.horde.core.JdbcPool
   [jdbc options]
 
-  (let [^Map c (-> (TLocalMap/cache) .get)
-        hc (:id @jdbc)]
+  (let [^Map c (.get (TLocalMap/cache))
+        hc (:id jdbc)]
     (when-not (.containsKey c hc)
-      (log/debug "No db-pool in DBIO-thread-local, creating one")
-      (->> (merge pool-cfg options)
-           (dbpool<> jdbc )
-           (.put c hc )))
+      (log/debug "No db-pool in thread-local, creating one")
+      (->> (merge pool-cfg options) (dbpool<> jdbc ) (.put c hc )))
     (.get c hc)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defn- openDB
+(defn- connectToDB
   "Connect to db"
   ^Connection [db cfg]
 
@@ -92,7 +89,7 @@
         auto? (!false? (:auto? cfg))]
   (doto
     ^Connection
-    (.open ^czlab.horde.connect.DbApi db)
+    (opendb db)
     (.setTransactionIsolation (int how))
     (.setAutoCommit auto?))))
 
@@ -101,7 +98,7 @@
 (defn- simSQLr "" [db]
   (let [cfg {:isolation
              Connection/TRANSACTION_SERIALIZABLE}]
-    (sqlr<> db #(with-open [c2 (openDB db cfg)] (% c2)))))
+    (sqlr<> db #(with-open [c2 (connectToDB db cfg)] (% c2)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -118,9 +115,9 @@
 (defobject TransactableObj
   czlab.horde.core.Transactable
   (execWith [me cb cfg]
-    (let [{:keys [db]} @me]
+    (let [{:keys [db]} me]
       (with-open
-        [c (openDB db
+        [c (connectToDB db
                    (->> {:auto? false}
                         (merge cfg)))]
         (try
@@ -145,20 +142,17 @@
   {:tag czlab.horde.connect.DbApi}
 
   ([jdbc schema]
-   (dbopen<> jdbc schema nil))
+   (dbopen<> jdbc schema _empty-map_))
 
   ([jdbc schema options]
-   (let [v (resolveVendor jdbc)
-         _ (test-some "db-vendor" v)
-         db (context<> DbApi
+   (let [db (context<> DbApi
                        {:open #(dbconnect<> (:jdbc %))
-                        :vendor v
+                        :vendor (resolveVendor jdbc)
                         :jdbc jdbc
-                        :schema schema})
-         cx (.getx db)]
-     (.setv cx :sm (simSQLr db))
-     (.setv cx :tx (txSQLr db))
-     db)))
+                        :schema schema})]
+     (doto ^Settable db
+       (.setv :sm (simSQLr db))
+       (.setv :tx (txSQLr db))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -170,20 +164,17 @@
    (dbapi<> pool schema _empty-map_))
 
   ([pool schema options]
-   (let [db
-         (context<> DbApi
-                    {:finz #(.shutdown
-                              ^czlab.horde.core.JdbcPool (:pool %))
-                     :open #(.nextFree
-                              ^czlab.horde.core.JdbcPool (:pool %))
-                     :vendor (:vendor @pool)
-                     :jdbc (:jdbc @pool)
-                     :schema schema
-                     :pool pool})
-         cx (.getx db)]
-     (.setv cx :sm (simSQLr db))
-     (.setv cx :tx (txSQLr db))
-     db)))
+   (let [{:keys [vendor jdbc]} pool
+         db (context<> DbApi
+                       {:finz #(shutdown (:pool %))
+                        :open #(nextFree (:pool %))
+                        :schema schema
+                        :vendor vendor
+                        :jdbc jdbc
+                        :pool pool})]
+     (doto ^Settable db
+       (.setv :sm (simSQLr db))
+       (.setv :tx (txSQLr db))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
