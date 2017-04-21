@@ -554,7 +554,7 @@
                         :qstr ""
                         :case-fn clojure.string/upper-case}
              *ddl-bvs* (atom {})]
-     (let [ms (dbmodels schema)
+     (let [ms (:models schema)
            vt (if (keyword? db)
                 (findVtbl db)
                 (do (assert (map? db)) db))

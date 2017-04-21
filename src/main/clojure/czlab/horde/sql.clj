@@ -486,19 +486,19 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defobject SQLrObj
+(decl-object SQLrObj
   czlab.horde.core.SQLr
-  (findSome [me typeid filters]
-    (.findSome me typeid filters _empty-map_))
-  (findAll [me typeid extra]
-    (.findSome me typeid _empty-map_ extra))
-  (findAll [me typeid]
-    (.findAll me typeid _empty-map_))
-  (findOne [me typeid filters]
-    (let [rs (.findSome me typeid filters)]
+  (find-some [me typeid filters]
+    (find-some me typeid filters _empty-map_))
+  (find-all [me typeid extra]
+    (find-some me typeid _empty-map_ extra))
+  (find-all [me typeid]
+    (find-all me typeid _empty-map_))
+  (find-one [me typeid filters]
+    (let [rs (find-some me typeid filters)]
       (if-not (empty? rs) (first rs))))
-  (findSome [me typeid filters extraSQL]
-    (let [{:keys [vendor models runc]} @me]
+  (find-some [me typeid filters extraSQL]
+    (let [{:keys [vendor models runc]} me]
       (if-some [mcz (models typeid)]
         (runc
           #(let [s (str "select * from "
@@ -514,39 +514,39 @@
                  extraSQL)
                pms mcz)))
         (dberr! "Unknown model: %s" typeid))))
-  (fmtId [me s] (fmtSqlId (:vendor @me) s))
-  (modObj [me obj]
-    (let [{:keys [vendor runc]} @me]
+  (fmt-id [me s] (fmtSqlId (:vendor me) s))
+  (mod-obj [me obj]
+    (let [{:keys [vendor runc]} me]
       (runc #(doUpdate vendor %1 obj))))
-  (delObj [me obj]
-    (let [{:keys [vendor runc]} @me]
+  (del-obj [me obj]
+    (let [{:keys [vendor runc]} me]
       (runc #(doDelete vendor %1 obj))))
-  (insObj [me obj]
-    (let [{:keys [vendor runc]} @me]
+  (add-obj [me obj]
+    (let [{:keys [vendor runc]} me]
       (runc #(doInsert vendor %1 obj))))
-  (selectSQL [me typeid sql params]
-    (let [{:keys [runc models vendor]} @me]
+  (select-sql [me typeid sql params]
+    (let [{:keys [runc models vendor]} me]
       (if-some [m (models typeid)]
         (runc #(doQuery+ vendor %1 sql params m))
         (dberr! "Unknown model: %s" typeid))))
-  (selectSQL [me sql params]
-    (let [{:keys [vendor runc]} @me]
+  (select-sql [me sql params]
+    (let [{:keys [vendor runc]} me]
       (runc #(doQuery vendor %1 sql params))))
-  (execWithOutput [me sql pms]
-    (let [{:keys [vendor runc]} @me]
+  (exec-with-output [me sql pms]
+    (let [{:keys [vendor runc]} me]
       (runc #(doExec+ vendor
                       %1
                       sql pms {:pkey *col-rowid*}))))
-  (execSQL [me sql pms]
-    (let [{:keys [vendor runc]} @me]
+  (exec-sql [me sql pms]
+    (let [{:keys [vendor runc]} me]
       (runc #(doExec vendor %1 sql pms))))
-  (countObjs [me typeid]
-    (let [{:keys [models vendor runc]} @me]
+  (count-objs [me typeid]
+    (let [{:keys [models vendor runc]} me]
       (if-some [m (models typeid)]
         (runc #(doCount vendor %1 m))
         (dberr! "Unknown model: %s" typeid))))
-  (purgeObjs [me typeid]
-    (let [{:keys [models vendor runc]} @me]
+  (purge-objs [me typeid]
+    (let [{:keys [models vendor runc]} me]
       (if-some [m (models typeid)]
         (runc #(doPurge vendor %1 m))
         (dberr! "Unknown model: %s" typeid)))))
@@ -558,9 +558,9 @@
   [db runc]
   {:pre [(fn? runc)]}
 
-  (let [{:keys [schema vendor]} @db]
+  (let [{:keys [schema vendor]} db]
     (object<> SQLrObj
-              {:models (dbmodels schema)
+              {:models (:models schema)
                :schema schema :vendor vendor :runc runc})))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

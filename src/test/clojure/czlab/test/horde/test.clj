@@ -18,7 +18,8 @@
         [czlab.basal.core]
         [clojure.test])
 
-  (:import [czlab.jasal Disposable]
+  (:import [czlab.basal.core.GenericMutable]
+           [czlab.jasal Disposable]
            [java.io File]
            [java.sql Connection]
            [java.util GregorianCalendar Calendar]))
@@ -82,8 +83,8 @@
       (dbuniques
         {:u1 #{ :cname } } ))
     (dbjoined<> ::EmpDepts ::Department ::Employee)))
-(def ^:private jdbc-spec (atom nil))
-(def ^:private DB (atom nil))
+(def ^:private jdbc-spec nil)
+(def ^:private DB nil)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -96,20 +97,21 @@
                 :url url
                 :user "sa"
                 :passwd "hello"})
-        ddl (getDdl meta-cc :h2)]
+        ddl (getDdl meta-cc :h2)
+        db (dbopen<+> jdbc meta-cc)]
     (when false
       (writeFile (io/file (sysTmpDir)
                           "dbtest.out") (dbgShowSchema meta-cc))
       (println "\n\n" (dbgShowSchema meta-cc)))
     (if false (println "\n\n" ddl))
-    (reset! jdbc-spec jdbc)
+    (alter-var-root #'jdbc-spec (constantly jdbc))
     (uploadDdl jdbc ddl)
-    (reset! DB (dbopen<+> jdbc meta-cc )))
-  (if (fn? f) (f)))
+    (alter-var-root #'DB (constantly db))
+  (if (fn? f) (f))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defn finzTest "" [] (do->true (.dispose ^Disposable @DB)))
+(defn finzTest "" [] (do->true (.dispose ^Disposable DB)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -130,7 +132,7 @@
 (defn- mkEmp
   ""
   [login]
-  (-> (get (dbmodels meta-cc) ::Employee)
+  (-> (lookupModel meta-cc ::Employee)
       dbpojo<>
       (dbSetFlds*
         {:pic (bytesit "poo")
@@ -144,7 +146,7 @@
 (defn- mkCompany
   ""
   [cname]
-  (-> (get (dbmodels meta-cc) ::Company)
+  (-> (lookupModel meta-cc ::Company)
       dbpojo<>
       (dbSetFlds*
         {:cname cname
@@ -156,7 +158,7 @@
 (defn- mkDept
   ""
   [dname]
-  (-> (get (dbmodels meta-cc) ::Department)
+  (-> (lookupModel meta-cc ::Department)
       dbpojo<>
       (dbSetFld :dname dname)))
 
@@ -165,25 +167,23 @@
 (defn- createEmp
   ""
   [fname lname sex login]
-  (let [^czlab.horde.core.Transactable
-        tx
-        (. ^czlab.horde.connect.DbApi @DB compositeSQLr)]
+  (let [tx (compositeSQLr DB)]
     (->>
-      (fn [^czlab.horde.core.SQLr s]
+      (fn [s]
         (let [p (mkPerson fname
                           lname
                           sex)
               e (mkEmp login)
-              e (.insObj s e)
-              p (.insObj s p)]
+              e (add-obj s e)
+              p (add-obj s p)]
           (dbSetO2O
             {:with s :as :person}
             e
-            (.findOne s
+            (find-one s
                       ::Person
                       {:first_name fname
                        :last_name lname}))))
-      (.execWith tx)
+      (transact! tx)
       first)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -191,18 +191,16 @@
 (defn- fetchAllEmps
   ""
   []
-  (-> ^czlab.horde.core.SQLr
-      (. ^czlab.horde.connect.DbApi @DB simpleSQLr)
-      (.findAll ::Employee)))
+  (-> (simpleSQLr DB)
+      (find-all ::Employee)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defn- fetch-person
   ""
   [fname lname]
-  (-> ^czlab.horde.core.SQLr
-      (. ^czlab.horde.connect.DbApi @DB simpleSQLr)
-      (.findOne ::Person
+  (-> (simpleSQLr DB)
+      (find-one ::Person
                 {:first_name fname :last_name lname})))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -210,38 +208,34 @@
 (defn- fetchEmp
   ""
   [login]
-  (-> ^czlab.horde.core.SQLr
-      (. ^czlab.horde.connect.DbApi @DB simpleSQLr)
-      (.findOne ::Employee {:login login})))
+  (-> (simpleSQLr DB)
+      (find-one ::Employee {:login login})))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defn- changeEmp
   ""
   [login]
-  (-> ^czlab.horde.core.Transactable
-      (. ^czlab.horde.connect.DbApi @DB compositeSQLr)
-      (.execWith
-        #(let [o2 (-> (. ^czlab.horde.core.SQLr
-                         %
-                         findOne ::Employee {:login login})
+  (->
+      (compositeSQLr DB)
+      (transact!
+        #(let [o2 (-> (find-one %
+                                ::Employee {:login login})
                       (dbSetFlds* {:salary 99.9234 :iq 0}))]
-           (if (> (. ^czlab.horde.core.SQLr
-                     %
-                     modObj o2) 0) o2)))))
+           (if (> (mod-obj % o2) 0) o2)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defn- deleteEmp
   ""
   [login]
-  (-> ^czlab.horde.core.Transactable
-      (.compositeSQLr ^czlab.horde.connect.DbApi @DB)
-      (.execWith
-        (fn [^czlab.horde.core.SQLr s]
-          (let [o1 (.findOne s ::Employee {:login login} )]
-            (.delObj s o1)
-            (.countObjs s ::Employee))))))
+  (->
+      (compositeSQLr DB)
+      (transact!
+        (fn [s]
+          (let [o1 (find-one s ::Employee {:login login})]
+            (del-obj s o1)
+            (count-objs s ::Employee))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -249,22 +243,20 @@
   ""
   [fname lname sex]
   (let [p (mkPerson fname lname sex)]
-    (-> ^czlab.horde.core.Transactable
-        (.compositeSQLr ^czlab.horde.connect.DbApi @DB)
-        (.execWith
-          #(.insObj ^czlab.horde.core.SQLr % p)))))
+    (->
+        (compositeSQLr DB)
+        (transact! #(add-obj % p)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defn- wedlock?
   ""
   []
-  (let [^czlab.horde.core.Transactable
-        sql (.compositeSQLr ^czlab.horde.connect.DbApi @DB)
+  (let [sql (compositeSQLr DB)
         e (createEmp "joe" "blog" "male" "joeb")
         w (createPerson "mary" "lou" "female")]
     (->>
-      (fn [^czlab.horde.core.SQLr s]
+      (fn [s]
         (let
           [pm (dbGetO2O {:with s :as :person} e)
            [p1 w1]
@@ -274,17 +266,16 @@
            w3 (dbGetO2O {:as :spouse :with s} p2)
            p3 (dbGetO2O {:as :spouse :with s} w3)]
           (and (some? w3)(some? p3))))
-      (.execWith sql))))
+      (transact! sql))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defn- undoWedlock
   ""
   []
-  (let [^czlab.horde.core.Transactable
-        sql (.compositeSQLr ^czlab.horde.connect.DbApi @DB)]
+  (let [sql (compositeSQLr DB)]
     (->>
-      (fn [^czlab.horde.core.SQLr s]
+      (fn [s]
         (let
           [e (fetchEmp "joeb")
            pm (dbGetO2O {:with s :as :person} e)
@@ -294,50 +285,48 @@
            w3 (dbGetO2O {:as :spouse :with s } p2)
            p3 (dbGetO2O {:as :spouse :with s } w2)]
           (and (nil? w3)(nil? p3)(some? w))))
-      (.execWith sql))))
+      (transact! sql))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defn- testCompany
   ""
   []
-  (let [^czlab.horde.core.Transactable
-        sql (.compositeSQLr ^czlab.horde.connect.DbApi @DB)]
+  (let [sql (compositeSQLr DB)]
     (->>
-      (fn [^czlab.horde.core.SQLr s]
-        (let [c (.insObj s (mkCompany "acme"))
+      (fn [s]
+        (let [c (add-obj s (mkCompany "acme"))
               _ (dbSetO2M
                   {:as :depts :with s }
                   c
-                  (.insObj s (mkDept "d1")))
+                  (add-obj s (mkDept "d1")))
               _ (dbSetO2M*
                   {:as :depts :with s }
                   c
-                  (.insObj s (mkDept "d2"))
-                  (.insObj s (mkDept "d3")))
+                  (add-obj s (mkDept "d2"))
+                  (add-obj s (mkDept "d3")))
               _ (dbSetO2M*
                   {:as :emps :with s }
                   c
-                  (.insObj s (mkEmp "e1" ))
-                  (.insObj s (mkEmp "e2" ))
-                  (.insObj s (mkEmp "e3" )))
+                  (add-obj s (mkEmp "e1" ))
+                  (add-obj s (mkEmp "e2" ))
+                  (add-obj s (mkEmp "e3" )))
               ds (dbGetO2M  {:as :depts :with s} c)
               es (dbGetO2M  {:as :emps :with s} c)]
           (and (= (count ds) 3)
                (= (count es) 3))))
-      (.execWith sql))))
+      (transact! sql))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defn- testM2M
   ""
   []
-  (let [^czlab.horde.core.Transactable
-        sql (.compositeSQLr ^czlab.horde.connect.DbApi @DB)]
+  (let [sql (compositeSQLr DB)]
     (->>
-      (fn [^czlab.horde.core.SQLr s]
+      (fn [s]
         (let
-          [c (.findOne s ::Company {:cname "acme"})
+          [c (find-one s ::Company {:cname "acme"})
            ds (dbGetO2M {:as :depts :with s} c)
            es (dbGetO2M {:as :emps :with s} c)
            _
@@ -360,46 +349,44 @@
                 (some #(if (= (:login %) "e2") %)  es))]
           (and (== (count s1) 3)
                (== (count s2) 3))))
-      (.execWith sql))))
+      (transact! sql))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defn- undoM2M
   ""
   []
-  (let [^czlab.horde.core.Transactable
-        sql (.compositeSQLr ^czlab.horde.connect.DbApi @DB)]
+  (let [sql (compositeSQLr DB)]
     (->>
-      (fn [^czlab.horde.core.SQLr s]
+      (fn [s]
         (let
-          [d2 (.findOne s ::Department {:dname "d2"})
-           e2 (.findOne s ::Employee {:login "e2"})
+          [d2 (find-one s ::Department {:dname "d2"})
+           e2 (find-one s ::Employee {:login "e2"})
            _ (dbClrM2M {:joined ::EmpDepts :with s} d2)
            _ (dbClrM2M {:joined ::EmpDepts :with s} e2)
            s1 (dbGetM2M {:joined ::EmpDepts :with s} d2)
            s2 (dbGetM2M {:joined ::EmpDepts :with s} e2)]
           (and (== (count s1) 0)
                (== (count s2) 0))))
-      (.execWith sql))))
+      (transact! sql))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defn- undoCompany
   ""
   []
-  (let [^czlab.horde.core.Transactable
-        sql (.compositeSQLr ^czlab.horde.connect.DbApi @DB)]
+  (let [sql (compositeSQLr DB)]
     (->>
-      (fn [^czlab.horde.core.SQLr s]
+      (fn [s]
         (let
-          [c (.findOne s ::Company {:cname "acme"})
+          [c (find-one s ::Company {:cname "acme"})
            _ (dbClrO2M {:as :depts :with s} c)
            _ (dbClrO2M {:as :emps :with s} c)
            s1 (dbGetO2M {:as :depts :with s} c)
            s2 (dbGetO2M {:as :emps :with s} c)]
           (and (== (count s1) 0)
                (== (count s2) 0))))
-      (.execWith sql))))
+      (transact! sql))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -412,15 +399,13 @@
   (testing
     "related to: db api"
 
-    (is (let [^czlab.horde.connect.DbApi
-              db
-              (dbopen<+> @jdbc-spec meta-cc)
-              url (:url @@jdbc-spec)
-              c (.compositeSQLr db)
-              s (.simpleSQLr db)
-              h (:schema @db)
-              v (:vendor @db)
-              ^Connection conn (.open db)
+    (is (let [db (dbopen<+> jdbc-spec meta-cc)
+              url (:url jdbc-spec)
+              c (compositeSQLr db)
+              s (simpleSQLr db)
+              h (:schema db)
+              v (:vendor db)
+              ^Connection conn (opendb db)
               a (fmtSqlId db "hello")
               b (fmtSqlId conn "hello")
               id (dbtag ::Person h)
@@ -444,15 +429,13 @@
               (.close conn)
               (.dispose ^Disposable db)))))
 
-    (is (let [^czlab.horde.connect.DbApi
-              db
-              (dbopen<> @jdbc-spec meta-cc)
-              url (:url @@jdbc-spec)
-              c (.compositeSQLr db)
-              s (.simpleSQLr db)
-              h (:schema @db)
-              v (:vendor @db)
-              ^Connection conn (.open db)
+    (is (let [db (dbopen<> jdbc-spec meta-cc)
+              url (:url jdbc-spec)
+              c (compositeSQLr db)
+              s (simpleSQLr db)
+              h (:schema db)
+              v (:vendor db)
+              ^Connection conn (opendb db)
               a (fmtSqlId db "hello")
               b (fmtSqlId conn "hello")
               id (dbtag ::Person h)
@@ -476,22 +459,22 @@
               (.close conn)
               (.dispose ^Disposable db)))))
 
-    (is (let [c (dbconnect<> @jdbc-spec)]
+    (is (let [c (dbconnect<> jdbc-spec)]
           (try
             (map? (loadTableMeta c "Person"))
             (finally (.close c)))))
 
-    (is (testConnect? @jdbc-spec))
+    (is (testConnect? jdbc-spec))
 
-    (is (map? (resolveVendor @jdbc-spec)))
+    (is (map? (resolveVendor jdbc-spec)))
 
-    (is (tableExist? @jdbc-spec "Person"))
+    (is (tableExist? jdbc-spec "Person"))
 
-    (is (let [p (dbpool<> @jdbc-spec)]
+    (is (let [p (dbpool<> jdbc-spec)]
           (try
             (tableExist? p "Person")
             (finally
-              (.shutdown p))))))
+              (shut-down p))))))
 
   (testing
     "related to: basic CRUD"
@@ -500,7 +483,7 @@
               r (:rowid m)]
           (> r 0)))
 
-    (is (rowExist? @jdbc-spec "Person"))
+    (is (rowExist? jdbc-spec "Person"))
 
     (is (let [m (createEmp "joe" "blog" "male" "joeb")
               r (:rowid m)]

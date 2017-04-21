@@ -25,6 +25,7 @@
   (:import [java.util HashMap TimeZone Properties GregorianCalendar]
            [clojure.lang Keyword APersistentMap APersistentVector]
            [com.zaxxer.hikari HikariConfig HikariDataSource]
+           [czlab.basal.core GenericMutable]
            [java.sql
             SQLException
             Connection
@@ -47,34 +48,34 @@
 ;;
 (defprotocol Transactable
   ""
-  (execWith [_ func] [_ func cfg] ""))
+  (transact! [_ func] [_ func cfg] ""))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defprotocol SQLr
   ""
-  (findSome [_ modeldef filters]
-            [_ modeldef filters extras] "")
-  (findAll [_ modeldef]
-           [_ modeldef extras] "")
-  (findOne [_ modeldef filters] "")
-  (modObj [_ obj] "")
-  (delObj [_ obj] "")
-  (insObj [_ obj] "")
-  (selectSQL [_ sql params]
-             [_ modeldef sql params] "")
-  (execWithOutput [_ sql params] "")
-  (execSQL [_ sql params] "")
-  (countObjs [_ modeldef] "")
-  (purgeObjs [_ modeldef] "")
-  (^String fmtId [_ s] ""))
+  (find-some [_ modeldef filters]
+             [_ modeldef filters extras] "")
+  (find-all [_ modeldef]
+            [_ modeldef extras] "")
+  (find-one [_ modeldef filters] "")
+  (mod-obj [_ obj] "")
+  (del-obj [_ obj] "")
+  (add-obj [_ obj] "")
+  (select-sql [_ sql params]
+              [_ modeldef sql params] "")
+  (exec-with-output [_ sql params] "")
+  (exec-sql [_ sql params] "")
+  (count-objs [_ modeldef] "")
+  (purge-objs [_ modeldef] "")
+  (^String fmt-id [_ s] ""))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defprotocol JdbcPool
   ""
-  (^Connection nextFree [_] "")
-  (shutdown [_] ""))
+  (shut-down [_] "")
+  (^Connection next-free [_] ""))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -116,7 +117,7 @@
 ;;
 (defmacro lookupModel
   "Get model from schema"
-  [schema typeid] `(get (:models ~@schema) ~typeid))
+  [schema typeid] `(get (:models ~schema) ~typeid))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -217,34 +218,28 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defobject JdbcPoolObj
+(decl-object JdbcPoolObj
   JdbcPool
-  (shutdown [me]
+  (shut-down [me]
     (do->nil
-      (doto->> ^HikariDataSource
-               (:impl me)
-               (log/debug "shutting: %s" )
-               (.close ))))
-  (nextFree [me]
-    (try
-      (-> ^HikariDataSource
-          (:impl me) .getConnection)
-      (catch Throwable e#
-        (log/error e# "")
-        (dberr! "No free connection")))))
+      (doto->> ^HikariDataSource (:impl me)
+               (log/debug "shutting: %s" ) (.close ))))
+  (next-free [me]
+    (try (-> ^HikariDataSource
+             (:impl me) .getConnection)
+         (catch Throwable e#
+           (log/error e# "") (dberr! "No free connection")))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;Stores jdbc info
-(defobject JdbcSpec)
+(decl-object JdbcSpec)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defn dbspec<>
   "Basic jdbc parameters"
-  ^czlab.horde.core.JdbcSpec
   [cfg]
   {:pre [(map? cfg)]}
-
   (object<> JdbcSpec
             (-> (dissoc cfg :server)
                 (assoc :url (or (:server cfg)
@@ -312,7 +307,6 @@
 (defn matchUrl
   "From jdbc url, get db-type"
   ^Keyword [dburl]
-
   (if-some+ [ss (.split (str dburl) ":")]
     (if (> (alength ss) 1) (matchSpec (aget ss 1)))))
 
@@ -648,13 +642,12 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defcontext Schema)
+(decl-object Schema)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defn dbschema<>
   "Stores metadata for all models"
-  ^czlab.horde.core.Schema
   [& models]
 
   (let [ms (if-not (empty? models)
@@ -663,14 +656,14 @@
         m2 (if (empty? ms)
              {}
              (-> ms resolveAssocs resolveMXMs (metaModels nil)))
-        ^Settable sch (context<> Schema {})]
+        sch (GenericMutable. {})]
     (->>
       (preduce<map>
         #(let [[k m] %2]
            (assoc! %1 k (vary-meta m assoc :schema sch)))
         m2)
-      (.setv sch :models))
-    sch))
+      (setf! sch :models))
+    (object<> Schema @sch)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -683,7 +676,7 @@
                 "\n"
                 (writeEdnStr {:TABLE (:table %2)
                               :DEFN %2
-                              :META (meta %2)})) (vals (:models @schema))))
+                              :META (meta %2)})) (vals (:models schema))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -692,7 +685,7 @@
 
   (let [{:keys [url driver
                 passwd user]}
-        @jdbc
+        jdbc
         p (Properties.)
         d (loadDriver jdbc)]
     (when (hgl? user)
@@ -719,7 +712,7 @@
   {:pre [(some? jdbc)]}
 
   (let [{:keys [url user]}
-        @jdbc
+        jdbc
         conn (if (hgl? user)
                (safeGetConn jdbc)
                (DriverManager/getConnection url))]
@@ -775,7 +768,7 @@
 (defmethod tableExist?
   czlab.horde.core.JdbcPool
   [^czlab.horde.core.JdbcPool pool ^String table]
-  (with-open [^Connection conn (.nextFree pool) ] (tableExist? conn table)))
+  (with-open [^Connection conn (next-free pool)] (tableExist? conn table)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -902,7 +895,6 @@
 ;;
 (defn dbpool<>
   "Create a db connection pool"
-  {:tag czlab.horde.core.JdbcPool}
 
   ([jdbc] (dbpool<> jdbc nil))
   ([jdbc options]
@@ -910,10 +902,10 @@
          dbv (resolveVendor jdbc)
          {:keys [driver url
                  passwd user]}
-         @jdbc
+         jdbc
          hc (HikariConfig.)]
      ;;(log/debug "pool-options: %s" options)
-     ;;(log/debug "pool-jdbc: %s" @jdbc)
+     ;;(log/debug "pool-jdbc: %s" jdbc)
      (if (hgl? driver) (forname driver))
      (test-some "database-vendor" dbv)
      (.setJdbcUrl hc ^String url)
@@ -923,9 +915,9 @@
          (.setPassword hc (strit passwd))))
      (log/debug "[hikari]\n%s" (str hc))
      (object<> JdbcPoolObj
-               {:impl (HikariDataSource. hc)
+               {:vendor dbv
                 :jdbc jdbc
-                :vendor dbv}))))
+                :impl (HikariDataSource. hc)}))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -953,7 +945,7 @@
 (defmethod uploadDdl
   czlab.horde.core.JdbcPool
   [^czlab.horde.core.JdbcPool pool ^String ddl]
-  (with-open [^Connection conn (nextFree pool)] (uploadDdl conn ddl)))
+  (with-open [^Connection conn (next-free pool)] (uploadDdl conn ddl)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -1088,9 +1080,8 @@
 (defn- dbioSetO2X
   "" [ctx lhsObj rhsObj kind]
 
-  (let [^czlab.horde.core.SQLr
+  (let [mcz (gmodel lhsObj)
         sqlr (:with ctx)
-        mcz (gmodel lhsObj)
         rid (:as ctx)]
     (if-some
       [r (dbioGetRelation mcz rid kind)]
@@ -1098,7 +1089,7 @@
             fid (:fkey r)
             y (-> (mockPojo<> rhsObj)
                   (dbSetFld fid fv))
-            cnt (.modObj sqlr y)]
+            cnt (mod-obj sqlr y)]
         [lhsObj (merge rhsObj y)])
       (dberr! "Unknown relation: %s" rid))))
 
@@ -1111,11 +1102,10 @@
 
   (if-some
     [r (dbioGetO2X ctx lhsObj :o2m)]
-    (-> ^czlab.horde.core.SQLr
-        (:with ctx)
-        (.findSome (or (:cast ctx)
-                       (:other r))
-                   {(:fkey r) (goid lhsObj)}))))
+    (find-some (:with ctx)
+               (or (:cast ctx)
+                   (:other r))
+               {(:fkey r) (goid lhsObj)})))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -1145,11 +1135,10 @@
 
   (if-some
     [r (dbioGetO2X ctx lhsObj :o2o)]
-    (-> ^czlab.horde.core.SQLr
-        (:with ctx)
-        (.findOne (or (:cast ctx)
-                      (:other r))
-                  {(:fkey r) (goid lhsObj)}))))
+    (find-one (:with ctx)
+              (or (:cast ctx)
+                  (:other r))
+              {(:fkey r) (goid lhsObj)})))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -1166,29 +1155,28 @@
 (defn- dbioClrO2X
   "" [ctx objA kind]
 
-  (let [^czlab.horde.core.SQLr
-        sqlr (:with ctx)
-        schema (:schema @sqlr)
+  (let [sqlr (:with ctx)
+        s (:schema sqlr)
         rid (:as ctx)
         mA (gmodel objA)]
     (if-some
       [r (dbioGetRelation mA rid kind)]
       (let [rt (or (:cast ctx) (:other r))
-            mB (lookupModel schema rt)
+            mB (lookupModel s rt)
             tn (dbtable mB)
             cn (dbcol (:fkey r) mB)]
-        (.execSQL
+        (exec-sql
           sqlr
           (if-not (:cascade? r)
             (format
               "update %s set %s= null where %s=?"
-              (.fmtId sqlr tn)
-              (.fmtId sqlr cn)
-              (.fmtId sqlr cn))
+              (fmt-id sqlr tn)
+              (fmt-id sqlr cn)
+              (fmt-id sqlr cn))
             (format
               "delete from %s where %s=?"
-              (.fmtId sqlr tn)
-              (.fmtId sqlr cn)))
+              (fmt-id sqlr tn)
+              (fmt-id sqlr cn)))
           [(goid objA)])
         objA)
       (dberr! "Unknown relation: %s" rid))))
@@ -1226,19 +1214,18 @@
   {:pre [(map? ctx)
          (map? objA) (map? objB)]}
 
-  (let [^czlab.horde.core.SQLr
-        sqlr (:with ctx)
-        schema (:schema @sqlr)
+  (let [sqlr (:with ctx)
+        s (:schema sqlr)
         jon (:joined ctx)]
     (if-some
-      [mm (lookupModel schema jon)]
+      [mm (lookupModel s jon)]
       (let [ka (selectSide mm objA)
             kb (selectSide mm objB)]
         (->> (-> (dbpojo<> mm)
                  (setMxMFlds*
                    ka (goid objA)
                    kb (goid objB)))
-             (.insObj sqlr )))
+             (add-obj sqlr )))
       (dberr! "Unkown relation: %s" jon))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -1249,28 +1236,27 @@
   ([ctx obj] (dbClrM2M ctx obj nil))
   ([ctx objA objB]
    {:pre [(some? objA)]}
-    (let [^czlab.horde.core.SQLr
-          sqlr (:with ctx)
-          schema (:schema @sqlr)
+    (let [sqlr (:with ctx)
+          s (:schema sqlr)
           jon (:joined ctx)]
       (if-some
-        [mm (lookupModel schema jon)]
+        [mm (lookupModel s jon)]
         (let [fs (:fields mm)
               ka (selectSide mm objA)
               kb (selectSide mm objB)]
           (if (nil? objB)
-            (.execSQL sqlr
+            (exec-sql sqlr
                       (format
                         "delete from %s where %s=?"
-                        (.fmtId sqlr (dbtable mm))
-                        (.fmtId sqlr (dbcol (fs ka))))
+                        (fmt-id sqlr (dbtable mm))
+                        (fmt-id sqlr (dbcol (fs ka))))
                       [(goid objA)])
-            (.execSQL sqlr
+            (exec-sql sqlr
                       (format
                         "delete from %s where %s=? and %s=?"
-                        (.fmtId sqlr (dbtable mm))
-                        (.fmtId sqlr (dbcol (fs ka)))
-                        (.fmtId sqlr (dbcol (fs kb))))
+                        (fmt-id sqlr (dbtable mm))
+                        (fmt-id sqlr (dbcol (fs ka)))
+                        (fmt-id sqlr (dbcol (fs kb))))
                       [(goid objA) (goid objB)])))
         (dberr! "Unkown relation: %s" jon)))))
 
@@ -1281,22 +1267,21 @@
   {:pre [(map? ctx)
          (map? obj)]}
 
-  (let [^czlab.horde.core.SQLr
-        sqlr (:with ctx)
-        RS (.fmtId sqlr "RES")
-        MM (.fmtId sqlr "MM")
-        schema (:schema @sqlr)
+  (let [sqlr (:with ctx)
+        RS (fmt-id sqlr "RES")
+        MM (fmt-id sqlr "MM")
+        s (:schema sqlr)
         jon (:joined ctx)]
     (if-some
-      [mm (lookupModel schema jon)]
+      [mm (lookupModel s jon)]
       (let [[ka kb t]
             (selectSide+ mm obj)
             t2 (or (:cast ctx) t)
             fs (:fields mm)
-            tm (lookupModel schema t2)]
+            tm (lookupModel s t2)]
         (if (nil? tm)
           (dberr! "Unknown model: %s" t2))
-        (.selectSQL
+        (select-sql
           sqlr
           t2
           (format
@@ -1304,13 +1289,13 @@
                  "join %s %s on "
                  "%s.%s=? and %s.%s=%s.%s"),
             RS
-            (.fmtId sqlr (dbtable tm))
+            (fmt-id sqlr (dbtable tm))
             RS
-            (.fmtId sqlr (dbtable mm))
+            (fmt-id sqlr (dbtable mm))
             MM
-            MM (.fmtId sqlr (dbcol (ka fs)))
-            MM (.fmtId sqlr (dbcol (kb fs)))
-            RS (.fmtId sqlr *col-rowid*))
+            MM (fmt-id sqlr (dbcol (ka fs)))
+            MM (fmt-id sqlr (dbcol (kb fs)))
+            RS (fmt-id sqlr *col-rowid*))
           [(goid obj)]))
       (dberr! "Unknown joined model: %s" jon))))
 
