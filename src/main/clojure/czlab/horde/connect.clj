@@ -25,8 +25,8 @@
 ;;
 (defprotocol IDbApi
   ""
-  (^czlab.horde.core.Transactable compositeSQLr [_] "")
-  (^czlab.horde.core.SQLr simpleSQLr [_] "")
+  (^czlab.horde.core.Transactable composite-sqlr [_] "")
+  (^czlab.horde.core.SQLr simple-sqlr [_] "")
   (^Connection opendb [_] ""))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -35,8 +35,8 @@
   Disposable
   (dispose [me] (if-fn? [f (:finz me)] (f me)))
   IDbApi
-  (compositeSQLr [me] (:tx me))
-  (simpleSQLr [me] (:sm me))
+  (composite-sqlr [me] (:tx me))
+  (simple-sqlr [me] (:sm me))
   (opendb [me] (if-fn? [f (:open me)] (f me))))
 
 ;;The calculation of pool size in order to avoid deadlock is a
