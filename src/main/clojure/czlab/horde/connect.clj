@@ -11,33 +11,37 @@
 
   czlab.horde.connect
 
-  (:require [czlab.basal.logging :as log])
+  (:require [czlab.horde.core :as h :refer [fmtSqlId]]
+            [czlab.basal.log :as log]
+            [czlab.basal.core :as c]
+            [czlab.horde.sql :as q])
 
-  (:use [czlab.horde.core]
-        [czlab.basal.core]
-        [czlab.horde.sql])
-
-  (:import [czlab.jasal Settable Disposable TLocalMap]
-           [java.sql SQLException Connection]
+  (:import [java.sql
+            Connection
+            SQLException]
+           [czlab.jasal
+            Settable
+            Disposable
+            TLocalMap]
            [java.util Map]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defprotocol IDbApi
+(defprotocol DbApi
   ""
-  (^czlab.horde.core.Transactable composite-sqlr [_] "")
-  (^czlab.horde.core.SQLr simple-sqlr [_] "")
-  (^Connection opendb [_] ""))
+  (composite-sqlr [_] "Transaction enabled session")
+  (simple-sqlr [_] "Auto commit session")
+  (^Connection opendb [_] "Jdbc connection"))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(decl-object DbApi
+(c/decl-object DbApiObj
   Disposable
-  (dispose [me] (if-fn? [f (:finz me)] (f me)))
-  IDbApi
+  (dispose [me] (c/if-fn? [f (:finz me)] (f me)))
+  DbApi
   (composite-sqlr [me] (:tx me))
   (simple-sqlr [me] (:sm me))
-  (opendb [me] (if-fn? [f (:open me)] (f me))))
+  (opendb [me] (c/if-fn? [f (:open me)] (f me))))
 
 ;;The calculation of pool size in order to avoid deadlock is a
 ;;fairly simple resource allocation formula:
@@ -74,7 +78,7 @@
         hc (:id jdbc)]
     (when-not (.containsKey c hc)
       (log/debug "No db-pool in thread-local, creating one")
-      (->> (merge pool-cfg options) (dbpool<> jdbc ) (.put c hc )))
+      (->> (merge pool-cfg options) (h/dbpool<> jdbc) (.put c hc)))
     (.get c hc)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -86,7 +90,7 @@
   (let [how (or (:isolation cfg)
                 Connection/TRANSACTION_SERIALIZABLE)
         f (:open db)
-        auto? (!false? (:auto? cfg))]
+        auto? (c/!false? (:auto? cfg))]
   (doto
     ^Connection
     (f db)
@@ -98,12 +102,12 @@
 (defn- simSQLr "" [db]
   (let [cfg {:isolation
              Connection/TRANSACTION_SERIALIZABLE}]
-    (sqlr<> db #(with-open [c2 (connectToDB db cfg)] (% c2)))))
+    (q/sqlr<> db #(with-open [c2 (connectToDB db cfg)] (% c2)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defmacro ^:private undo
-  "" [c] `(try! (.rollback ~(with-meta c {:tag 'Connection}))))
+  "" [c] `(c/try! (.rollback ~(with-meta c {:tag 'Connection}))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -112,7 +116,7 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(decl-object TransactableObj
+(c/decl-object TransactableObj
   czlab.horde.core.Transactable
   (transact! [me cb cfg]
     (let [{:keys [db]} me]
@@ -122,18 +126,18 @@
                         (merge cfg)))]
         (try
           (let
-            [rc (cb (sqlr<> db #(% c)))]
+            [rc (cb (q/sqlr<> db #(% c)))]
             (commit c)
             rc)
           (catch Throwable _
             (undo c) (log/warn _ "") (throw _))))))
   (transact! [me cb]
-    (transact! me cb _empty-map_)))
+    (.transact! me cb nil)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defn- txSQLr "" [db]
-  (object<> TransactableObj {:db db}))
+  (c/object<> TransactableObj {:db db}))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -141,32 +145,31 @@
   "Open/access to a datasource"
 
   ([jdbc schema]
-   (dbopen<> jdbc schema _empty-map_))
+   (dbopen<> jdbc schema nil))
 
   ([jdbc schema options]
-   (let [opener #(dbconnect<> (:jdbc %))
-         vendor (resolveVendor jdbc)
+   (let [opener #(h/dbconnect<> (:jdbc %))
+         vendor (h/resolveVendor jdbc)
          db {:vendor vendor
              :open opener
              :jdbc jdbc
              :schema schema}
          tx (txSQLr db)
          sm (simSQLr db)]
-     (object<> DbApi (assoc db :tx tx :sm sm)))))
+     (c/object<> DbApiObj (assoc db :tx tx :sm sm)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defn dbapi<>
   "Open/access to a datasource (pooled)"
-  ^czlab.horde.connect.DbApi
 
   ([pool schema]
-   (dbapi<> pool schema _empty-map_))
+   (dbapi<> pool schema nil))
 
   ([pool schema options]
    (let [{:keys [vendor jdbc]} pool
-         finzer #(shut-down (:pool %))
-         opener #(next-free (:pool %))
+         finzer #(h/shut-down (:pool %))
+         opener #(h/next-free (:pool %))
          db {:finz finzer
              :open opener
              :schema schema
@@ -175,20 +178,19 @@
              :pool pool}
          sm (simSQLr db)
          tx (txSQLr db)]
-     (object<> DbApi (assoc db :tx tx :sm sm)))))
+     (c/object<> DbApiObj (assoc db :tx tx :sm sm)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defn dbopen<+>
   "Open/access to a datasource (pooled)"
-  ^czlab.horde.connect.DbApi
 
   ([jdbc schema]
-   (dbopen<+> jdbc schema _empty-map_))
+   (dbopen<+> jdbc schema nil))
 
   ([jdbc schema options]
    (dbapi<> (->> (merge pool-cfg options)
-                 (dbpool<> jdbc )) schema)))
+                 (h/dbpool<> jdbc)) schema)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;EOF

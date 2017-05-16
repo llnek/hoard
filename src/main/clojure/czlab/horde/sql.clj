@@ -11,20 +11,19 @@
 
   czlab.horde.sql
 
-  (:require [czlab.basal.io :refer [readChars readBytes]]
-            [czlab.basal.meta
+  (:require [czlab.basal.io :as i :refer [rxChars rxBytes]]
+            [czlab.basal.dates :as d :refer [gmt<>]]
+            [czlab.basal.meta :as m
              :refer
              [instBytes?
               instChars?
               bytesClass
               charsClass]]
-            [czlab.basal.logging :as log]
+            [czlab.basal.log :as log]
             [clojure.string :as cs]
-            [czlab.basal.dates :refer [gmt<>]])
-
-  (:use [czlab.horde.core]
-        [czlab.basal.core]
-        [czlab.basal.str])
+            [czlab.horde.core :as h]
+            [czlab.basal.core :as c]
+            [czlab.basal.str :as s])
 
   (:import [java.util Calendar TimeZone GregorianCalendar]
            [java.math BigDecimal BigInteger]
@@ -52,7 +51,7 @@
 (defn- fmtUpdateWhere
   "Filter on primary key"
   [vendor model]
-  (str (fmtSqlId vendor (dbcol (:pkey model) model)) "=?"))
+  (str (h/fmtSqlId vendor (h/dbcol (:pkey model) model)) "=?"))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -61,20 +60,20 @@
   [vendor model filters]
   (let
     [flds (:fields model)
-     wc (sreduce<>
+     wc (c/sreduce<>
           #(let [[k v] %2
                  fd (flds k)
                  c (if (nil? fd)
-                     (sname k)
+                     (s/sname k)
                      (:column fd))]
-             (addDelim!
+             (s/addDelim!
                %1
                " and "
-               (str (fmtSqlId vendor c)
+               (str (h/fmtSqlId vendor c)
                     (if (nil? v)
                       " is null " " =? ")))) filters)]
     ;;returns the where clause and parameters
-    [wc (flatnil (vals filters))]))
+    [wc (c/flatnil (vals filters))]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -94,8 +93,8 @@
            Reader obj
            nil)]
     (cond
-      (some? rdr) (with-open [r rdr] (readChars r))
-      (some? inp) (with-open [p inp] (readBytes p))
+      (some? rdr) (with-open [r rdr] (i/rxChars r))
+      (some? inp) (with-open [p inp] (i/rxBytes p))
       :else obj)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -103,7 +102,7 @@
 (defn- readOneCol
   "Read column"
   [sqlType pos ^ResultSet rset]
-  (let [c (gmt<>)
+  (let [c (d/gmt<>)
         pos (int pos)]
     (condp == (int sqlType)
       Types/TIMESTAMP (.getTimestamp rset pos c)
@@ -118,7 +117,7 @@
   ;;if column is not defined in the model, ignore it
   (if-some
     [fdef (-> (:columns (meta model))
-              (get (ucase cn)))]
+              (get (s/ucase cn)))]
     (assoc! row (:id fdef) cv)
     row))
 
@@ -135,7 +134,7 @@
 (defn- row2Obj
   "Convert a jdbc row into object"
   [finj ^ResultSet rs ^ResultSetMetaData rsmeta]
-  (preduce<map>
+  (c/preduce<map>
     #(let
        [pos (int %2)
         ct (.getColumnType rsmeta pos)]
@@ -148,7 +147,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defmacro ^:private insert?
-  "" [sql] `(.startsWith (lcase (strim ~sql)) "insert"))
+  "" [sql] `(.startsWith (s/lcase (s/strim ~sql)) "insert"))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -159,8 +158,8 @@
   (let [c (.content x)]
     (->>
       (if (or (string? c)
-              (instBytes? c)
-              (instChars? c)) c (.stream x))
+              (m/instBytes? c)
+              (m/instChars? c)) c (.stream x))
       (setBindVar ps pos ))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -190,21 +189,21 @@
     Date (.setDate ps pos p (gmt<>))
     Calendar (.setTimestamp ps pos
                             (Timestamp. (.getTimeInMillis ^Calendar p))
-                            (gmt<>))
-    (dberr! "Unsupported param-type: %s" (type p))))
+                            (d/gmt<>))
+    (h/dberr! "Unsupported param-type: %s" (type p))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defn- mssqlTweakSqlstr
   "" [^String sqlstr token cmd]
 
-  (loop [target (sname token)
+  (loop [target (s/sname token)
          start 0
          stop false
          sql sqlstr]
     (if stop
       sql
-      (let [pos (.indexOf (lcase sql)
+      (let [pos (.indexOf (s/lcase sql)
                           target start)
             rc (if (< pos 0)
                  nil
@@ -225,9 +224,9 @@
 (defn- jiggleSQL
   "" ^String [vendor ^String sqlstr]
 
-  (let [sql (strim sqlstr)
-        lcs (lcase sql)]
-    (if (= SQLServer (:id vendor))
+  (let [sql (s/strim sqlstr)
+        lcs (s/lcase sql)]
+    (if (= h/SQLServer (:id vendor))
       (cond
         (.startsWith lcs "select")
         (mssqlTweakSqlstr sql :where "nolock")
@@ -244,17 +243,15 @@
   "" ^PreparedStatement
   [vendor ^Connection conn sqlstr params]
 
-  (let [sql (jiggleSQL vendor sqlstr)
-        ps (if (insert? sql)
-             (.prepareStatement
-               conn
-               sql
-               Statement/RETURN_GENERATED_KEYS)
-             (.prepareStatement conn sql))]
-    (log/debug "SQLStmt: %s" sql)
-    (doseq [n (range 0 (count params))]
-      (setBindVar ps (inc n) (nth params n)))
-    ps))
+  (let [sql (jiggleSQL vendor sqlstr)]
+    (c/do-with
+      [ps (if (insert? sql)
+            (.prepareStatement
+              conn sql Statement/RETURN_GENERATED_KEYS)
+            (.prepareStatement conn sql))]
+      (log/debug "SQLStmt: %s" sql)
+      (doseq [n (range 0 (count params))]
+        (setBindVar ps (inc n) (nth params n))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -294,7 +291,7 @@
       (loop [sum (transient [])
              ok (.next rs)]
         (if-not ok
-          (pcoll! sum)
+          (c/pcoll! sum)
           (recur (->> (post (func rs m))
                       (conj! sum)) (.next rs)))))))
 
@@ -318,19 +315,19 @@
 (defn- insertFlds
   "Format sql for insert" [vendor obj flds]
 
-  (let [sb2 (strbf<>)
-        sb1 (strbf<>)
+  (let [sb2 (s/strbf<>)
+        sb1 (s/strbf<>)
         ps
-        (preduce<vec>
+        (c/preduce<vec>
           #(let [[k v] %2
                  fd (get flds k)]
              (if (and fd
                       (not (:auto? fd))
                       (not (:system? fd)))
                (do
-                 (addDelim! sb1
-                            "," (fmtSqlId vendor (dbcol fd)))
-                 (addDelim! sb2
+                 (s/addDelim! sb1
+                            "," (h/fmtSqlId vendor (h/dbcol fd)))
+                 (s/addDelim! sb2
                             "," (if (nil? v) "null" "?"))
                  (if v (conj! %1 v) %1))
                %1)) obj)]
@@ -341,9 +338,9 @@
 (defn- updateFlds
   "Format sql for update" [vendor obj flds]
 
-  (let [sb1 (strbf<>)
+  (let [sb1 (s/strbf<>)
         ps
-        (preduce<vec>
+        (c/preduce<vec>
           #(let [[k v] %2
                  fd (get flds k)]
              (if (and fd
@@ -351,8 +348,8 @@
                       (not (:auto? fd))
                       (not (:system? fd)))
                (do
-                 (addDelim! sb1
-                            "," (fmtSqlId vendor (dbcol fd)))
+                 (s/addDelim! sb1
+                            "," (h/fmtSqlId vendor (h/dbcol fd)))
                  (.append sb1 (if (nil? v) "=null" "=?"))
                  (if v (conj! %1 v) %1))
                %1)) obj)]
@@ -361,7 +358,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defmacro ^:private
-  postFmtModelRow "" [obj model] `(bindModel ~obj ~model))
+  postFmtModelRow "" [obj model] `(czlab.horde.core/bindModel ~obj ~model))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -399,7 +396,7 @@
     [rc (doQuery vendor
                  conn
                  (str "select count(*) from "
-                      (fmtSqlId vendor (dbtable model) )) [])]
+                      (h/fmtSqlId vendor (h/dbtable model) )) [])]
     (if (empty? rc)
       0
       (last (first (seq (first rc)))))))
@@ -410,7 +407,7 @@
   ""
   [vendor conn model]
   (let [sql (str "delete from "
-                 (fmtSqlId vendor (dbtable model)))]
+                 (h/fmtSqlId vendor (h/dbtable model)))]
     (sqlExec vendor conn sql [])
     0))
 
@@ -420,65 +417,65 @@
   ""
   ^long [vendor conn obj]
 
-  (if-some [mcz (gmodel obj)]
+  (if-some [mcz (h/gmodel obj)]
     (doExec vendor
             conn
             (str "delete from "
-                 (->> (dbtable mcz)
-                      (fmtSqlId vendor ))
+                 (->> (h/dbtable mcz)
+                      (h/fmtSqlId vendor ))
                  " where "
                  (fmtUpdateWhere vendor mcz))
-            [(goid obj)])
-    (dberr! "Unknown model for: %s" obj)))
+            [(h/goid obj)])
+    (h/dberr! "Unknown model for: %s" obj)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defn- doInsert ""
   ^Object [vendor conn obj]
 
-  (if-some [mcz (gmodel obj)]
+  (if-some [mcz (h/gmodel obj)]
     (let [pke (:pkey mcz)
           [s1 s2 pms]
           (insertFlds vendor obj (:fields mcz))]
-      (if (hgl? s1)
+      (if (s/hgl? s1)
         (let [out (doExec+
                     vendor
                     conn
                     (str "insert into "
-                         (->> (dbtable mcz)
-                              (fmtSqlId vendor ))
+                         (->> (h/dbtable mcz)
+                              (h/fmtSqlId vendor ))
                          " (" s1 ") values (" s2 ")")
                     pms
-                    {:pkey (dbcol pke mcz)})]
+                    {:pkey (h/dbcol pke mcz)})]
           (if (empty? out)
-            (dberr! "rowid must be returned")
+            (h/dberr! "rowid must be returned")
             (log/debug "Exec-with-out %s" out))
           (let [n (:1 out)]
             (if-not (number? n)
-              (dberr! "rowid must be a Long"))
+              (h/dberr! "rowid must be a Long"))
             (merge obj {pke  n})))))
-    (dberr! "Unknown model for: %s" obj)))
+    (h/dberr! "Unknown model for: %s" obj)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defn- doUpdate ""
   ^long [vendor conn obj]
 
-  (if-some [mcz (gmodel obj)]
+  (if-some [mcz (h/gmodel obj)]
     (let [[sb1 pms]
           (updateFlds vendor
                       obj (:fields mcz))]
-      (if (hgl? sb1)
+      (if (s/hgl? sb1)
         (doExec vendor
                 conn
                 (str "update "
-                     (->> (dbtable mcz)
-                          (fmtSqlId vendor ))
+                     (->> (h/dbtable mcz)
+                          (h/fmtSqlId vendor ))
                      " set " sb1 " where "
                      (fmtUpdateWhere vendor mcz))
-                (conj pms (goid obj)))
+                (conj pms (h/goid obj)))
         0))
-    (dberr! "Unknown model for: %s" obj)))
+    (h/dberr! "Unknown model for: %s" obj)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -486,35 +483,35 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(decl-object SQLrObj
+(c/decl-object SQLrObj
   czlab.horde.core.SQLr
   (find-some [me typeid filters]
-    (find-some me typeid filters _empty-map_))
+    (.find-some me typeid filters c/_empty-map_))
   (find-all [me typeid extra]
-    (find-some me typeid _empty-map_ extra))
+    (.find-some me typeid c/_empty-map_ extra))
   (find-all [me typeid]
-    (find-all me typeid _empty-map_))
+    (.find-all me typeid c/_empty-map_))
   (find-one [me typeid filters]
-    (let [rs (find-some me typeid filters)]
+    (let [rs (.find-some me typeid filters)]
       (if-not (empty? rs) (first rs))))
   (find-some [me typeid filters extraSQL]
     (let [{:keys [vendor models runc]} me]
       (if-some [mcz (models typeid)]
         (runc
           #(let [s (str "select * from "
-                        (fmtSqlId vendor (:table mcz)))
+                        (h/fmtSqlId vendor (:table mcz)))
                  [wc pms]
                  (sqlFilterClause vendor mcz filters)]
              (doQuery+
                vendor
                %1
                (doExtraSQL
-                 (if (hgl? wc)
+                 (if (s/hgl? wc)
                    (str s " where " wc) s)
                  extraSQL)
                pms mcz)))
-        (dberr! "Unknown model: %s" typeid))))
-  (fmt-id [me s] (fmtSqlId (:vendor me) s))
+        (h/dberr! "Unknown model: %s" typeid))))
+  (fmt-id [me s] (h/fmtSqlId (:vendor me) s))
   (mod-obj [me obj]
     (let [{:keys [vendor runc]} me]
       (runc #(doUpdate vendor %1 obj))))
@@ -528,7 +525,7 @@
     (let [{:keys [runc models vendor]} me]
       (if-some [m (models typeid)]
         (runc #(doQuery+ vendor %1 sql params m))
-        (dberr! "Unknown model: %s" typeid))))
+        (h/dberr! "Unknown model: %s" typeid))))
   (select-sql [me sql params]
     (let [{:keys [vendor runc]} me]
       (runc #(doQuery vendor %1 sql params))))
@@ -536,7 +533,7 @@
     (let [{:keys [vendor runc]} me]
       (runc #(doExec+ vendor
                       %1
-                      sql pms {:pkey *col-rowid*}))))
+                      sql pms {:pkey h/*col-rowid*}))))
   (exec-sql [me sql pms]
     (let [{:keys [vendor runc]} me]
       (runc #(doExec vendor %1 sql pms))))
@@ -544,12 +541,12 @@
     (let [{:keys [models vendor runc]} me]
       (if-some [m (models typeid)]
         (runc #(doCount vendor %1 m))
-        (dberr! "Unknown model: %s" typeid))))
+        (h/dberr! "Unknown model: %s" typeid))))
   (purge-objs [me typeid]
     (let [{:keys [models vendor runc]} me]
       (if-some [m (models typeid)]
         (runc #(doPurge vendor %1 m))
-        (dberr! "Unknown model: %s" typeid)))))
+        (h/dberr! "Unknown model: %s" typeid)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -559,7 +556,7 @@
   {:pre [(fn? runc)]}
 
   (let [{:keys [schema vendor]} db]
-    (object<> SQLrObj
+    (c/object<> SQLrObj
               {:models (:models schema)
                :schema schema :vendor vendor :runc runc})))
 

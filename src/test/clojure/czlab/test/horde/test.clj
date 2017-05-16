@@ -8,15 +8,15 @@
 
 (ns czlab.test.horde.test
 
-  (:require [czlab.basal.io :refer [writeFile]]
+  (:require [czlab.basal.io :as i :refer [writeFile]]
+            [czlab.horde.connect :as hc]
+            [czlab.horde.drivers :as d]
             [clojure.java.io :as io]
-            [clojure.string :as cs])
+            [clojure.string :as cs]
+            [czlab.horde.core :as h]
+            [czlab.basal.core :as c])
 
-  (:use [czlab.horde.drivers]
-        [czlab.horde.connect]
-        [czlab.horde.core]
-        [czlab.basal.core]
-        [clojure.test])
+  (:use [clojure.test])
 
   (:import [czlab.basal.core.GenericMutable]
            [czlab.jasal Disposable]
@@ -29,60 +29,60 @@
 (def
   ^:private
   meta-cc
-  (dbschema<>
-    (dbmodel<> ::Address
-      (dbfields
+  (h/dbschema<>
+    (h/dbmodel<> ::Address
+      (h/dbfields
         {:addr1 {:size 200 :null? false}
          :addr2 {:size 64}
          :city {:null? false}
          :state {:null? false}
          :zip {:null? false}
          :country {:null? false}})
-      (dbindexes
+      (h/dbindexes
         {:i1 #{:city :state :country }
          :i2 #{:zip :country }
          :i3 #{:state }
          :i4 #{:zip } }))
-    (dbmodel<> ::Person
-      (dbfields
+    (h/dbmodel<> ::Person
+      (h/dbfields
         {:first_name {:null? false }
          :last_name {:null? false }
          :iq {:domain :Int}
          :bday {:domain :Calendar :null? false}
          :sex {:null? false} })
-      (dbindexes
+      (h/dbindexes
         {:i1 #{ :first_name :last_name }
          :i2 #{ :bday } })
-      (dbassocs
+      (h/dbassocs
         {:addrs {:kind :o2m :other ::Address :cascade? true}
          :spouse {:kind :o2o :other ::Person } }))
-    (dbmodel<> ::Employee
-      (dbfields
+    (h/dbmodel<> ::Employee
+      (h/dbfields
         {:salary { :domain :Float :null? false }
          :passcode { :domain :Password }
          :pic { :domain :Bytes }
          :descr {}
          :login {:null? false} })
-      (dbindexes {:i1 #{ :login } } )
-      (dbassocs
+      (h/dbindexes {:i1 #{ :login } } )
+      (h/dbassocs
         {:person {:kind :o2o :other ::Person } }))
-    (dbmodel<> ::Department
-      (dbfields
+    (h/dbmodel<> ::Department
+      (h/dbfields
         {:dname { :null? false } })
-      (dbuniques
+      (h/dbuniques
         {:u1 #{ :dname }} ))
-    (dbmodel<> ::Company
-      (dbfields
+    (h/dbmodel<> ::Company
+      (h/dbfields
         {:revenue { :domain :Double :null? false }
          :cname { :null? false }
          :logo { :domain :Bytes } })
-      (dbassocs
+      (h/dbassocs
         {:depts {:kind :o2m :other ::Department :cascade? true}
          :emps {:kind :o2m :other ::Employee :cascade? true}
          :hq {:kind :o2o :other ::Address :cascade? true}})
-      (dbuniques
+      (h/dbuniques
         {:u1 #{ :cname } } ))
-    (dbjoined<> ::EmpDepts ::Department ::Employee)))
+    (h/dbjoined<> ::EmpDepts ::Department ::Employee)))
 (def ^:private jdbc-spec nil)
 (def ^:private DB nil)
 
@@ -91,36 +91,36 @@
 (defn initTest
   ""
   [f]
-  (let [url (H2Db (sysTmpDir) (str (now<>)) "sa" "hello")
-        jdbc (dbspec<>
-               {:driver *h2-driver*
+  (let [url (d/H2Db (c/sysTmpDir) (str (c/now<>)) "sa" "hello")
+        jdbc (h/dbspec<>
+               {:driver d/*h2-driver*
                 :url url
                 :user "sa"
                 :passwd "hello"})
-        ddl (getDdl meta-cc :h2)
-        db (dbopen<+> jdbc meta-cc)]
+        ddl (h/getDdl meta-cc :h2)
+        db (hc/dbopen<+> jdbc meta-cc)]
     (when false
-      (writeFile (io/file (sysTmpDir)
-                          "dbtest.out") (dbgShowSchema meta-cc))
-      (println "\n\n" (dbgShowSchema meta-cc)))
+      (i/writeFile (io/file (c/sysTmpDir)
+                          "dbtest.out") (h/dbgShowSchema meta-cc))
+      (println "\n\n" (h/dbgShowSchema meta-cc)))
     (if false (println "\n\n" ddl))
     (alter-var-root #'jdbc-spec (constantly jdbc))
-    (uploadDdl jdbc ddl)
+    (h/uploadDdl jdbc ddl)
     (alter-var-root #'DB (constantly db))
   (if (fn? f) (f))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defn finzTest "" [] (do->true (.dispose ^Disposable DB)))
+(defn finzTest "" [] (c/do->true (.dispose ^Disposable DB)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defn- mkPerson
   ""
   [fname lname sex]
-  (-> (lookupModel meta-cc ::Person)
-      dbpojo<>
-      (dbSetFlds*
+  (-> (h/lookupModel meta-cc ::Person)
+      h/dbpojo<>
+      (h/dbSetFlds*
         {:first_name fname
          :last_name  lname
          :iq 100
@@ -132,10 +132,10 @@
 (defn- mkEmp
   ""
   [login]
-  (-> (lookupModel meta-cc ::Employee)
-      dbpojo<>
-      (dbSetFlds*
-        {:pic (bytesit "poo")
+  (-> (h/lookupModel meta-cc ::Employee)
+      h/dbpojo<>
+      (h/dbSetFlds*
+        {:pic (c/bytesit "poo")
          :salary 1000000.00
          :passcode "secret"
          :desc "idiot"
@@ -146,44 +146,44 @@
 (defn- mkCompany
   ""
   [cname]
-  (-> (lookupModel meta-cc ::Company)
-      dbpojo<>
-      (dbSetFlds*
+  (-> (h/lookupModel meta-cc ::Company)
+      h/dbpojo<>
+      (h/dbSetFlds*
         {:cname cname
          :revenue 100.00
-         :logo (bytesit "hi")})))
+         :logo (c/bytesit "hi")})))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defn- mkDept
   ""
   [dname]
-  (-> (lookupModel meta-cc ::Department)
-      dbpojo<>
-      (dbSetFld :dname dname)))
+  (-> (h/lookupModel meta-cc ::Department)
+      h/dbpojo<>
+      (h/dbSetFld :dname dname)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defn- createEmp
   ""
   [fname lname sex login]
-  (let [tx (compositeSQLr DB)]
+  (let [tx (h/compositeSQLr DB)]
     (->>
       (fn [s]
         (let [p (mkPerson fname
                           lname
                           sex)
               e (mkEmp login)
-              e (add-obj s e)
-              p (add-obj s p)]
-          (dbSetO2O
+              e (h/add-obj s e)
+              p (h/add-obj s p)]
+          (h/dbSetO2O
             {:with s :as :person}
             e
-            (find-one s
+            (h/find-one s
                       ::Person
                       {:first_name fname
                        :last_name lname}))))
-      (transact! tx)
+      (h/transact! tx)
       first)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -191,25 +191,25 @@
 (defn- fetchAllEmps
   ""
   []
-  (-> (simpleSQLr DB)
-      (find-all ::Employee)))
+  (-> (h/simpleSQLr DB)
+      (h/find-all ::Employee)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defn- fetch-person
   ""
   [fname lname]
-  (-> (simpleSQLr DB)
-      (find-one ::Person
-                {:first_name fname :last_name lname})))
+  (-> (h/simpleSQLr DB)
+      (h/find-one ::Person
+                  {:first_name fname :last_name lname})))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defn- fetchEmp
   ""
   [login]
-  (-> (simpleSQLr DB)
-      (find-one ::Employee {:login login})))
+  (-> (h/simpleSQLr DB)
+      (h/find-one ::Employee {:login login})))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -217,12 +217,12 @@
   ""
   [login]
   (->
-      (compositeSQLr DB)
-      (transact!
-        #(let [o2 (-> (find-one %
+      (h/compositeSQLr DB)
+      (h/transact!
+        #(let [o2 (-> (h/find-one %
                                 ::Employee {:login login})
-                      (dbSetFlds* {:salary 99.9234 :iq 0}))]
-           (if (> (mod-obj % o2) 0) o2)))))
+                      (h/dbSetFlds* {:salary 99.9234 :iq 0}))]
+           (if (> (h/mod-obj % o2) 0) o2)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -230,12 +230,12 @@
   ""
   [login]
   (->
-      (compositeSQLr DB)
-      (transact!
+      (h/compositeSQLr DB)
+      (h/transact!
         (fn [s]
-          (let [o1 (find-one s ::Employee {:login login})]
-            (del-obj s o1)
-            (count-objs s ::Employee))))))
+          (let [o1 (h/find-one s ::Employee {:login login})]
+            (h/del-obj s o1)
+            (h/count-objs s ::Employee))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -244,180 +244,180 @@
   [fname lname sex]
   (let [p (mkPerson fname lname sex)]
     (->
-        (compositeSQLr DB)
-        (transact! #(add-obj % p)))))
+        (h/compositeSQLr DB)
+        (h/transact! #(h/add-obj % p)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defn- wedlock?
   ""
   []
-  (let [sql (compositeSQLr DB)
+  (let [sql (h/compositeSQLr DB)
         e (createEmp "joe" "blog" "male" "joeb")
         w (createPerson "mary" "lou" "female")]
     (->>
       (fn [s]
         (let
-          [pm (dbGetO2O {:with s :as :person} e)
+          [pm (h/dbGetO2O {:with s :as :person} e)
            [p1 w1]
-           (dbSetO2O {:as :spouse :with s} pm w)
+           (h/dbSetO2O {:as :spouse :with s} pm w)
            [w2 p2]
-           (dbSetO2O {:as :spouse :with s} w1 p1)
-           w3 (dbGetO2O {:as :spouse :with s} p2)
-           p3 (dbGetO2O {:as :spouse :with s} w3)]
+           (h/dbSetO2O {:as :spouse :with s} w1 p1)
+           w3 (h/dbGetO2O {:as :spouse :with s} p2)
+           p3 (h/dbGetO2O {:as :spouse :with s} w3)]
           (and (some? w3)(some? p3))))
-      (transact! sql))))
+      (h/transact! sql))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defn- undoWedlock
   ""
   []
-  (let [sql (compositeSQLr DB)]
+  (let [sql (h/compositeSQLr DB)]
     (->>
       (fn [s]
         (let
           [e (fetchEmp "joeb")
-           pm (dbGetO2O {:with s :as :person} e)
-           w (dbGetO2O {:as :spouse :with s } pm)
-           p2 (dbClrO2O {:as :spouse :with s } pm)
-           w2 (dbClrO2O {:as :spouse :with s } w)
-           w3 (dbGetO2O {:as :spouse :with s } p2)
-           p3 (dbGetO2O {:as :spouse :with s } w2)]
+           pm (h/dbGetO2O {:with s :as :person} e)
+           w (h/dbGetO2O {:as :spouse :with s } pm)
+           p2 (h/dbClrO2O {:as :spouse :with s } pm)
+           w2 (h/dbClrO2O {:as :spouse :with s } w)
+           w3 (h/dbGetO2O {:as :spouse :with s } p2)
+           p3 (h/dbGetO2O {:as :spouse :with s } w2)]
           (and (nil? w3)(nil? p3)(some? w))))
-      (transact! sql))))
+      (h/transact! sql))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defn- testCompany
   ""
   []
-  (let [sql (compositeSQLr DB)]
+  (let [sql (h/compositeSQLr DB)]
     (->>
       (fn [s]
-        (let [c (add-obj s (mkCompany "acme"))
-              _ (dbSetO2M
+        (let [c (h/add-obj s (mkCompany "acme"))
+              _ (h/dbSetO2M
                   {:as :depts :with s }
                   c
-                  (add-obj s (mkDept "d1")))
-              _ (dbSetO2M*
+                  (h/add-obj s (mkDept "d1")))
+              _ (h/dbSetO2M*
                   {:as :depts :with s }
                   c
-                  (add-obj s (mkDept "d2"))
-                  (add-obj s (mkDept "d3")))
-              _ (dbSetO2M*
+                  (h/add-obj s (mkDept "d2"))
+                  (h/add-obj s (mkDept "d3")))
+              _ (h/dbSetO2M*
                   {:as :emps :with s }
                   c
-                  (add-obj s (mkEmp "e1" ))
-                  (add-obj s (mkEmp "e2" ))
-                  (add-obj s (mkEmp "e3" )))
-              ds (dbGetO2M  {:as :depts :with s} c)
-              es (dbGetO2M  {:as :emps :with s} c)]
+                  (h/add-obj s (mkEmp "e1" ))
+                  (h/add-obj s (mkEmp "e2" ))
+                  (h/add-obj s (mkEmp "e3" )))
+              ds (h/dbGetO2M  {:as :depts :with s} c)
+              es (h/dbGetO2M  {:as :emps :with s} c)]
           (and (= (count ds) 3)
                (= (count es) 3))))
-      (transact! sql))))
+      (h/transact! sql))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defn- testM2M
   ""
   []
-  (let [sql (compositeSQLr DB)]
+  (let [sql (h/compositeSQLr DB)]
     (->>
       (fn [s]
         (let
-          [c (find-one s ::Company {:cname "acme"})
-           ds (dbGetO2M {:as :depts :with s} c)
-           es (dbGetO2M {:as :emps :with s} c)
+          [c (h/find-one s ::Company {:cname "acme"})
+           ds (h/dbGetO2M {:as :depts :with s} c)
+           es (h/dbGetO2M {:as :emps :with s} c)
            _
            (doseq [d ds
                    :when (= (:dname d) "d2")]
              (doseq [e es]
-               (dbSetM2M {:joined ::EmpDepts :with s} d e)))
+               (h/dbSetM2M {:joined ::EmpDepts :with s} d e)))
            _
            (doseq [e es
                    :when (= (:login e) "e2")]
              (doseq [d ds
                      :let [dn (:dname d)]
                      :when (not= dn "d2")]
-               (dbSetM2M {:joined ::EmpDepts :with s} e d)))
-           s1 (dbGetM2M
+               (h/dbSetM2M {:joined ::EmpDepts :with s} e d)))
+           s1 (h/dbGetM2M
                 {:joined ::EmpDepts :with s}
                 (some #(if (= (:dname %) "d2") %)  ds))
-           s2 (dbGetM2M
+           s2 (h/dbGetM2M
                 {:joined ::EmpDepts :with s}
                 (some #(if (= (:login %) "e2") %)  es))]
           (and (== (count s1) 3)
                (== (count s2) 3))))
-      (transact! sql))))
+      (h/transact! sql))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defn- undoM2M
   ""
   []
-  (let [sql (compositeSQLr DB)]
+  (let [sql (h/compositeSQLr DB)]
     (->>
       (fn [s]
         (let
-          [d2 (find-one s ::Department {:dname "d2"})
-           e2 (find-one s ::Employee {:login "e2"})
-           _ (dbClrM2M {:joined ::EmpDepts :with s} d2)
-           _ (dbClrM2M {:joined ::EmpDepts :with s} e2)
-           s1 (dbGetM2M {:joined ::EmpDepts :with s} d2)
-           s2 (dbGetM2M {:joined ::EmpDepts :with s} e2)]
+          [d2 (h/find-one s ::Department {:dname "d2"})
+           e2 (h/find-one s ::Employee {:login "e2"})
+           _ (h/dbClrM2M {:joined ::EmpDepts :with s} d2)
+           _ (h/dbClrM2M {:joined ::EmpDepts :with s} e2)
+           s1 (h/dbGetM2M {:joined ::EmpDepts :with s} d2)
+           s2 (h/dbGetM2M {:joined ::EmpDepts :with s} e2)]
           (and (== (count s1) 0)
                (== (count s2) 0))))
-      (transact! sql))))
+      (h/transact! sql))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defn- undoCompany
   ""
   []
-  (let [sql (compositeSQLr DB)]
+  (let [sql (h/compositeSQLr DB)]
     (->>
       (fn [s]
         (let
-          [c (find-one s ::Company {:cname "acme"})
-           _ (dbClrO2M {:as :depts :with s} c)
-           _ (dbClrO2M {:as :emps :with s} c)
-           s1 (dbGetO2M {:as :depts :with s} c)
-           s2 (dbGetO2M {:as :emps :with s} c)]
+          [c (h/find-one s ::Company {:cname "acme"})
+           _ (h/dbClrO2M {:as :depts :with s} c)
+           _ (h/dbClrO2M {:as :emps :with s} c)
+           s1 (h/dbGetO2M {:as :depts :with s} c)
+           s2 (h/dbGetO2M {:as :emps :with s} c)]
           (and (== (count s1) 0)
                (== (count s2) 0))))
-      (transact! sql))))
+      (h/transact! sql))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (deftest czlabtesthorde-test
 
-  (is (do->true (initTest nil)))
+  (is (c/do->true (initTest nil)))
 
-  (is (some? (tstamp<>)))
+  (is (some? (h/tstamp<>)))
 
   (testing
     "related to: db api"
 
-    (is (let [db (dbopen<+> jdbc-spec meta-cc)
+    (is (let [db (hc/dbopen<+> jdbc-spec meta-cc)
               url (:url jdbc-spec)
-              c (compositeSQLr db)
-              s (simpleSQLr db)
+              c (h/compositeSQLr db)
+              s (h/simpleSQLr db)
               h (:schema db)
               v (:vendor db)
-              ^Connection conn (opendb db)
-              a (fmtSqlId db "hello")
-              b (fmtSqlId conn "hello")
-              id (dbtag ::Person h)
-              t (dbtable ::Person h)
-              m (lookupModel h ::Person)
-              cn (dbcol :iq m)
-              ks1 (matchSpec "h2")
-              ks2 (matchUrl url)]
+              ^Connection conn (hc/opendb db)
+              a (h/fmtSqlId db "hello")
+              b (h/fmtSqlId conn "hello")
+              id (h/dbtag ::Person h)
+              t (h/dbtable ::Person h)
+              m (h/lookupModel h ::Person)
+              cn (h/dbcol :iq m)
+              ks1 (h/matchSpec "h2")
+              ks2 (h/matchUrl url)]
           (try
             (and (some? c)
                  (some? s)
-                 (ist? czlab.horde.core.Schema h)
+                 (c/ist? czlab.horde.core.Schema h)
                  (map? v)
                  (some? conn)
                  (= a b)
@@ -429,25 +429,25 @@
               (.close conn)
               (.dispose ^Disposable db)))))
 
-    (is (let [db (dbopen<> jdbc-spec meta-cc)
+    (is (let [db (hc/dbopen<> jdbc-spec meta-cc)
               url (:url jdbc-spec)
-              c (compositeSQLr db)
-              s (simpleSQLr db)
+              c (h/compositeSQLr db)
+              s (h/simpleSQLr db)
               h (:schema db)
               v (:vendor db)
-              ^Connection conn (opendb db)
-              a (fmtSqlId db "hello")
-              b (fmtSqlId conn "hello")
-              id (dbtag ::Person h)
-              t (dbtable ::Person h)
-              m (lookupModel h ::Person)
-              cn (dbcol :iq m)
-              ks1 (matchSpec "h2")
-              ks2 (matchUrl url)]
+              ^Connection conn (hc/opendb db)
+              a (h/fmtSqlId db "hello")
+              b (h/fmtSqlId conn "hello")
+              id (h/dbtag ::Person h)
+              t (h/dbtable ::Person h)
+              m (h/lookupModel h ::Person)
+              cn (h/dbcol :iq m)
+              ks1 (h/matchSpec "h2")
+              ks2 (h/matchUrl url)]
           (try
             (and (some? c)
                  (some? s)
-                 (ist? czlab.horde.core.Schema h)
+                 (c/ist? czlab.horde.core.Schema h)
                  (map? v)
                  (some? conn)
                  (= a b)
@@ -459,22 +459,22 @@
               (.close conn)
               (.dispose ^Disposable db)))))
 
-    (is (let [c (dbconnect<> jdbc-spec)]
+    (is (let [c (h/dbconnect<> jdbc-spec)]
           (try
-            (map? (loadTableMeta c "Person"))
+            (map? (h/loadTableMeta c "Person"))
             (finally (.close c)))))
 
-    (is (testConnect? jdbc-spec))
+    (is (h/testConnect? jdbc-spec))
 
-    (is (map? (resolveVendor jdbc-spec)))
+    (is (map? (h/resolveVendor jdbc-spec)))
 
-    (is (tableExist? jdbc-spec "Person"))
+    (is (h/tableExist? jdbc-spec "Person"))
 
-    (is (let [p (dbpool<> jdbc-spec)]
+    (is (let [p (h/dbpool<> jdbc-spec)]
           (try
-            (tableExist? p "Person")
+            (h/tableExist? p "Person")
             (finally
-              (shut-down p))))))
+              (h/shut-down p))))))
 
   (testing
     "related to: basic CRUD"
@@ -483,7 +483,7 @@
               r (:rowid m)]
           (> r 0)))
 
-    (is (rowExist? jdbc-spec "Person"))
+    (is (h/rowExist? jdbc-spec "Person"))
 
     (is (let [m (createEmp "joe" "blog" "male" "joeb")
               r (:rowid m)]

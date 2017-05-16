@@ -11,16 +11,16 @@
 
   czlab.horde.core
 
-  (:require [czlab.basal.format :refer [writeEdnStr]]
-            [czlab.basal.logging :as log]
+  (:require [czlab.basal.format :as f :refer [writeEdnStr]]
+            [czlab.basal.log :as log]
             [clojure.java.io :as io]
             [clojure.string :as cs]
             [clojure.set :as cset]
-            [czlab.basal.meta :refer [forname]])
+            [czlab.basal.core :as c]
+            [czlab.basal.str :as s]
+            [czlab.basal.meta :as m :refer [forname]])
 
-  (:use [flatland.ordered.set]
-        [czlab.basal.core]
-        [czlab.basal.str])
+  (:use [flatland.ordered.set])
 
   (:import [java.util HashMap TimeZone Properties GregorianCalendar]
            [clojure.lang Keyword APersistentMap APersistentVector]
@@ -48,7 +48,7 @@
 ;;
 (defprotocol Transactable
   ""
-  (transact! [_ func] [_ func cfg] ""))
+  (transact! [_ func] [_ func cfg] "Run this function inside a transaction"))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -74,14 +74,14 @@
 ;;
 (defprotocol JdbcPool
   ""
-  (shut-down [_] "")
-  (^Connection next-free [_] ""))
+  (shut-down [_] "Shut down this pool")
+  (^Connection next-free [_] "Next free connection from the pool"))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defn dberr!
   "Throw a SQL execption"
-  [fmt & more] (trap! SQLException (str (apply format fmt more))))
+  [fmt & more] (c/trap! SQLException (str (apply format fmt more))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -101,13 +101,15 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defmacro gtype "Get object's type" [obj] `(:id (gmodel ~obj)))
+(defmacro gtype
+  "Get object's type" [obj] `(:id (czlab.horde.core/gmodel ~obj)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defmacro goid
-  "Get object's id" [obj] `(let [o# ~obj
-                                 pk# (:pkey (gmodel o#))] (pk# o#)))
+  "Get object's id"
+  [obj] `(let [o# ~obj
+               pk# (:pkey (czlab.horde.core/gmodel o#))] (pk# o#)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -142,12 +144,12 @@
 
   ([info idstr] (fmtSqlId info idstr nil))
   ([info idstr quote?]
-   (let [ch (strim (:qstr info))
+   (let [ch (s/strim (:qstr info))
          id (cond
               (:ucs? info)
-              (ucase idstr)
+              (s/ucase idstr)
               (:lcs? info)
-              (lcase idstr)
+              (s/lcase idstr)
               :else idstr)]
      (if (false? quote?) id (str ch id ch)))))
 
@@ -157,12 +159,12 @@
 
   ([mt idstr] (fmtSqlId mt idstr nil))
   ([^DatabaseMetaData mt idstr quote?]
-   (let [ch (strim (.getIdentifierQuoteString mt))
+   (let [ch (s/strim (.getIdentifierQuoteString mt))
          id (cond
               (.storesUpperCaseIdentifiers mt)
-              (ucase idstr)
+              (s/ucase idstr)
               (.storesLowerCaseIdentifiers mt)
-              (lcase idstr)
+              (s/lcase idstr)
               :else idstr)]
      (if (false? quote?) id (str ch id ch)))))
 
@@ -218,12 +220,12 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(decl-object JdbcPoolObj
+(c/decl-object JdbcPoolObj
   JdbcPool
   (shut-down [me]
-    (do->nil
-      (doto->> ^HikariDataSource (:impl me)
-               (log/debug "shutting: %s" ) (.close ))))
+    (c/do->nil
+      (c/doto->> ^HikariDataSource (:impl me)
+                 (log/debug "shutting: %s" ) .close)))
   (next-free [me]
     (try (-> ^HikariDataSource
              (:impl me) .getConnection)
@@ -232,7 +234,7 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;Stores jdbc info
-(decl-object JdbcSpec)
+(c/decl-object JdbcSpec)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -240,18 +242,18 @@
   "Basic jdbc parameters"
   [cfg]
   {:pre [(map? cfg)]}
-  (object<> JdbcSpec
+  (c/object<> JdbcSpec
             (-> (dissoc cfg :server)
                 (assoc :url (or (:server cfg)
                                 (:url cfg)))
-                (assoc :passwd (charsit (:passwd cfg)))
+                (assoc :passwd (c/charsit (:passwd cfg)))
                 (assoc :id (or (:id cfg)
-                                (str "jdbc#" (seqint2)))))))
+                                (str "jdbc#" (c/seqint2)))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defn loadDriver ^Driver [spec]
-  (if-some+ [s (:url spec)] (DriverManager/getDriver s)))
+  (c/if-some+ [s (:url spec)] (DriverManager/getDriver s)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -279,8 +281,8 @@
   "Detect the database vendor"
   [product]
 
-  (let [fc #(embeds? %2 %1)
-        lp (lcase product)]
+  (let [fc #(s/embeds? %2 %1)
+        lp (s/lcase product)]
     (condp fc lp
       "microsoft" SQLServer
       "postgres" Postgresql
@@ -293,21 +295,21 @@
 ;;
 (defmacro ^:private fmtfkey
   "For o2o & o2m relations"
-  [tn rn] `(toKW "fk_" (name ~tn) "_" (name ~rn)))
+  [tn rn] `(s/toKW "fk_" (name ~tn) "_" (name ~rn)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defn matchSpec
   "Ensure db-type is supported"
   ^Keyword [^String spec]
-  (let [kw (keyword (lcase spec))] (if (contains? *db-types* kw) kw)))
+  (let [kw (keyword (s/lcase spec))] (if (contains? *db-types* kw) kw)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defn matchUrl
   "From jdbc url, get db-type"
   ^Keyword [dburl]
-  (if-some+ [ss (.split (str dburl) ":")]
+  (c/if-some+ [ss (.split (str dburl) ":")]
     (if (> (alength ss) 1) (matchSpec (aget ss 1)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -327,7 +329,7 @@
   {:tag APersistentMap
    :no-doc true}
   [modelName]
-  {:pre [(isFQKeyword? modelName)]}
+  {:pre [(c/isFQKeyword? modelName)]}
 
   {:table (cleanName (name modelName))
    :id modelName
@@ -344,7 +346,7 @@
 ;;
 (defmacro dbmodel<>
   "Define a data model"
-  [modelname & body] `(-> (dbdef<> ~modelname) ~@body))
+  [modelname & body] `(-> (czlab.horde.core/dbdef<> ~modelname) ~@body))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -355,7 +357,7 @@
    :no-doc true}
   [pojo lhs rhs]
   {:pre [(map? pojo)
-         (isFQKeyword? lhs) (isFQKeyword? rhs)]}
+         (c/isFQKeyword? lhs) (c/isFQKeyword? rhs)]}
 
   (let [a2 {:lhs {:kind :mxm
                   :other lhs
@@ -373,17 +375,17 @@
   "Define a joined data model"
   [modelname lhs rhs]
 
-  `(-> (dbdef<> ~modelname)
-       (dbfields
-         {:lhs-rowid {:column *col-lhs-rowid*
+  `(-> (czlab.horde.core/dbdef<> ~modelname)
+       (czlab.horde.core/dbfields
+         {:lhs-rowid {:column czlab.horde.core/*col-lhs-rowid*
                       :domain :Long
                       :null? false}
-          :rhs-rowid {:column *col-rhs-rowid*
+          :rhs-rowid {:column czlab.horde.core/*col-rhs-rowid*
                       :domain :Long
                       :null? false} })
-       (dbuniques
+       (czlab.horde.core/dbuniques
          {:i1 #{ :lhs-rowid :rhs-rowid }})
-       (withJoined ~lhs ~rhs)))
+       (czlab.horde.core/withJoined ~lhs ~rhs)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -398,7 +400,7 @@
 ;;merge new stuff onto old stuff
 (defn- withXXXSets
   "" [pojo kvs fld]
-  (->> (preduce<map>
+  (->> (c/preduce<map>
          #(assoc! %1
                   (first %2)
                   (into (ordered-set) (last %2))) kvs)
@@ -529,7 +531,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defn- checkField? "" [pojo fld]
-  (bool!
+  (c/bool!
     (if-some [f (lookupField (gmodel pojo) fld)]
       (not (or (:auto? f)
                (not (:updatable? f)))))))
@@ -581,14 +583,14 @@
                        (assoc (@phd other) fkey))))))
     ;; now walk through all the placeholder maps and merge those new
     ;; fields to the actual models
-    (doseq [[k v] (pcoll! @phd)
+    (doseq [[k v] (c/pcoll! @phd)
             :let [mcz (metas k)]]
       (->> (assoc! @xs
                    k
                    (update-in mcz
                               [:fields] merge v))
            (var-set xs )))
-    (pcoll! @xs)))
+    (c/pcoll! @xs)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -600,7 +602,7 @@
                   rs (:rels m)]
             :when (:mxm? m)]
       (->>
-        (preduce<map>
+        (c/preduce<map>
           #(let
              [[side kee] %2
               other (get-in rs [side :other])
@@ -616,14 +618,14 @@
         (assoc m :fields )
         (assoc! @mms k )
         (var-set mms )))
-    (merge metas (pcoll! @mms))))
+    (merge metas (c/pcoll! @mms))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defn- colmapFields
   "Create a map of fields keyed by the column name"
   [flds]
-  (preduce<map> #(let [[_ v] %2] (assoc! %1 (ucase (:column v)) v)) flds))
+  (c/preduce<map> #(let [[_ v] %2] (assoc! %1 (s/ucase (:column v)) v)) flds))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -631,7 +633,7 @@
   "Inject extra meta-data properties into each model.  Each model will have
    its (complete) set of fields keyed by column nam or field id"
   [metas schema]
-  (preduce<map>
+  (c/preduce<map>
     #(let [[k m] %2]
        (->> [schema (->> (:fields m)
                          (colmapFields ))]
@@ -642,7 +644,7 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(decl-object Schema)
+(c/decl-object Schema)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -651,19 +653,19 @@
   [& models]
 
   (let [ms (if-not (empty? models)
-             (preduce<map>
+             (c/preduce<map>
                #(assoc! %1 (:id %2) %2) models))
         m2 (if (empty? ms)
              {}
              (-> ms resolveAssocs resolveMXMs (metaModels nil)))
         sch (GenericMutable. {})]
     (->>
-      (preduce<map>
+      (c/preduce<map>
         #(let [[k m] %2]
            (assoc! %1 k (vary-meta m assoc :schema sch)))
         m2)
-      (setf! sch :models))
-    (object<> Schema @sch)))
+      (c/setf! sch :models))
+    (c/object<> Schema @sch)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -671,12 +673,12 @@
   ^String [schema]
   {:pre [(some? schema)]}
 
-  (sreduce<>
-    #(addDelim! %1
+  (c/sreduce<>
+    #(s/addDelim! %1
                 "\n"
-                (writeEdnStr {:TABLE (:table %2)
-                              :DEFN %2
-                              :META (meta %2)})) (vals (:models schema))))
+                (f/writeEdnStr {:TABLE (:table %2)
+                                :DEFN %2
+                                :META (meta %2)})) (vals (:models schema))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -688,15 +690,15 @@
         jdbc
         p (Properties.)
         d (loadDriver jdbc)]
-    (when (hgl? user)
+    (when (s/hgl? user)
       (doto p
         (.put "user" user)
         (.put "username" user))
       (if (some? passwd)
-        (.put p "password" (strit passwd))))
+        (.put p "password" (c/strit passwd))))
     (if (nil? d)
       (dberr! "Can't load Jdbc Url: %s" url))
-    (if (and (hgl? driver)
+    (if (and (s/hgl? driver)
              (not= (-> d
                        .getClass
                        .getName) driver))
@@ -713,7 +715,7 @@
 
   (let [{:keys [url user]}
         jdbc
-        conn (if (hgl? user)
+        conn (if (s/hgl? user)
                (safeGetConn jdbc)
                (DriverManager/getConnection url))]
     (if (nil? conn)
@@ -727,7 +729,7 @@
 ;;
 (defn testConnect?
   "If able to connect to the database, as a test"
-  [jdbc] (try (do->true (.close (dbconnect<> jdbc)))
+  [jdbc] (try (c/do->true (.close (dbconnect<> jdbc)))
               (catch SQLException _ false)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -746,9 +748,9 @@
 (defmethod resolveVendor
   Connection
   [conn]
-  (let [md (. ^Connection conn getMetaData)
+  (let [md (.getMetaData ^Connection conn)
         rc {:id (maybeGetVendor (.getDatabaseProductName md))
-            :qstr (strim (.getIdentifierQuoteString md))
+            :qstr (s/strim (.getIdentifierQuoteString md))
             :version (.getDatabaseProductVersion md)
             :name (.getDatabaseProductName md)
             :url (.getURL md)
@@ -767,7 +769,7 @@
 ;;
 (defmethod tableExist?
   czlab.horde.core.JdbcPool
-  [^czlab.horde.core.JdbcPool pool ^String table]
+  [pool ^String table]
   (with-open [^Connection conn (next-free pool)] (tableExist? conn table)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -783,7 +785,7 @@
   Connection
   [^Connection conn ^String table]
   (log/debug "testing table: %s" table)
-  (try!!
+  (c/try!!
     false
     (let [dbv (resolveVendor conn)
           mt (.getMetaData conn)
@@ -813,7 +815,7 @@
 (defmethod rowExist?
   Connection
   [^Connection conn ^String table]
-  (try!!
+  (c/try!!
     false
     (let
       [sql (str "select count(*) from "
@@ -833,24 +835,24 @@
 
   (with-local-vars [pkeys #{} cms {}]
     (with-open
-      [rs (. mt getPrimaryKeys catalog schema table)]
+      [rs (.getPrimaryKeys mt catalog schema table)]
       (loop [sum (transient #{})
              more (.next rs)]
         (if-not more
-          (var-set pkeys (pcoll! sum))
+          (var-set pkeys (c/pcoll! sum))
           (recur
             (conj! sum (.getString rs (int 4)))
             (.next rs)))))
     (with-open
-      [rs (. mt getColumns catalog schema table "%")]
+      [rs (.getColumns mt catalog schema table "%")]
       (loop [sum (transient {})
              more (.next rs)]
         (if-not more
-          (var-set cms (pcoll! sum))
+          (var-set cms (c/pcoll! sum))
           (let [opt (not= (.getInt rs (int 11))
                           DatabaseMetaData/columnNoNulls)
                 n (.getString rs (int 4))
-                cn (ucase n)
+                cn (s/ucase n)
                 ctype (.getInt rs (int 5))]
             (recur
               (assoc! sum
@@ -898,7 +900,7 @@
 
   ([jdbc] (dbpool<> jdbc nil))
   ([jdbc options]
-   (let [options (or options _empty-map_)
+   (let [options (or options c/_empty-map_)
          dbv (resolveVendor jdbc)
          {:keys [driver url
                  passwd user]}
@@ -906,28 +908,28 @@
          hc (HikariConfig.)]
      ;;(log/debug "pool-options: %s" options)
      ;;(log/debug "pool-jdbc: %s" jdbc)
-     (if (hgl? driver) (forname driver))
-     (test-some "database-vendor" dbv)
+     (if (s/hgl? driver) (m/forname driver))
+     (c/test-some "database-vendor" dbv)
      (.setJdbcUrl hc ^String url)
-     (when (hgl? user)
+     (when (s/hgl? user)
        (.setUsername hc ^String user)
        (if (some? passwd)
-         (.setPassword hc (strit passwd))))
+         (.setPassword hc (c/strit passwd))))
      (log/debug "[hikari]\n%s" (str hc))
-     (object<> JdbcPoolObj
-               {:vendor dbv
-                :jdbc jdbc
-                :impl (HikariDataSource. hc)}))))
+     (c/object<> JdbcPoolObj
+                 {:vendor dbv
+                  :jdbc jdbc
+                  :impl (HikariDataSource. hc)}))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defn- maybeOK?
   "" [^String dbn ^Throwable e]
 
-  (let [ee (cast? SQLException (rootCause e))
+  (let [ee (c/cast? SQLException (c/rootCause e))
         ec (some-> ee .getErrorCode)]
     (if
-      (and (embeds? (str dbn) "oracle")
+      (and (s/embeds? (str dbn) "oracle")
            (some? ec)
            (== 942 ec)
            (== 1418 ec)
@@ -944,7 +946,7 @@
 ;;
 (defmethod uploadDdl
   czlab.horde.core.JdbcPool
-  [^czlab.horde.core.JdbcPool pool ^String ddl]
+  [pool ^String ddl]
   (with-open [^Connection conn (next-free pool)] (uploadDdl conn ddl)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -961,16 +963,15 @@
   [^Connection conn ddlstr]
   {:pre [(some? conn)]}
 
-  (let [lines (mapv #(strim %)
+  (let [lines (mapv #(s/strim %)
                     (cs/split ddlstr (re-pattern ddl-sep)))
-        dbn (lcase (-> conn
-                       .getMetaData
-                       .getDatabaseProductName))]
+        dbn (s/lcase (-> conn
+                         .getMetaData .getDatabaseProductName))]
     (.setAutoCommit conn true)
     (log/debug "\n%s" ddlstr)
     (doseq [s lines
-            :let [ln (strimAny s ";" true)]
-            :when (and (hgl? ln) (not= (lcase ln) "go"))]
+            :let [ln (s/strimAny s ";" true)]
+            :when (and (s/hgl? ln) (not= (s/lcase ln) "go"))]
       (with-open [s (.createStatement conn)]
         (try (.executeUpdate s ln)
              (catch SQLException _ (maybeOK? dbn _)))))))
@@ -986,14 +987,15 @@
 ;;
 (defn dbpojo<>
   "Create object of type"
-  ^APersistentMap [model] (bindModel _empty-map_ model))
+  ^APersistentMap [model] (bindModel c/_empty-map_ model))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (defmacro mockPojo<>
   "Clone object with pkey only" [obj]
   `(let [o# ~obj
-         pk# (:pkey (gmodel o#))] (with-meta {pk# (goid o#)} (meta o#))))
+         pk# (:pkey (czlab.horde.core/gmodel o#))]
+     (with-meta {pk# (czlab.horde.core/goid o#)} (meta o#))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -1121,7 +1123,7 @@
 (defn dbSetO2M* ""
   ^APersistentVector
   [ctx lhsObj & rhsObjs]
-  (preduce<vec>
+  (c/preduce<vec>
     #(conj! %1
             (last (dbioSetO2X ctx lhsObj %2 :o2m))) rhsObjs))
 

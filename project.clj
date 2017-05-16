@@ -8,9 +8,9 @@
   :description "sql orm"
   :url "https://github.com/llnek/horde"
 
-  :dependencies [[org.postgresql/postgresql "42.0.0"]
+  :dependencies [[org.postgresql/postgresql "42.1.1"]
                  [com.zaxxer/HikariCP "2.6.1"]
-                 [com.h2database/h2 "1.4.194"]
+                 [com.h2database/h2 "1.4.195"]
                  [io.czlab/basal "1.0.0"]]
 
   :plugins [[cider/cider-nrepl "0.14.0"]
