@@ -102,7 +102,7 @@
   (c/sreduce<>
     (fn [b [_ v]]
       (when-not (empty? v)
-        (c/addDelim!
+        (s/addDelim!
           b
           ",\n"
           (str (c/rvtbl vt :getPad db)
@@ -150,7 +150,7 @@
                 (c/rvtbl vt :genString db fld)
                 :Bytes (c/rvtbl vt :genBytes db fld)
                 (h/dberr! "Unsupported field: %s" fld))
-              (c/addDelim! bf ",\n" ))
+              (s/addDelim! bf ",\n" ))
             (if (= pke
                    (:id fld)) (conj! p fld) p)) fields)]
     (when (> (.length bf) 0)
@@ -179,7 +179,7 @@
 ;;
 (def ^:private ddl-base
 
-  (c/defvtbl*
+  (c/vtbl*
 
   :genExec #(str ";\n" (c/rvtbl %1 :genSep %2))
 
@@ -195,10 +195,10 @@
 
   :genDrop
   #(str "drop table "
-        (h/gtable %3) (c/rvtbl %1 :genExec %2) "\n\n")
+        (gtable %3) (c/rvtbl %1 :genExec %2) "\n\n")
 
   :genBegin
-  #(str "create table " (h/gtable %3) " (\n")
+  #(str "create table " (gtable %3) " (\n")
 
   :genEnd
   #(str "\n) " (c/rvtbl %1 :genExec %2) "\n\n")
@@ -206,11 +206,11 @@
   :genEndSQL ""
   :genGrant ""
 
-  :genIndex #(h/gSQLId (str (:table %3) "_" %4))
+  :genIndex #(gSQLId (str (:table %3) "_" %4))
 
-  :genTable #(h/gtable %3)
+  :genTable #(gtable %3)
 
-  :genCol #(h/gcolumn %3)
+  :genCol #(gcolumn %3)
 
   :getPad "    "
 
@@ -277,7 +277,7 @@
 ;; H2
 (def ^:private ddl-h2
 
-  (c/defvtbl** ddl-base
+  (c/vtbl** ddl-base
 
   :id :h2
 
@@ -304,10 +304,10 @@
          (if (:pkey field)
            " identity(1) " " auto_increment(1) ")))
   :genBegin
-  #(str "create cached table " (h/gtable %3) " (\n" )
+  #(str "create cached table " (gtable %3) " (\n" )
   :genDrop
   #(str "drop table "
-        (h/gtable %3)
+        (gtable %3)
         " if exists cascade"
         (c/rvtbl %1 :genExec %2) "\n\n")))
 
@@ -358,7 +358,7 @@
 (def ^:dynamic *mysql-driver* "com.mysql.jdbc.Driver")
 
 (def ^:private ddl-mysql
-  (c/defvtbl** ddl-base
+  (c/vtbl** ddl-base
 
   :id :mysql
 
@@ -379,7 +379,7 @@
                      (c/rvtbl %1 :getLongKwd %2)
                      " not null auto_increment")
   :genDrop #(str "drop table if exists "
-                 (h/gtable %3)
+                 (gtable %3)
                  (c/rvtbl %1 :genExec %2) "\n\n")))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -388,7 +388,7 @@
 (def ^:dynamic *postgresql-driver* "org.postgresql.Driver")
 
 (def ^:private ddl-postgres
-  (c/defvtbl** ddl-base
+  (c/vtbl** ddl-base
 
   :id :postgres
 
@@ -406,7 +406,7 @@
                      " bigserial"
                      " not null auto_increment")
   :genDrop #(str "drop table if exists "
-                 (h/gtable %3)
+                 (gtable %3)
                  " cascade "
                  (c/rvtbl %1 :genExec %2) "\n\n")))
 
@@ -414,7 +414,7 @@
 ;; SQLServer
 
 (def ^:private ddl-sqlserver
-  (c/defvtbl** ddl-base
+  (c/vtbl** ddl-base
 
   :id :sqlserver
 
@@ -438,17 +438,17 @@
                        " autoincrement "))
   :genDrop #(str "if exists (select * from "
                  "dbo.sysobjects where id=object_id('"
-                 (h/gtable %3 false)
+                 (gtable %3 false)
                  "')) drop table "
-                 (h/gtable %3)
+                 (gtable %3)
                  (c/rvtbl %1 :genExec %2) "\n\n")))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;Oracle
 (defn- createSeq "" [vt db m fd]
-  (let [s (h/gSQLId (str "S_"
+  (let [s (gSQLId (str "S_"
                        (:table m) "_" (:column fd)))
-        t (h/gSQLId (str "T_"
+        t (gSQLId (str "T_"
                        (:table m) "_" (:column fd)))]
     (str "create sequence "
          s
@@ -459,7 +459,7 @@
          t
          "\n"
          "before insert on "
-         (h/gtable m)
+         (gtable m)
          "\n"
          "referencing new as new\n"
          "for each row\n"
@@ -467,7 +467,7 @@
          "select "
          s
          ".nextval into :new."
-         (h/gcolumn fd) " from dual;\n"
+         (gcolumn fd) " from dual;\n"
          "end" (c/rvtbl vt :genExec db) "\n\n")))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -497,7 +497,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 (def ^:private ddl-oracle
-  (c/defvtbl** ddl-base
+  (c/vtbl** ddl-base
 
   :id :oracle
 
@@ -526,7 +526,7 @@
            bd fields))
        (deref h/*ddl-bvs*)))
   :genDrop #(str "drop table "
-                 (h/gtable %3)
+                 (gtable %3)
                  " cascade constraints purge"
                  (c/rvtbl %1 :genExec %2) "\n\n")))
 
@@ -554,7 +554,7 @@
              h/*ddl-bvs* (atom {})]
      (let [ms (:models schema)
            vt (if (keyword? db)
-                (c/findVtbl db)
+                (findVtbl db)
                 (do (assert (map? db)) db))
            dbID (:id vt)
            drops (s/strbf<>)

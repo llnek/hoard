@@ -62,7 +62,7 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defmethod fmtSqlId DbApi
+(defmethod fmtSqlId DbApiObj
 
   ([db idstr] (fmtSqlId db idstr nil))
   ([db idstr quote?]

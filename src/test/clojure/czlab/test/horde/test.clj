@@ -97,7 +97,7 @@
                 :url url
                 :user "sa"
                 :passwd "hello"})
-        ddl (h/getDdl meta-cc :h2)
+        ddl (d/getDdl meta-cc :h2)
         db (hc/dbopen<+> jdbc meta-cc)]
     (when false
       (i/writeFile (io/file (c/sysTmpDir)
@@ -167,7 +167,7 @@
 (defn- createEmp
   ""
   [fname lname sex login]
-  (let [tx (h/compositeSQLr DB)]
+  (let [tx (hc/composite-sqlr DB)]
     (->>
       (fn [s]
         (let [p (mkPerson fname
@@ -191,7 +191,7 @@
 (defn- fetchAllEmps
   ""
   []
-  (-> (h/simpleSQLr DB)
+  (-> (hc/simple-sqlr DB)
       (h/find-all ::Employee)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -199,7 +199,7 @@
 (defn- fetch-person
   ""
   [fname lname]
-  (-> (h/simpleSQLr DB)
+  (-> (hc/simple-sqlr DB)
       (h/find-one ::Person
                   {:first_name fname :last_name lname})))
 
@@ -208,7 +208,7 @@
 (defn- fetchEmp
   ""
   [login]
-  (-> (h/simpleSQLr DB)
+  (-> (hc/simple-sqlr DB)
       (h/find-one ::Employee {:login login})))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -217,7 +217,7 @@
   ""
   [login]
   (->
-      (h/compositeSQLr DB)
+      (hc/composite-sqlr DB)
       (h/transact!
         #(let [o2 (-> (h/find-one %
                                 ::Employee {:login login})
@@ -230,7 +230,7 @@
   ""
   [login]
   (->
-      (h/compositeSQLr DB)
+      (hc/composite-sqlr DB)
       (h/transact!
         (fn [s]
           (let [o1 (h/find-one s ::Employee {:login login})]
@@ -244,7 +244,7 @@
   [fname lname sex]
   (let [p (mkPerson fname lname sex)]
     (->
-        (h/compositeSQLr DB)
+        (hc/composite-sqlr DB)
         (h/transact! #(h/add-obj % p)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -252,7 +252,7 @@
 (defn- wedlock?
   ""
   []
-  (let [sql (h/compositeSQLr DB)
+  (let [sql (hc/composite-sqlr DB)
         e (createEmp "joe" "blog" "male" "joeb")
         w (createPerson "mary" "lou" "female")]
     (->>
@@ -273,7 +273,7 @@
 (defn- undoWedlock
   ""
   []
-  (let [sql (h/compositeSQLr DB)]
+  (let [sql (hc/composite-sqlr DB)]
     (->>
       (fn [s]
         (let
@@ -292,7 +292,7 @@
 (defn- testCompany
   ""
   []
-  (let [sql (h/compositeSQLr DB)]
+  (let [sql (hc/composite-sqlr DB)]
     (->>
       (fn [s]
         (let [c (h/add-obj s (mkCompany "acme"))
@@ -322,7 +322,7 @@
 (defn- testM2M
   ""
   []
-  (let [sql (h/compositeSQLr DB)]
+  (let [sql (hc/composite-sqlr DB)]
     (->>
       (fn [s]
         (let
@@ -356,7 +356,7 @@
 (defn- undoM2M
   ""
   []
-  (let [sql (h/compositeSQLr DB)]
+  (let [sql (hc/composite-sqlr DB)]
     (->>
       (fn [s]
         (let
@@ -375,7 +375,7 @@
 (defn- undoCompany
   ""
   []
-  (let [sql (h/compositeSQLr DB)]
+  (let [sql (hc/composite-sqlr DB)]
     (->>
       (fn [s]
         (let
@@ -401,8 +401,8 @@
 
     (is (let [db (hc/dbopen<+> jdbc-spec meta-cc)
               url (:url jdbc-spec)
-              c (h/compositeSQLr db)
-              s (h/simpleSQLr db)
+              c (hc/composite-sqlr db)
+              s (hc/simple-sqlr db)
               h (:schema db)
               v (:vendor db)
               ^Connection conn (hc/opendb db)
@@ -431,8 +431,8 @@
 
     (is (let [db (hc/dbopen<> jdbc-spec meta-cc)
               url (:url jdbc-spec)
-              c (h/compositeSQLr db)
-              s (h/simpleSQLr db)
+              c (hc/composite-sqlr db)
+              s (hc/simple-sqlr db)
               h (:schema db)
               v (:vendor db)
               ^Connection conn (hc/opendb db)
