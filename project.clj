@@ -1,6 +1,6 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defproject io.czlab/horde "1.0.0"
+(defproject io.czlab/horde "1.1.0"
 
   :license {:name "Eclipse Public License"
             :url "http://www.eclipse.org/legal/epl-v10.html"}
@@ -8,18 +8,29 @@
   :description "SQL orm"
   :url "https://github.com/llnek/horde"
 
-  :dependencies [[org.postgresql/postgresql "42.1.1"]
-                 [com.zaxxer/HikariCP "2.6.1"]
-                 [com.h2database/h2 "1.4.195"]
-                 [io.czlab/basal "1.0.3"]]
+  :dependencies [[org.postgresql/postgresql "42.2.6"]
+                 [com.zaxxer/HikariCP "3.3.1"]
+                 [com.h2database/h2 "1.4.199"]
+                 [io.czlab/basal "1.1.0"]]
 
-  :plugins [[cider/cider-nrepl "0.14.0"]
-            [lein-codox "0.10.3"]
-            [lein-cprint "1.2.0"]]
+  :plugins [[cider/cider-nrepl "0.21.1"]
+            [lein-cprint "1.3.1"]
+            [lein-codox "0.10.7"]]
 
   :profiles {:provided {:dependencies
-                        [[org.clojure/clojure "1.8.0" :scope "provided"]]}
+                        [[org.clojure/clojure "1.10.1" :scope "provided"]]}
              :uberjar {:aot :all}}
+
+  :test-selectors {:core :test-core
+                   :str :test-str
+                   :misc :test-misc
+                   :psub :test-psub
+                   :proc :test-proc
+                   :ini :test-ini
+                   :io :test-io
+                   :meta :test-meta
+                   :dates :test-dates
+                   :util :test-util}
 
   :global-vars {*warn-on-reflection* true}
   :target-path "out/%s"

@@ -1,4 +1,4 @@
-;; Copyright (c) 2013-2017, Kenneth Leung. All rights reserved.
+;; Copyright © 2013-2019, Kenneth Leung. All rights reserved.
 ;; The use and distribution terms for this software are covered by the
 ;; Eclipse Public License 1.0 (http://opensource.org/licenses/eclipse-1.0.php)
 ;; which can be found in the file epl-v10.html at the root of this distribution.
@@ -11,7 +11,7 @@
 
   czlab.horde.drivers
 
-  (:require [czlab.basal.log :as log]
+  (:require [czlab.basal.log :as l]
             [clojure.java.io :as io]
             [clojure.string :as cs]
             [czlab.horde.core :as h]
@@ -20,18 +20,15 @@
 
   (:import [clojure.lang Var]
            [java.io File]
-           [czlab.basal Stateful]
            [java.sql DriverManager Connection Statement]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;(set! *warn-on-reflection* true)
-
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;
-(defn- gSQLId
-  "Format SQL identifier" {:tag String}
-
-  ([idstr] (gSQLId idstr nil))
+(defn- gsqlid
+  "Format SQL identifier"
+  {:tag String}
+  ([idstr] (gsqlid idstr nil))
   ([idstr quote?]
    (let [{:keys [case-fn qstr]}
          h/*ddl-cfg*
@@ -39,100 +36,87 @@
      (if (false? quote?) id (str qstr id qstr)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;
 (defn- gtable
-  "Get the table name (quoted)" {:tag String}
-
+  "Get the table name (quoted)"
+  {:tag String}
   ([model] (gtable model nil))
   ([model quote?]
-   {:pre [(map? model)]} (gSQLId (:table model) quote?)))
+   {:pre [(map? model)]} (gsqlid (:table model) quote?)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;
 (defn- gcolumn
-  "Get the column name (quoted)" {:tag String}
-
+  "Get the column name (quoted)"
+  {:tag String}
   ([field] (gcolumn field nil))
   ([field quote?]
-   {:pre [(map? field)]} (gSQLId (:column field) quote?)))
+   {:pre [(map? field)]} (gsqlid (:column field) quote?)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;
 ;;(defmacro ^:private gcn "Get column name" [fields fid] `(genCol (get ~fields ~fid)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;
-(defn- genColDef
-  "" ^String [vt db typedef field]
-
-  (let [dft (first (:dft field))]
+(defn- gen-col-def
+  ^String [vt db typedef field]
+  (let [dft (c/_1 (:dft field))]
     (str (c/rvtbl vt :getPad db)
          (c/rvtbl vt :genCol db field)
-         (str " " typedef " ")
+         " " typedef " "
          (c/rvtbl vt :nullClause db (:null? field))
          (if (s/hgl? dft) (str " default " dft) ""))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;
-(defn- genExIndexes
-  "external indexes"
+(defn- gen-ex-indexes
+  "External indexes."
   ^String [vt db schema fields model]
-
-  (c/sreduce<>
-    (fn [^StringBuilder b [k v]]
-      (when-not (empty? v)
-        (.append b
-          (str "create index "
-               (c/rvtbl vt :genIndex db model (name k))
-               " on "
-               (c/rvtbl vt :genTable db model)
-               " ("
-               (->> (map #(c/rvtbl vt :genCol db (fields %)) v)
-                    (cs/join "," ))
-               ") "
-               (c/rvtbl vt :genExec db) "\n\n")))
-      b)
+  (s/sreduce<>
+    (fn [b [k v]]
+      (if (empty? v)
+        b
+        (s/sbf+ b
+                "create index "
+                (c/rvtbl vt :genIndex db model (name k))
+                " on "
+                (c/rvtbl vt :genTable db model)
+                " ("
+                (->> (map #(c/rvtbl vt :genCol db (fields %)) v)
+                     (cs/join "," ))
+                ") "
+                (c/rvtbl vt :genExec db) "\n\n")))
     (:indexes model)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;
-(defn- genUniques
-  "" ^String [vt db schema fields model]
-
-  (c/sreduce<>
+(defn- gen-uniques
+  ^String [vt db schema fields model]
+  (s/sreduce<>
     (fn [b [_ v]]
-      (when-not (empty? v)
-        (s/addDelim!
-          b
-          ",\n"
-          (str (c/rvtbl vt :getPad db)
-               "unique("
-               (->> (map #(c/rvtbl vt :genCol db (fields %)) v)
-                    (cs/join "," ))
-               ")")))
-      b)
+      (if (empty? v)
+        b
+        (s/sbf-join b
+                    ",\n"
+                    (str (c/rvtbl vt :getPad db)
+                         "unique("
+                         (cs/join ","
+                                  (map #(c/rvtbl vt
+                                                 :genCol db (fields %)) v))
+                         ")"))))
     (:uniques model)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;
-(defn- genPKey
-  "" ^String [vt db model pks]
+(defn- gen-pkey
+  ^String [vt db model pks]
   (str (c/rvtbl vt :getPad db)
        "primary key("
        (cs/join "," (map #(c/rvtbl vt :genCol db %) pks)) ")"))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;
-(defn- genBody
-  "" ^String [vt db schema model]
-
-  (let [fields (:fields model)
-        pke (:pkey model)
-        bf (s/strbf<>)
+(defn- gen-body
+  ^String [vt db schema model]
+  (let [{:keys [fields pkey]} model
+        bf (s/sbf<>)
         pkeys
         (c/preduce<vec>
           (fn [p [k fld]]
-            (->>
+            (s/sbf-join bf ",\n"
               (case (:domain fld)
                 :Timestamp (c/rvtbl vt :genTimestamp db fld)
                 :Date (c/rvtbl vt :genDate db fld)
@@ -149,38 +133,34 @@
                 (:Password :String)
                 (c/rvtbl vt :genString db fld)
                 :Bytes (c/rvtbl vt :genBytes db fld)
-                (h/dberr! "Unsupported field: %s" fld))
-              (s/addDelim! bf ",\n" ))
-            (if (= pke
-                   (:id fld)) (conj! p fld) p)) fields)]
-    (when (> (.length bf) 0)
-      (when-not (empty? pkeys)
-        (.append bf (str ",\n"
-                         (genPKey vt db model pkeys))))
-      (let [s (genUniques vt db schema fields model)]
+                (h/dberr! "Unsupported field: %s." fld)))
+            (if (not= pkey (:id fld))
+              p
+              (conj! p fld))) fields)]
+    (when (pos? (.length bf))
+      (when (not-empty pkeys)
+        (s/sbf+ bf ",\n" (gen-pkey vt db
+                                   model pkeys)))
+      (let [s (gen-uniques vt db
+                           schema fields model)]
         (when (s/hgl? s)
-          (.append bf (str ",\n" s)))))
+          (s/sbf+ bf ",\n" s))))
     [(str bf)
-     (genExIndexes vt db schema fields model)]))
+     (gen-ex-indexes vt db schema fields model)]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;
-(defn- genOneTable
-  "" ^String [vt db schema model]
-
-  (let [d (genBody vt db schema model)
+(defn- gen-one-table
+  ^String [vt db schema model]
+  (let [d (gen-body vt db schema model)
         b (c/rvtbl vt :genBegin db model)
         e (c/rvtbl vt :genEnd db)]
     (str b
-         (first d) e (last d)
+         (c/_1 d) e (c/_E d)
          (c/rvtbl vt :genGrant db model))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;
 (def ^:private ddl-base
-
   (c/vtbl*
-
   :genExec #(str ";\n" (c/rvtbl %1 :genSep %2))
 
   :getNotNull "not null"
@@ -190,7 +170,7 @@
                  (c/rvtbl %1 :getNull %2)
                  (c/rvtbl %1 :getNotNull %2))
 
-  :genSep (fn [_ _]
+  :genSep (c/fn_2
             (if (:use-sep? h/*ddl-cfg*) h/ddl-sep ""))
 
   :genDrop
@@ -206,7 +186,7 @@
   :genEndSQL ""
   :genGrant ""
 
-  :genIndex #(gSQLId (str (:table %3) "_" %4))
+  :genIndex #(gsqlid (str (:table %3) "_" %4))
 
   :genTable #(gtable %3)
 
@@ -217,42 +197,42 @@
   ;; data types
 
   :genBytes
-  #(genColDef %1 %2 (c/rvtbl %1 :getBlobKwd %2) %3)
+  #(gen-col-def %1 %2 (c/rvtbl %1 :getBlobKwd %2) %3)
 
   :genString
-  #(genColDef %1 %2
+  #(gen-col-def %1 %2
               (str (c/rvtbl %1 :getStringKwd %2)
                    "(" (:size %3) ")") %3)
 
   :genInteger
-  #(genColDef %1 %2 (c/rvtbl %1 :getIntKwd %2) %3)
+  #(gen-col-def %1 %2 (c/rvtbl %1 :getIntKwd %2) %3)
 
   :genAutoInteger ""
 
   :genDouble
-  #(genColDef %1 %2 (c/rvtbl %1 :getDoubleKwd %2) %3)
+  #(gen-col-def %1 %2 (c/rvtbl %1 :getDoubleKwd %2) %3)
 
   :genFloat
-  #(genColDef %1 %2 (c/rvtbl %1 :getFloatKwd %2) %3)
+  #(gen-col-def %1 %2 (c/rvtbl %1 :getFloatKwd %2) %3)
 
   :genLong
-  #(genColDef %1 %2 (c/rvtbl %1 :getLongKwd %2) %3)
+  #(gen-col-def %1 %2 (c/rvtbl %1 :getLongKwd %2) %3)
 
   :genAutoLong ""
 
   :getTSDefault "CURRENT_TIMESTAMP"
 
   :genTimestamp
-  #(genColDef %1 %2 (c/rvtbl %1 :getTSKwd %2) %3)
+  #(gen-col-def %1 %2 (c/rvtbl %1 :getTSKwd %2) %3)
 
   :genDate
-  #(genColDef %1 %2 (c/rvtbl %1 :getDateKwd %2) %3)
+  #(gen-col-def %1 %2 (c/rvtbl %1 :getDateKwd %2) %3)
 
   :genCaldr
   #(c/rvtbl %1 :genTimestamp %2 %3)
 
   :genBool
-  #(genColDef %1 %2 (c/rvtbl %1 :getBoolKwd %2) %3)
+  #(gen-col-def %1 %2 (c/rvtbl %1 :getBoolKwd %2) %3)
 
   ;; keywords
   :getDoubleKwd "double precision"
@@ -276,7 +256,6 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; H2
 (def ^:private ddl-h2
-
   (c/vtbl** ddl-base
 
   :id :h2
@@ -312,8 +291,7 @@
         (c/rvtbl %1 :genExec %2) "\n\n")))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;
-(defn H2Db
+(defn h2db
   "Create a H2 database"
   [dbDir ^String dbid ^String user ^String pwd]
 
@@ -324,34 +302,30 @@
   (let [url (doto (io/file dbDir dbid) (.mkdirs))
         u (.getCanonicalPath url)
         dbUrl (cs/replace *h2-file-url* "{{path}}" u)]
-    (log/debug "Creating H2: %s" dbUrl)
-    (with-open [c1 (DriverManager/getConnection dbUrl user pwd)]
+    (l/debug "Creating H2: %s." dbUrl)
+    (c/wo* [c1 (DriverManager/getConnection dbUrl user pwd)]
       (.setAutoCommit c1 true)
-      (with-open [s (.createStatement c1)]
+      (c/wo* [s (.createStatement c1)]
         ;;(.execute s (str "create user " user " password \"" pwd "\" admin"))
         (.execute s "set default_table_type cached"))
-      (with-open [s (.createStatement c1)]
+      (c/wo* [s (.createStatement c1)]
         (.execute s "shutdown")))
     dbUrl))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;
-(defn closeH2Db
+(defn close-h2db
   "Close an existing H2 database"
   [dbDir ^String dbid ^String user ^String pwd]
-
   (c/test-some "file-dir" dbDir)
   (c/test-hgl "db-id" dbid)
   (c/test-hgl "user" user)
-
   (let [url (io/file dbDir dbid)
         u (.getCanonicalPath url)
         dbUrl (cs/replace *h2-file-url* "{{path}}" u)]
-    (log/debug "Closing H2: %s" dbUrl)
-    (with-open [c1 (DriverManager/getConnection dbUrl user pwd)]
+    (l/debug "Closing H2: %s." dbUrl)
+    (c/wo* [c1 (DriverManager/getConnection dbUrl user pwd)]
       (.setAutoCommit c1 true)
-      (with-open [s (.createStatement c1)]
-        (.execute s "shutdown")) )))
+      (c/wo* [s (.createStatement c1)] (.execute s "shutdown")))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;MySQL
@@ -445,10 +419,10 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;Oracle
-(defn- createSeq "" [vt db m fd]
-  (let [s (gSQLId (str "S_"
+(defn- create-seq [vt db m fd]
+  (let [s (gsqlid (str "S_"
                        (:table m) "_" (:column fd)))
-        t (gSQLId (str "T_"
+        t (gsqlid (str "T_"
                        (:table m) "_" (:column fd)))]
     (str "create sequence "
          s
@@ -471,31 +445,27 @@
          "end" (c/rvtbl vt :genExec db) "\n\n")))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;
-(defn- maybeTrackFields
-  ""
+(defn- maybe-track-fields
   [model field]
-  (if (or (= "12c+" (h/*ddl-cfg* :db-version))
-          (= "12c" (h/*ddl-cfg* :db-version)))
-    false
-    (let [m (deref h/*ddl-bvs*)
-          t (:id model)
-          r (or (m t) {})]
-      (->> (assoc r (:id field) field)
-           (swap! h/*ddl-bvs*  assoc t))
-      true)))
+  (if-not (or (= "12c+" (h/*ddl-cfg* :db-version))
+              (= "12c" (h/*ddl-cfg* :db-version)))
+    (c/let#true [m (deref h/*ddl-bvs*)
+                 t (:id model)
+                 r (or (m t) {})]
+      (swap! h/*ddl-bvs*
+             assoc
+             t
+             (assoc r (:id field) field)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;
-(defn- autoXXX
-  "" [vt db model fld]
+(defn- auto-xxx
+  [vt db model fld]
   (str (c/rvtbl vt :getPad db)
        (c/rvtbl vt :genCol db fld)
        " "
-       "number generated by default on null as identity"))
+       "number generated by default on null as identity."))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;
 (def ^:private ddl-oracle
   (c/vtbl** ddl-base
 
@@ -506,23 +476,22 @@
   :getLongKwd "number(38)"
   :getDoubleKwd "binary_double"
   :getFloatKwd "binary_float"
-  :genAutoInteger #(if (maybeTrackFields %3 %4)
+  :genAutoInteger #(if (maybe-track-fields %3 %4)
                      (c/rvtbl %1 :genInteger %2 %4)
                      (c/rvtbl %1 :autoXXX %2 %3 %4))
-  :genAutoLong #(if (maybeTrackFields %3 %4)
+  :genAutoLong #(if (maybe-track-fields %3 %4)
                   (c/rvtbl %1 :genLong %2 %4)
-                  (autoXXX %2 %3 %4))
+                  (auto-xxx %2 %3 %4))
   :genEndSQL
   #(if (or (= "12c+" (h/*ddl-cfg* :db-version))
            (= "12c" (h/*ddl-cfg* :db-version)))
      ""
-     (c/sreduce<>
+     (s/sreduce<>
        (fn [bd [model fields]]
          (reduce
            (fn [bd [_ fld]]
-             (.append ^StringBuilder
-                      bd
-                      (createSeq %2 model fld)))
+             (s/sbf+ bd
+                     (create-seq %2 model fld)))
            bd fields))
        (deref h/*ddl-bvs*)))
   :genDrop #(str "drop table "
@@ -531,8 +500,7 @@
                  (c/rvtbl %1 :genExec %2) "\n\n")))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;
-(defn- findVtbl "" [dbID]
+(defn- find-vtbl [dbID]
   (let [nsp "czlab.horde.drivers/ddl-"
         v (-> (str nsp
                    (name dbID))
@@ -540,32 +508,30 @@
     (.deref ^Var v)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;
-(defn getDdl
-  "Generate database DDL
-  for this schema" {:tag String}
-
-  ([schema db] (getDdl schema db nil))
+(defn get-ddl
+  "Generate database DDL for this schema."
+  {:tag String}
+  ([schema db] (get-ddl schema db nil))
   ([schema db dbver]
    (binding [h/*ddl-cfg* {:db-version (s/strim dbver)
                           :use-sep? true
                           :qstr ""
                           :case-fn clojure.string/upper-case}
              h/*ddl-bvs* (atom {})]
-     (let [ms (:models schema)
+     (let [ms (:models @schema)
            vt (if (keyword? db)
-                (findVtbl db)
+                (find-vtbl db)
                 (do (assert (map? db)) db))
            dbID (:id vt)
-           drops (s/strbf<>)
-           body (s/strbf<>)]
+           drops (s/sbf<>)
+           body (s/sbf<>)]
        (doseq [[id model] ms
                :let [tbl (:table model)]
                :when (and (not (:abstract? model))
                           (s/hgl? tbl))]
-         (log/debug "model id: %s, table: %s" (name id) tbl)
-         (.append drops (c/rvtbl vt :genDrop dbID model))
-         (.append body (genOneTable vt dbID schema model)))
+         (l/debug "model id: %s, table: %s" (name id) tbl)
+         (s/sbf+ drops (c/rvtbl vt :genDrop dbID model))
+         (s/sbf+ body (gen-one-table vt dbID schema model)))
        (str drops body (c/rvtbl vt :genEndSQL dbID))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
