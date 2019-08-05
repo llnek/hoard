@@ -9,19 +9,19 @@
 (ns ^{:doc "Database connections."
       :author "Kenneth Leung"}
 
-  czlab.horde.connect
+  czlab.hoard.connect
 
-  (:require [czlab.horde.sql :as q]
+  (:require [czlab.hoard.sql :as q]
             [czlab.basal.log :as l]
             [czlab.basal.core :as c]
-            [czlab.horde.core
+            [czlab.hoard.core
              :as h :refer [fmt-sqlid]])
 
   (:import [java.sql
             Connection
             SQLException]
            [java.util Map]
-           [czlab.horde TLocalMap]))
+           [czlab.hoard TLocalMap]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defprotocol DbApi
@@ -33,8 +33,8 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defrecord DbObj []
   DbApi
-  (db-composite [me] (:tx me))
-  (db-simple [me] (:sm me))
+  (db-composite [me] (:co me))
+  (db-simple [me] (:si me))
   (db-finz [me] (c/if-fn? [f (:finz me)] (f me)))
   (db-open [me] (c/if-fn? [f (:open me)] (f me))))
 
@@ -72,7 +72,7 @@
     (.get c hc)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(defn- connect-db "Connect to db." ^Connection [db cfg]
+(defn- gconn "Connect to db." ^Connection [db cfg]
   (let [{:keys [isolation auto?]} cfg
         ^Connection c ((:open db) db)
         how (or isolation
@@ -85,7 +85,7 @@
 (defn- sim-sqlr [db]
   (let [cfg {:isolation
              Connection/TRANSACTION_SERIALIZABLE}]
-    (q/sqlr<> db #(c/wo* [c2 (connect-db db cfg)] (% c2)))))
+    (q/sqlr<> db #(c/wo* [c2 (gconn db cfg)] (% c2)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defmacro ^:private undo
@@ -97,10 +97,10 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defrecord TransactableObj []
-  czlab.horde.core.Transactable
+  czlab.hoard.core.Transactable
   (transact! [me cb cfg]
     (let [{:keys [db]} me]
-      (c/wo* [c (connect-db db (assoc cfg :auto? false))]
+      (c/wo* [c (gconn db (assoc cfg :auto? false))]
         (try (let [rc (cb (q/sqlr<> db #(% c)))]
                (commit c)
                rc)
@@ -113,48 +113,35 @@
 (defn- tx-sqlr [db] (assoc (TransactableObj.) :db db))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(defn dbopen<>
-  "Open/access to a datasource"
-  ([jdbc schema]
-   (dbopen<> jdbc schema nil))
-  ([jdbc schema options]
-   (let [opener #(h/dbconnect<> (:jdbc %))
-         vendor (h/resolve-vendor jdbc)
-         db {:vendor vendor
-             :open opener
-             :jdbc jdbc
-             :schema schema}
-         tx (tx-sqlr db)
-         sm (sim-sqlr db)]
-     (merge (DbObj.) (assoc db :tx tx :sm sm)))))
+(defmacro ^:private dbobj<> [m]
+  `(let [db# ~m]
+     (merge (DbObj.)
+            (assoc db# :co (tx-sqlr db#) :si (sim-sqlr db#)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(defn dbapi<>
-  "Open/access to a datasource (pooled)"
-  ([pool schema]
-   (dbapi<> pool schema nil))
-  ([pool schema options]
-   (let [{:keys [vendor jdbc]} pool
-         finzer #(h/p-close (:pool %))
-         opener #(h/p-next (:pool %))
-         db {:finz finzer
-             :open opener
-             :schema schema
-             :vendor vendor
+(defn dbio<>
+  "Open/access to a datasource."
+  ([jdbc schema] (dbio<> jdbc schema nil))
+  ([jdbc schema options]
+   (dbobj<> {:schema schema
              :jdbc jdbc
-             :pool pool}
-         sm (sim-sqlr db)
-         tx (tx-sqlr db)]
-     (merge (DbObj.) (assoc db :tx tx :sm sm)))))
+             :open #(h/conn<> (:jdbc %))
+             :vendor (h/resolve-vendor jdbc)})))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(defn dbopen<+>
-  "Open/access to a datasource (pooled)"
-  ([jdbc schema]
-   (dbopen<+> jdbc schema nil))
+(defn dbio<+>
+  "IO access to a datasource (pooled)."
+  ([jdbc schema] (dbio<+> jdbc schema nil))
   ([jdbc schema options]
-   (dbapi<> (h/dbpool<> jdbc
-                        (merge pool-cfg options)) schema)))
+   (let [{:keys [vendor] :as pool}
+         (h/dbpool<> jdbc
+                     (merge pool-cfg options))]
+     (dbobj<> {:schema schema
+               :vendor vendor
+               :jdbc jdbc
+               :pool pool
+               :open #(h/p-next (:pool %))
+               :finz #(h/p-close (:pool %))}))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;EOF

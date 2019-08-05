@@ -9,7 +9,7 @@
 (ns ^{:doc "Database and modeling functions."
       :author "Kenneth Leung"}
 
-  czlab.horde.core
+  czlab.hoard.core
 
   (:require [czlab.basal.util :as u]
             [clojure.java.io :as io]
@@ -95,7 +95,7 @@
 (defmacro dbmodel<>
   "Define a data model inside dbschema<>."
   [name & body]
-  `(-> (czlab.horde.core/dbdef<> ~name) ~@body))
+  `(-> (czlab.hoard.core/dbdef<> ~name) ~@body))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defmacro tstamp<>
@@ -113,13 +113,13 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defmacro gtype
-  "Get object's type." [obj] `(:id (czlab.horde.core/gmodel ~obj)))
+  "Get object's type." [obj] `(:id (czlab.hoard.core/gmodel ~obj)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defmacro goid
   "Get object's id."
   [obj] `(let [o# ~obj
-               pk# (:pkey (czlab.horde.core/gmodel o#))] (pk# o#)))
+               pk# (:pkey (czlab.hoard.core/gmodel o#))] (pk# o#)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defmacro gschema "Get schema." [model] `(:schema (meta ~model)))
@@ -389,12 +389,12 @@
   "Define a joined data model."
   ([modelname lhs rhs]
    `(dbjoined<> modelname
-                (czlab.horde.core/dbcfg nil) lhs rhs))
+                (czlab.hoard.core/dbcfg nil) lhs rhs))
   ([modelname options lhs rhs]
-   `(-> (czlab.horde.core/dbdef<> ~modelname {:mxm? true})
+   `(-> (czlab.hoard.core/dbdef<> ~modelname {:mxm? true})
         ~options
-        (czlab.horde.core/with-joined ~lhs ~rhs)
-        (czlab.horde.core/dbuniques {:i1 #{:lhs-rowid :rhs-rowid}}))))
+        (czlab.hoard.core/with-joined ~lhs ~rhs)
+        (czlab.hoard.core/dbuniques {:i1 #{:lhs-rowid :rhs-rowid}}))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defn with-table
@@ -603,12 +603,12 @@
         (if (and (= :meta p1)
                  (map? p2))
           [p2 (drop 2 args)] [nil args])]
-    `(czlab.horde.core/dbschema*
+    `(czlab.hoard.core/dbschema*
        :meta ~options
        ~@(map #(let [[p1 p2 & more] %]
                  (cons p1
                        (cons p2
-                             (cons `(czlab.horde.core/dbcfg ~options) more)))) models))))
+                             (cons `(czlab.hoard.core/dbcfg ~options) more)))) models))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defn dbschema*
@@ -666,24 +666,24 @@
     (.connect d url p)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(defn dbconnect<>
+(defn conn<>
   "Connect to db"
   ^Connection
   [{:keys [url user] :as jdbc}]
   (let [^Connection
-        conn (if (s/hgl? user)
-               (safe-get-conn jdbc)
-               (DriverManager/getConnection url))]
-    (if (nil? conn)
+        c (if (s/hgl? user)
+            (safe-get-conn jdbc)
+            (DriverManager/getConnection url))]
+    (if (nil? c)
       (dberr! "Failed to connect: %s" url))
-    (doto conn
+    (doto c
       (.setTransactionIsolation
         Connection/TRANSACTION_SERIALIZABLE))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defn test-connect?
   "Test connect to the database?"
-  [jdbc] (try (c/do#true (.close (dbconnect<> jdbc)))
+  [jdbc] (try (c/do#true (.close (conn<> jdbc)))
               (catch SQLException _ false)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -692,7 +692,7 @@
   ^APersistentMap [in]
   (condp instance? in
     JdbcSpec
-    (c/wo* [c (dbconnect<> in)] (resolve-vendor c))
+    (c/wo* [c (conn<> in)] (resolve-vendor c))
     Connection
     (let [m (.getMetaData ^Connection in)
           rc {:id (maybe-get-vendor (.getDatabaseProductName m))
@@ -717,7 +717,7 @@
             c (p-next in)]
       (table-exist? c table))
     JdbcSpec
-    (c/wo* [c (dbconnect<> in)] (table-exist? c table))
+    (c/wo* [c (conn<> in)] (table-exist? c table))
     Connection
     (u/try!!
       false
@@ -735,7 +735,7 @@
   [in table]
   (condp instance? in
     JdbcSpec
-    (c/wo* [c (dbconnect<> in)] (row-exist? c table))
+    (c/wo* [c (conn<> in)] (row-exist? c table))
     Connection
     (u/try!!
       false
@@ -851,7 +851,7 @@
     (c/wo* [^Connection
             c (p-next in)] (upload-ddl c ddl))
     JdbcSpec
-    (c/wo* [c (dbconnect<> in)] (upload-ddl c ddl))
+    (c/wo* [c (conn<> in)] (upload-ddl c ddl))
     Connection
     (let [lines (mapv #(s/strim %)
                       (cs/split ddl (re-pattern ddl-sep)))
@@ -882,8 +882,8 @@
 (defmacro mock-pojo<>
   "Clone object with pkey only" [obj]
   `(let [o# ~obj
-         pk# (:pkey (czlab.horde.core/gmodel o#))]
-     (with-meta {pk# (czlab.horde.core/goid o#)} (meta o#))))
+         pk# (:pkey (czlab.hoard.core/gmodel o#))]
+     (with-meta {pk# (czlab.hoard.core/goid o#)} (meta o#))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defn db-set-fld

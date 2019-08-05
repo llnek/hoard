@@ -9,12 +9,12 @@
 (ns ^{:doc "Utility functions for DDL generation."
       :author "Kenneth Leung"}
 
-  czlab.horde.drivers
+  czlab.hoard.drivers
 
   (:require [czlab.basal.log :as l]
             [clojure.java.io :as io]
             [clojure.string :as cs]
-            [czlab.horde.core :as h]
+            [czlab.hoard.core :as h]
             [czlab.basal.core :as c]
             [czlab.basal.str :as s])
 
@@ -501,7 +501,7 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defn- find-vtbl [dbID]
-  (let [nsp "czlab.horde.drivers/ddl-"
+  (let [nsp "czlab.hoard.drivers/ddl-"
         v (-> (str nsp
                    (name dbID))
               symbol resolve)]

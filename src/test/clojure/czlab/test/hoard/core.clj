@@ -9,13 +9,13 @@
 (ns ^{:doc ""
       :author "Kenneth Leung"}
 
-  czlab.test.horde.core
+  czlab.test.hoard.core
 
-  (:require [czlab.horde.connect :as cn]
-            [czlab.horde.drivers :as d]
+  (:require [czlab.hoard.connect :as cn]
+            [czlab.hoard.drivers :as d]
             [clojure.java.io :as io]
-            [czlab.horde.sql :as q]
-            [czlab.horde.core :as h]
+            [czlab.hoard.sql :as q]
+            [czlab.hoard.core :as h]
             [clojure.string :as cs]
             [clojure.test :as ct]
             [czlab.basal.io :as i]
@@ -94,7 +94,7 @@
         jdbc (h/dbspec<> d/*h2-driver*
                          url "sa" "hello")
         ddl (d/get-ddl meta-cc :h2)
-        db (cn/dbopen<+> jdbc meta-cc)]
+        db (cn/dbio<+> jdbc meta-cc)]
     (when false
       (let [s (h/dbg-show-schema meta-cc)]
         (println "\n\n" ddl)
@@ -188,8 +188,8 @@
 
   (ensure?? "tstamp<>" (some? (h/tstamp<>)))
 
-  (ensure?? "dbopen<+>"
-            (let [db (cn/dbopen<+> jdbc-spec meta-cc)
+  (ensure?? "dbio<+>"
+            (let [db (cn/dbio<+> jdbc-spec meta-cc)
                   url (:url jdbc-spec)
                   c (cn/db-composite db)
                   s (cn/db-simple db)
@@ -216,8 +216,8 @@
                      (i/klose conn)
                      (cn/db-finz db)))))
 
-  (ensure?? "dbopen<>"
-            (let [db (cn/dbopen<> jdbc-spec meta-cc)
+  (ensure?? "dbio<>"
+            (let [db (cn/dbio<> jdbc-spec meta-cc)
                   url (:url jdbc-spec)
                   c (cn/db-composite db)
                   s (cn/db-simple db)
@@ -244,8 +244,8 @@
                      (i/klose conn)
                      (cn/db-finz db)))))
 
-  (ensure?? "dbconnect<>"
-            (let [c (h/dbconnect<> jdbc-spec)]
+  (ensure?? "conn<>"
+            (let [c (h/conn<> jdbc-spec)]
               (try
                 (map? (h/load-table-meta c "Person"))
                 (finally (i/klose c)))))
@@ -330,7 +330,7 @@
                      (and (some? w3)
                           (some? p3))))))
 
-  (ensure?? "db-get-o2o,db-clr-o2o"
+  (ensure?? "db-(get|clr)-o2o"
             (h/transact!
               (cn/db-composite DB)
               #(let
@@ -461,6 +461,7 @@
   (ct/is (let [[ok? r]
                (c/runtest test-core "test-core")] (println r) ok?)))
 
+;(println (u/sys-tmp-dir))
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;EOF
 

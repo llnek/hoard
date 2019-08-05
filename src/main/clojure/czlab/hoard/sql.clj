@@ -9,7 +9,7 @@
 (ns ^{:doc "Low level SQL JDBC functions."
       :author "Kenneth Leung"}
 
-  czlab.horde.sql
+  czlab.hoard.sql
 
   (:require [czlab.basal.io :as i]
             [czlab.basal.dates :as d]
@@ -18,7 +18,7 @@
             [czlab.basal.log :as l]
             [clojure.java.io :as io]
             [clojure.string :as cs]
-            [czlab.horde.core :as h]
+            [czlab.hoard.core :as h]
             [czlab.basal.core :as c]
             [czlab.basal.str :as s])
 
@@ -298,7 +298,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defmacro ^:private
   post-fmt-model-row [obj model]
-  `(czlab.horde.core/bind-model ~obj ~model))
+  `(czlab.hoard.core/bind-model ~obj ~model))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defn- do-exec+
@@ -404,7 +404,7 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defrecord SQLrObj []
-  czlab.horde.core.SQLr
+  czlab.hoard.core.SQLr
   (find-some [me typeid filters]
     (.find-some me typeid filters {}))
   (find-all [me typeid extra]

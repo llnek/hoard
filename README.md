@@ -1,18 +1,18 @@
-# horde
+# hoard
 
-[![Build Status](https://travis-ci.org/llnek/horde.svg?branch=master)](https://travis-ci.org/llnek/horde)
+[![Build Status](https://travis-ci.org/llnek/hoard.svg?branch=master)](https://travis-ci.org/llnek/hoard)
 
-`horde` is a light weight object-relationl mapping framework.
+`hoard` is a light weight object-relationl mapping framework.
 
 ## Installation
 
 Add the following dependency to your `project.clj` file:
 
-    [io.czlab/horde "1.1.0"]
+    [io.czlab/hoard "1.1.0"]
 
 ## Documentation
 
-* [API Docs](https://llnek.github.io/horde/)
+* [API Docs](https://llnek.github.io/hoard/)
 
 ## Supported Databases
 
@@ -40,7 +40,7 @@ Currently supports
 
 ## Modeling
 
-Defining a model in `horde` is very similar to defining a SQL table, with
+Defining a model in `hoard` is very similar to defining a SQL table, with
 the additional capability of defining relations.  Each model must have
 an unique identifier, follow by a set of field definitions, indexes and
 associations.  All models have a built-in primary key defined to be a
@@ -50,7 +50,7 @@ For example, to model a address object:
 
 ```clojure
 (ns demo.app
-  (:require [czlab.horde.dbio.core :as hc]))
+  (:require [czlab.hoard.core :as hc]))
 
   (dbmodel<> ::Address
     (dbfields
@@ -73,7 +73,7 @@ macro dbschema<>.
 
 ```clojure
 (ns demo.app
-  (:require [czlab.horde.dbio.core]))
+  (:require [czlab.hoard.core]))
 
   (dbschema<>
     (dbmodel<> ::Address
@@ -114,51 +114,51 @@ Connections to the underlying database can be done in 2 ways
 + pooled connections
 + raw connections
 
-(dbopen<+> jdbc-info schema)
+(dbio<+> jdbc-info schema)
 or
-(dbopen<> jdbc-info schema)
+(dbio<> jdbc-info schema)
 
 ## SQL DDL
 
-To extract the ddl from your schema, use (getDdl db-flavor).  
-For example, (getDDL :h2) will return the DDL as String.
+To extract the ddl from your schema, use (get-ddl db-flavor).  
+For example, (get-ddl :h2) will return the DDL as String.
 
-To upload the ddl to the underlying database, use (uploadDdl ...)
+To upload the ddl to the underlying database, use (upload-ddl ...)
 
 ## Basic CRUD operations
 
 ```clojure
 (def schemaObj (dbschema<> ...))
-(def db (dbopen<> ... schemaObj))
+(def db (dbio<> ... schemaObj))
 
-(let [person-model (. schemaObj get ::Person)
+(let [person-model (find-model schemaObj ::Person)
 
       ;create a person object
       joe (-> (dbpojo<> person-model)
-              (dbSetFlds*
-                {:first_name "Joe" :last_name  "Blogg" :age 21}))
+              (db-set-flds*
+                :first_name "Joe" :last_name  "Blogg" :age 21))
 
       ;insert into db returning a fresh object
       ;joe2 is the persisted version, has primary field set
-      joe2 (-> (. db simpleSQLr) (.insert joe))
+      joe2 (-> (db-simple db) (add-obj joe))
 
       ;update joe
-      joe3 (dbSetFld joe2 :sex "male")
-      joe4 (-> (. db simpleSQLr) (.update joe3))
+      joe3 (db-set-fld joe2 :sex "male")
+      joe4 (-> (db-simple db) (mod-obj joe3))
 
       ;query for joe
-      joe5 (-> (. db simpleSQLr)
-               (.findOne ::Person {:first_name "Joe" :last_name "Blogg"}))
+      joe5 (-> (db-simple db)
+               (find-one ::Person {:first_name "Joe" :last_name "Blogg"}))
       ;got joe from db
       ;delete joe
-      _ (-> (. db simpleSQLr) (.delete joe5))]
+      _ (-> (db-simple db) (del-obj joe5))]
   (println "no more joe"))
 
 ```
 
 ## Relations
 
-`horde` supports the 3 classic relations:
+`hoard` supports the 3 classic relations:
 
 + many to many
   + e.g. a teacher can have many students and a student can have many teachers.
@@ -173,31 +173,31 @@ To upload the ddl to the underlying database, use (uploadDdl ...)
 (def schemaObj (dbschema<> (dbmodel<> ::Teacher ...)
                            (dbmodel<> ::Student ...)
                            (dbjoined<> ::t-and-s ::Teacher ::Student)))
-(def db (dbopen<> ... schemaObj))
+(def db (dbio<> ... schemaObj))
 
-  ;let's assume we have some teachers T1, T2, T3 and 
+  ;let's assume we have some teachers T1, T2, T3 and
   ;students S7, S8, S9 in the database
 
-  (let [sql (. db compositeSQL)
-        sim (. db simpleSQL)]
+  (let [sql (db-composite db)
+        sim (db-simple db)]
 
-    (->> (fn [tx]
-           (dbSetM2M {:joined ::t-and-s :with tx} T1 S7)
-           (dbSetM2M {:joined ::t-and-s :with tx} S8 T1)
-           (dbSetM2M {:joined ::t-and-s :with tx} S8 T2)
-         (.execSQL sql ))
+    (transact! sql 
+               (fn [tx]
+                 (db-set-m2m {:joined ::t-and-s :with tx} T1 S7)
+                 (db-set-m2m {:joined ::t-and-s :with tx} S8 T1)
+                 (db-set-m2m {:joined ::t-and-s :with tx} S8 T2)))
 
     ;let's check the db
     ;returns 2 teachers (T1, T2)
-    (dbGetM2M {:joined ::t-and-s :with sim} S8)
+    (db-get-m2m {:joined ::t-and-s :with sim} S8)
     ;returns 2 students (S7, S8)
-    (dbGetM2M {:joined ::t-and-s :with sim} T1)
+    (db-get-m2m {:joined ::t-and-s :with sim} T1)
 
     ;school closes, clear all
-    (->> (fn [tx]
-           (dbClrM2M {:joined ::t-and-s :with tx} T1)
-           (dbClrM2M {:joined ::t-and-s :with tx} S8)
-         (.execSQL sql )))
+    (transact! sql 
+               (fn [tx]
+                 (db-clr-m2m {:joined ::t-and-s :with tx} T1)
+                 (db-clr-m2m {:joined ::t-and-s :with tx} S8)))
 
 ```
 
@@ -205,32 +205,30 @@ To upload the ddl to the underlying database, use (uploadDdl ...)
 
 ```clojure
 (def schemaObj (dbschema<> ...))
-(def db (dbopen<> ... schemaObj))
+(def db (dbio<> ... schemaObj))
 
   ;following previous examples,
   ;we have joe in the database
 
-  (let [sql (. db compositeSQL)]
+  (let [sql (db-composite db)]
 
-    (->> (fn [tx]
-           (dbSetO2M 
-             {:as :addrs :with tx}
-             joe
-             (.insert tx (create-a-address-object)))
-           (dbSetO2M 
-             {:as :addrs :with tx}
-             joe
-             (.insert tx (create-another-address-object))))
-         (.execSQL sql ))
+    (transact! sql 
+               (fn [tx]
+                 (db-set-o2m {:as :addrs :with tx}
+                             joe
+                             (add-obj tx (create-a-address-object)))
+                 (db-set-o2m {:as :addrs :with tx}
+                             joe
+                             (add-obj tx (create-another-address-object)))))
 
     ;let's check the db
     ;returns all the addresses
-    (dbGetO2M {:as :addrs :with sql} joe)
+    (db-get-o2m {:as :addrs :with sql} joe)
 
     ;joe moves and clears all addresses
-    (->> (fn [tx]
-           (dbClrO2M {:as :addrs :with tx} joe))
-         (.execSQL sql )))
+    (transact! sql 
+               (fn [tx]
+                 (db-clr-o2m {:as :addrs :with tx} joe)))
 
 ```
 
@@ -238,29 +236,29 @@ To upload the ddl to the underlying database, use (uploadDdl ...)
 
 ```clojure
 (def schemaObj (dbschema<> ...))
-(def db (dbopen<> ... schemaObj))
+(def db (dbio<> ... schemaObj))
 
   ;following previous examples,
   ;we have joe and another person mary in the db
-  (let [sql (. db compositeSQL)]
+  (let [sql (db-composite db)]
 
     ;joe and mary gets married
-    (->> (fn [tx]
-           (dbSetO2O {:as :spouse :with tx} joe mary)
-           (dbSetO2O {:as :spouse :with tx} mary joe))
-         (.execSQL sql ))
+    (transact! sql 
+               (fn [tx]
+                 (db-set-o2o {:as :spouse :with tx} joe mary)
+                 (db-set-o2o {:as :spouse :with tx} mary joe)))
 
     ;let's check the db
     ;returns joe
-    (dbGetO2O {:as :spouse :with sql} mary)
+    (db-get-o2o {:as :spouse :with sql} mary)
     ;return mary
-    (dbGetO2O {:as :spouse :with sql} joe)
+    (db-get-o2o {:as :spouse :with sql} joe)
 
     ;joe and mary separates
-    (->> (fn [tx]
-           (dbClrO2O {:as :spouse :with tx} joe)
-           (dbClrO2O {:as :spouse :with tx} mary))
-         (.execSQL sql ))
+    (transact! sql 
+               (fn [tx]
+                 (db-clr-o2o {:as :spouse :with tx} joe)
+                 (db-clr-o2o {:as :spouse :with tx} mary)))
 
 ```
 
@@ -277,9 +275,9 @@ Distributed under the Eclipse Public License either version 1.0 or (at
 your option) any later version.
 
 <!--- links (repos) -->
-[CHANGELOG]: https://github.com/llnek/horde/releases
-[GitHub issues page]: https://github.com/llnek/horde/issues
-[GitHub contributors page]: https://github.com/llnek/horde/graphs/contributors
+[CHANGELOG]: https://github.com/llnek/hoard/releases
+[GitHub issues page]: https://github.com/llnek/hoard/issues
+[GitHub contributors page]: https://github.com/llnek/hoard/graphs/contributors
 
 
 

@@ -1,12 +1,12 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defproject io.czlab/horde "1.1.0"
+(defproject io.czlab/hoard "1.1.0"
 
   :license {:name "Eclipse Public License"
             :url "http://www.eclipse.org/legal/epl-v10.html"}
 
   :description "SQL orm"
-  :url "https://github.com/llnek/horde"
+  :url "https://github.com/llnek/hoard"
 
   :dependencies [[org.postgresql/postgresql "42.2.6"]
                  [com.zaxxer/HikariCP "3.3.1"]
@@ -21,16 +21,7 @@
                         [[org.clojure/clojure "1.10.1" :scope "provided"]]}
              :uberjar {:aot :all}}
 
-  :test-selectors {:core :test-core
-                   :str :test-str
-                   :misc :test-misc
-                   :psub :test-psub
-                   :proc :test-proc
-                   :ini :test-ini
-                   :io :test-io
-                   :meta :test-meta
-                   :dates :test-dates
-                   :util :test-util}
+  :test-selectors {:core :test-core}
 
   :global-vars {*warn-on-reflection* true}
   :target-path "out/%s"

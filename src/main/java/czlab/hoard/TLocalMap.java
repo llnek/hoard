@@ -8,7 +8,7 @@
  * You must not remove this notice, or any other, from this software.
  */
 
-package czlab.horde;
+package czlab.hoard;
 
 import java.util.HashMap;
 import java.util.Map;
