@@ -26,7 +26,7 @@
 ;;(set! *warn-on-reflection* true)
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defn- gsqlid
-  "Format SQL identifier"
+  "Format SQL identifier."
   {:tag String}
   ([idstr] (gsqlid idstr nil))
   ([idstr quote?]
@@ -37,7 +37,7 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defn- gtable
-  "Get the table name (quoted)"
+  "Get the table name (quoted)."
   {:tag String}
   ([model] (gtable model nil))
   ([model quote?]
@@ -45,7 +45,7 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defn- gcolumn
-  "Get the column name (quoted)"
+  "Get the column name (quoted)."
   {:tag String}
   ([field] (gcolumn field nil))
   ([field quote?]
@@ -58,10 +58,10 @@
 (defn- gen-col-def
   ^String [vt db typedef field]
   (let [dft (c/_1 (:dft field))]
-    (str (c/rvtbl vt :getPad db)
-         (c/rvtbl vt :genCol db field)
+    (str (c/vt-run?? vt :getPad [db])
+         (c/vt-run?? vt :genCol [db field])
          " " typedef " "
-         (c/rvtbl vt :nullClause db (:null? field))
+         (c/vt-run?? vt :nullClause [db (:null? field)])
          (if (s/hgl? dft) (str " default " dft) ""))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -74,14 +74,14 @@
         b
         (s/sbf+ b
                 "create index "
-                (c/rvtbl vt :genIndex db model (name k))
+                (c/vt-run?? vt :genIndex [db model (name k)])
                 " on "
-                (c/rvtbl vt :genTable db model)
+                (c/vt-run?? vt :genTable [db model])
                 " ("
-                (->> (map #(c/rvtbl vt :genCol db (fields %)) v)
+                (->> (map #(c/vt-run?? vt :genCol [db (fields %)]) v)
                      (cs/join "," ))
                 ") "
-                (c/rvtbl vt :genExec db) "\n\n")))
+                (c/vt-run?? vt :genExec [db]) "\n\n")))
     (:indexes model)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -93,20 +93,20 @@
         b
         (s/sbf-join b
                     ",\n"
-                    (str (c/rvtbl vt :getPad db)
+                    (str (c/vt-run?? vt :getPad [db])
                          "unique("
                          (cs/join ","
-                                  (map #(c/rvtbl vt
-                                                 :genCol db (fields %)) v))
+                                  (map #(c/vt-run?? vt
+                                                    :genCol [db (fields %)]) v))
                          ")"))))
     (:uniques model)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defn- gen-pkey
   ^String [vt db model pks]
-  (str (c/rvtbl vt :getPad db)
+  (str (c/vt-run?? vt :getPad [db])
        "primary key("
-       (cs/join "," (map #(c/rvtbl vt :genCol db %) pks)) ")"))
+       (cs/join "," (map #(c/vt-run?? vt :genCol [db %]) pks)) ")"))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defn- gen-body
@@ -118,21 +118,21 @@
           (fn [p [k fld]]
             (s/sbf-join bf ",\n"
               (case (:domain fld)
-                :Timestamp (c/rvtbl vt :genTimestamp db fld)
-                :Date (c/rvtbl vt :genDate db fld)
-                :Calendar (c/rvtbl vt :genCaldr db fld)
-                :Boolean (c/rvtbl vt :genBool db fld)
+                :Timestamp (c/vt-run?? vt :genTimestamp [db fld])
+                :Date (c/vt-run?? vt :genDate [db fld])
+                :Calendar (c/vt-run?? vt :genCaldr [db fld])
+                :Boolean (c/vt-run?? vt :genBool [db fld])
                 :Int (if (:auto? fld)
-                       (c/rvtbl vt :genAutoInteger db model fld)
-                       (c/rvtbl vt :genInteger db fld))
+                       (c/vt-run?? vt :genAutoInteger [db model fld])
+                       (c/vt-run?? vt :genInteger [db fld]))
                 :Long (if (:auto? fld)
-                        (c/rvtbl vt :genAutoLong db model fld)
-                        (c/rvtbl vt :genLong db fld))
-                :Double (c/rvtbl vt :genDouble db fld)
-                :Float (c/rvtbl vt :genFloat db fld)
+                        (c/vt-run?? vt :genAutoLong [db model fld])
+                        (c/vt-run?? vt :genLong [db fld]))
+                :Double (c/vt-run?? vt :genDouble [db fld])
+                :Float (c/vt-run?? vt :genFloat [db fld])
                 (:Password :String)
-                (c/rvtbl vt :genString db fld)
-                :Bytes (c/rvtbl vt :genBytes db fld)
+                (c/vt-run?? vt :genString [db fld])
+                :Bytes (c/vt-run?? vt :genBytes [db fld])
                 (h/dberr! "Unsupported field: %s." fld)))
             (if (not= pkey (:id fld))
               p
@@ -152,36 +152,36 @@
 (defn- gen-one-table
   ^String [vt db schema model]
   (let [d (gen-body vt db schema model)
-        b (c/rvtbl vt :genBegin db model)
-        e (c/rvtbl vt :genEnd db)]
+        b (c/vt-run?? vt :genBegin [db model])
+        e (c/vt-run?? vt :genEnd [db])]
     (str b
          (c/_1 d) e (c/_E d)
-         (c/rvtbl vt :genGrant db model))))
+         (c/vt-run?? vt :genGrant [db model]))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (def ^:private ddl-base
   (c/vtbl*
-  :genExec #(str ";\n" (c/rvtbl %1 :genSep %2))
+  :genExec #(str ";\n" (c/vt-run?? %1 :genSep [%2]))
 
   :getNotNull "not null"
   :getNull "null"
 
   :nullClause #(if %3
-                 (c/rvtbl %1 :getNull %2)
-                 (c/rvtbl %1 :getNotNull %2))
+                 (c/vt-run?? %1 :getNull [%2])
+                 (c/vt-run?? %1 :getNotNull [%2]))
 
   :genSep (c/fn_2
             (if (:use-sep? h/*ddl-cfg*) h/ddl-sep ""))
 
   :genDrop
   #(str "drop table "
-        (gtable %3) (c/rvtbl %1 :genExec %2) "\n\n")
+        (gtable %3) (c/vt-run?? %1 :genExec [%2]) "\n\n")
 
   :genBegin
   #(str "create table " (gtable %3) " (\n")
 
   :genEnd
-  #(str "\n) " (c/rvtbl %1 :genExec %2) "\n\n")
+  #(str "\n) " (c/vt-run?? %1 :genExec [%2]) "\n\n")
 
   :genEndSQL ""
   :genGrant ""
@@ -197,42 +197,42 @@
   ;; data types
 
   :genBytes
-  #(gen-col-def %1 %2 (c/rvtbl %1 :getBlobKwd %2) %3)
+  #(gen-col-def %1 %2 (c/vt-run?? %1 :getBlobKwd [%2]) %3)
 
   :genString
   #(gen-col-def %1 %2
-              (str (c/rvtbl %1 :getStringKwd %2)
+              (str (c/vt-run?? %1 :getStringKwd [%2])
                    "(" (:size %3) ")") %3)
 
   :genInteger
-  #(gen-col-def %1 %2 (c/rvtbl %1 :getIntKwd %2) %3)
+  #(gen-col-def %1 %2 (c/vt-run?? %1 :getIntKwd [%2]) %3)
 
   :genAutoInteger ""
 
   :genDouble
-  #(gen-col-def %1 %2 (c/rvtbl %1 :getDoubleKwd %2) %3)
+  #(gen-col-def %1 %2 (c/vt-run?? %1 :getDoubleKwd [%2]) %3)
 
   :genFloat
-  #(gen-col-def %1 %2 (c/rvtbl %1 :getFloatKwd %2) %3)
+  #(gen-col-def %1 %2 (c/vt-run?? %1 :getFloatKwd [%2]) %3)
 
   :genLong
-  #(gen-col-def %1 %2 (c/rvtbl %1 :getLongKwd %2) %3)
+  #(gen-col-def %1 %2 (c/vt-run?? %1 :getLongKwd [%2]) %3)
 
   :genAutoLong ""
 
   :getTSDefault "CURRENT_TIMESTAMP"
 
   :genTimestamp
-  #(gen-col-def %1 %2 (c/rvtbl %1 :getTSKwd %2) %3)
+  #(gen-col-def %1 %2 (c/vt-run?? %1 :getTSKwd [%2]) %3)
 
   :genDate
-  #(gen-col-def %1 %2 (c/rvtbl %1 :getDateKwd %2) %3)
+  #(gen-col-def %1 %2 (c/vt-run?? %1 :getDateKwd [%2]) %3)
 
   :genCaldr
-  #(c/rvtbl %1 :genTimestamp %2 %3)
+  #(c/vt-run?? %1 :genTimestamp [%2 %3])
 
   :genBool
-  #(gen-col-def %1 %2 (c/rvtbl %1 :getBoolKwd %2) %3)
+  #(gen-col-def %1 %2 (c/vt-run?? %1 :getBoolKwd [%2]) %3)
 
   ;; keywords
   :getDoubleKwd "double precision"
@@ -267,19 +267,19 @@
 
   :genAutoInteger
   (fn [vt db model field]
-    (str (c/rvtbl vt :getPad db)
-         (c/rvtbl vt :genCol db field)
+    (str (c/vt-run?? vt :getPad [db])
+         (c/vt-run?? vt :genCol [db field])
          " "
-         (c/rvtbl vt :getIntKwd db)
+         (c/vt-run?? vt :getIntKwd [db])
          (if (:pkey field)
            " identity(1) " " auto_increment(1) ")))
 
   :genAutoLong
   (fn [vt db model field]
-    (str (c/rvtbl vt :getPad db)
-         (c/rvtbl vt :genCol db field)
+    (str (c/vt-run?? vt :getPad [db])
+         (c/vt-run?? vt :genCol [db field])
          " "
-         (c/rvtbl vt :getLongKwd db)
+         (c/vt-run?? vt :getLongKwd [db])
          (if (:pkey field)
            " identity(1) " " auto_increment(1) ")))
   :genBegin
@@ -288,7 +288,7 @@
   #(str "drop table "
         (gtable %3)
         " if exists cascade"
-        (c/rvtbl %1 :genExec %2) "\n\n")))
+        (c/vt-run?? %1 :genExec [%2]) "\n\n")))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defn h2db
@@ -341,20 +341,20 @@
   :getDoubleKwd "double"
   :getFloatKwd "double"
   :genEnd #(str "\n) type=InnoDB"
-                (c/rvtbl %1 :genExec %2) "\n\n")
-  :genAutoInteger #(str (c/rvtbl %1 :getPad %2)
-                        (c/rvtbl %1 :genCol %2 %3)
+                (c/vt-run?? %1 :genExec [%2]) "\n\n")
+  :genAutoInteger #(str (c/vt-run?? %1 :getPad [%2])
+                        (c/vt-run?? %1 :genCol [%2 %3])
                         " "
-                        (c/rvtbl %1 :getIntKwd %2)
+                        (c/vt-run?? %1 :getIntKwd [%2])
                         " not null auto_increment")
-  :genAutoLong #(str (c/rvtbl %1 :getPad %2)
-                     (c/rvtbl %1 :genCol %2 %3)
+  :genAutoLong #(str (c/vt-run?? %1 :getPad [%2])
+                     (c/vt-run?? %1 :genCol [%2 %3])
                      " "
-                     (c/rvtbl %1 :getLongKwd %2)
+                     (c/vt-run?? %1 :getLongKwd [%2])
                      " not null auto_increment")
   :genDrop #(str "drop table if exists "
                  (gtable %3)
-                 (c/rvtbl %1 :genExec %2) "\n\n")))
+                 (c/vt-run?? %1 :genExec [%2]) "\n\n")))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;PostgreSQL
@@ -370,19 +370,19 @@
   :getBlobKwd "bytea"
   :getDoubleKwd "double precision"
   :getFloatKwd "real"
-  :genCaldr #(c/rvtbl %1 :genTimestamp %2 %3)
-  :genAutoInteger #(str (c/rvtbl %1 :getPad %2)
-                        (c/rvtbl %1 :genCol %2 %3)
+  :genCaldr #(c/vt-run?? %1 :genTimestamp [%2 %3])
+  :genAutoInteger #(str (c/vt-run?? %1 :getPad [%2])
+                        (c/vt-run?? %1 :genCol [%2 %3])
                         " serial"
                         " not null auto_increment")
-  :genAutoLong #(str (c/rvtbl %1 :getPad %2)
-                     (c/rvtbl %1 :genCol %2 %3)
+  :genAutoLong #(str (c/vt-run?? %1 :getPad [%2])
+                     (c/vt-run?? %1 :genCol [%2 %3])
                      " bigserial"
                      " not null auto_increment")
   :genDrop #(str "drop table if exists "
                  (gtable %3)
                  " cascade "
-                 (c/rvtbl %1 :genExec %2) "\n\n")))
+                 (c/vt-run?? %1 :genExec [%2]) "\n\n")))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; SQLServer
@@ -396,17 +396,17 @@
   :getFloatKwd "float(53)"
   :getBlobKwd "image"
   :getTSKwd "datetime"
-  :genAutoInteger #(str (c/rvtbl %1 :getPad %2)
-                        (c/rvtbl %1 :genCol %2 %3)
+  :genAutoInteger #(str (c/vt-run?? %1 :getPad [%2])
+                        (c/vt-run?? %1 :genCol [%2 %3])
                         " "
-                        (c/rvtbl %1 :getIntKwd %2)
+                        (c/vt-run?? %1 :getIntKwd [%2])
                         (if (:pkey %3)
                           " identity (1,1) "
                           " autoincrement "))
-  :genAutoLong #(str (c/rvtbl %1 :getPad %2)
-                     (c/rvtbl %1 :genCol %2 %3)
+  :genAutoLong #(str (c/vt-run?? %1 :getPad [%2])
+                     (c/vt-run?? %1 :genCol [%2 %3])
                      " "
-                     (c/rvtbl %1 :getLongKwd %2)
+                     (c/vt-run?? %1 :getLongKwd [%2])
                      (if (:pkey %3)
                        " identity (1,1) "
                        " autoincrement "))
@@ -415,7 +415,7 @@
                  (gtable %3 false)
                  "')) drop table "
                  (gtable %3)
-                 (c/rvtbl %1 :genExec %2) "\n\n")))
+                 (c/vt-run?? %1 :genExec [%2]) "\n\n")))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;Oracle
@@ -427,7 +427,7 @@
     (str "create sequence "
          s
          " start with 1 increment by 1"
-         (c/rvtbl vt :genExec db)
+         (c/vt-run?? vt :genExec [db])
          "\n\n"
          "create or replace trigger "
          t
@@ -442,7 +442,7 @@
          s
          ".nextval into :new."
          (gcolumn fd) " from dual;\n"
-         "end" (c/rvtbl vt :genExec db) "\n\n")))
+         "end" (c/vt-run?? vt :genExec [db]) "\n\n")))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defn- maybe-track-fields
@@ -460,8 +460,8 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defn- auto-xxx
   [vt db model fld]
-  (str (c/rvtbl vt :getPad db)
-       (c/rvtbl vt :genCol db fld)
+  (str (c/vt-run?? vt :getPad [db])
+       (c/vt-run?? vt :genCol [db fld])
        " "
        "number generated by default on null as identity."))
 
@@ -477,10 +477,10 @@
   :getDoubleKwd "binary_double"
   :getFloatKwd "binary_float"
   :genAutoInteger #(if (maybe-track-fields %3 %4)
-                     (c/rvtbl %1 :genInteger %2 %4)
-                     (c/rvtbl %1 :autoXXX %2 %3 %4))
+                     (c/vt-run?? %1 :genInteger [%2 %4])
+                     (c/vt-run?? %1 :autoXXX [%2 %3 %4]))
   :genAutoLong #(if (maybe-track-fields %3 %4)
-                  (c/rvtbl %1 :genLong %2 %4)
+                  (c/vt-run?? %1 :genLong [%2 %4])
                   (auto-xxx %2 %3 %4))
   :genEndSQL
   #(if (or (= "12c+" (h/*ddl-cfg* :db-version))
@@ -497,7 +497,7 @@
   :genDrop #(str "drop table "
                  (gtable %3)
                  " cascade constraints purge"
-                 (c/rvtbl %1 :genExec %2) "\n\n")))
+                 (c/vt-run?? %1 :genExec [%2]) "\n\n")))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defn- find-vtbl [dbID]
@@ -529,10 +529,10 @@
                :let [tbl (:table model)]
                :when (and (not (:abstract? model))
                           (s/hgl? tbl))]
-         (l/debug "model id: %s, table: %s" (name id) tbl)
-         (s/sbf+ drops (c/rvtbl vt :genDrop dbID model))
+         (l/debug "model id: %s, table: %s." (name id) tbl)
+         (s/sbf+ drops (c/vt-run?? vt :genDrop [dbID model]))
          (s/sbf+ body (gen-one-table vt dbID schema model)))
-       (str drops body (c/rvtbl vt :genEndSQL dbID))))))
+       (str drops body (c/vt-run?? vt :genEndSQL [dbID]))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;EOF

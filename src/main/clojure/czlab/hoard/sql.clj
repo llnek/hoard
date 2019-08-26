@@ -18,9 +18,9 @@
             [czlab.basal.log :as l]
             [clojure.java.io :as io]
             [clojure.string :as cs]
-            [czlab.hoard.core :as h]
             [czlab.basal.core :as c]
-            [czlab.basal.str :as s])
+            [czlab.basal.str :as s]
+            [czlab.hoard.core :as h :refer [SQLr]])
 
   (:import [java.util Calendar TimeZone GregorianCalendar]
            [java.math BigDecimal BigInteger]
@@ -56,8 +56,8 @@
     [(s/sreduce<>
        #(let [[k v] %2
               fd (fields k)
-              c (or (:column fd)
-                    (s/sname k))]
+              c (s/stror (:column fd)
+                         (s/sname k))]
           (s/sbf-join %1
                       " and "
                       (str (h/fmt-sqlid vendor c)
@@ -69,14 +69,14 @@
   "Read column value, handling blobs."
   [pos ^ResultSet rset]
   (let [obj (.getObject rset (int pos))
-        in (condp instance? obj
+        in (c/condp?? instance? obj
              InputStream obj
              Blob (.getBinaryStream ^Blob obj)
              Reader obj
-             Clob (.getCharacterStream ^Clob obj) nil)]
+             Clob (.getCharacterStream ^Clob obj))]
     (condp instance? in
-      Reader (c/wo* [^Reader r in] (i/slurp-chars r))
-      InputStream (c/wo* [^InputStream p in] (i/slurp-bytes p)) obj)))
+      Reader (c/wo* [^Reader r in] (i/slurpc r))
+      InputStream (c/wo* [^InputStream p in] (i/slurpb p)) obj)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defn- read-one-col
@@ -111,14 +111,15 @@
 (defn- row->obj
   "Convert a jdbc row into object."
   [finj ^ResultSet rs ^ResultSetMetaData rsmeta]
-  (c/preduce<map>
-    #(let [pos (int %2)
-           ct (.getColumnType rsmeta pos)]
-       (finj %1
-             (.getColumnName rsmeta pos)
-             ct
-             (read-one-col ct pos rs)))
-    (range 1 (+ 1 (.getColumnCount rsmeta)))))
+  (merge (h/dbpojo<>)
+         (c/preduce<map>
+           #(let [pos (int %2)
+                  ct (.getColumnType rsmeta pos)]
+              (finj %1
+                    (.getColumnName rsmeta pos)
+                    ct
+                    (read-one-col ct pos rs)))
+           (range 1 (+ 1 (.getColumnCount rsmeta))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defmacro ^:private insert?
@@ -197,7 +198,7 @@
             (.prepareStatement
               conn sql Statement/RETURN_GENERATED_KEYS)
             (.prepareStatement conn sql))]
-      (l/debug "SQLStmt: %s" sql)
+      (l/debug "SQLStmt: %s." sql)
       (doseq [n (range 0 (count params))]
         (set-bind-var ps (+ 1 n) (nth params n))))))
 
@@ -271,6 +272,8 @@
                              "," (if (nil? v) "null" "?"))
                  (if v (conj! %1 v) %1))
                %1)) obj)]
+    (l/debug "obj = %s" (i/fmt->edn vendor))
+    (l/debug "s1= %s\ns2=%s\n" sb1 sb2)
     [(str sb1) (str sb2) ps]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -373,11 +376,12 @@
                     pms
                     {:pkey (h/dbcol pkey mcz)})]
           (if (not-empty out)
-            (l/debug "Exec-with-out %s" out)
+            (l/debug "Exec-with-out %s." out)
             (h/dberr! "rowid must be returned."))
           (let [n (:1 out)]
             (if-not (number? n)
               (h/dberr! "rowid must be a Long."))
+            (l/debug "PKEY ==== %s, n= %s" pkey n)
             (assoc obj pkey n)))))
     (h/dberr! "Unknown model for: %s." obj)))
 
@@ -402,82 +406,94 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defn- do-extra-sql ^String [sql extra] sql)
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(defrecord SQLrObj []
-  czlab.hoard.core.SQLr
-  (find-some [me typeid filters]
-    (.find-some me typeid filters {}))
-  (find-all [me typeid extra]
-    (.find-some me typeid {} extra))
-  (find-all [me typeid]
-    (.find-all me typeid {}))
-  (find-one [me typeid filters]
-    (let [rs (.find-some me typeid filters)]
-      (if (not-empty rs) (c/_1 rs))))
-  (find-some [me typeid filters extraSQL]
-    (let [{:keys [vendor models runc]} me]
-      (if-some [{:keys [table] :as mcz}
-                (models typeid)]
-        (runc
-          #(let [s (str "select * from "
-                        (h/fmt-sqlid vendor table))
-                 [wc pms]
-                 (sql-filter-clause vendor mcz filters)]
-             (do-query+
-               vendor
-               %1
-               (do-extra-sql
-                 (if (s/hgl? wc)
-                   (str s " where " wc) s)
-                 extraSQL)
-               pms mcz)))
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(defrecord SQLrImpl []
+  SQLr
+  (sq-find-some [_ typeid filters]
+    (h/sq-find-some _ typeid filters {}))
+  (sq-find-all [_ typeid extra]
+    (h/sq-find-some _ typeid {} extra))
+  (sq-find-all [_ typeid]
+    (h/sq-find-all _ typeid {}))
+  (sq-find-one [_ typeid filters]
+    (c/if-some+ [rs (h/sq-find-some _ typeid filters)]
+                (first rs)))
+
+  (sq-find-some [me typeid filters extraSQL]
+    (let [{:keys [runc models vendor]} me]
+      (if-some [{:keys [table] :as mcz} (models typeid)]
+        (runc #(let [s (str "select * from "
+                            (h/fmt-sqlid vendor table))
+                     [wc pms]
+                     (sql-filter-clause vendor mcz filters)]
+                 (do-query+ vendor
+                            %1
+                            (do-extra-sql
+                              (if (s/hgl? wc)
+                                (str s " where " wc) s)
+                              extraSQL)
+                            pms mcz)))
         (h/dberr! "Unknown model: %s." typeid))))
-  (fmt-id [me s] (h/fmt-sqlid (:vendor me) s))
-  (mod-obj [me obj]
-    (let [{:keys [vendor runc]} me]
+
+  (sq-fmt-id [me s] (h/fmt-sqlid (:vendor me) s))
+
+  (sq-mod-obj [me obj]
+    (let [{:keys [runc vendor]} me]
       (runc #(do-update vendor %1 obj))))
-  (del-obj [me obj]
-    (let [{:keys [vendor runc]} me]
+
+  (sq-del-obj [me obj]
+    (let [{:keys [runc vendor]} me]
       (runc #(do-delete vendor %1 obj))))
-  (add-obj [me obj]
-    (let [{:keys [vendor runc]} me]
+
+  (sq-add-obj [me obj]
+    (let [{:keys [runc vendor]} me]
       (runc #(do-insert vendor %1 obj))))
-  (select-sql [me typeid sql params]
+
+  (sq-select-sql [me typeid sql params]
     (let [{:keys [runc models vendor]} me]
       (if-some [m (models typeid)]
         (runc #(do-query+ vendor %1 sql params m))
         (h/dberr! "Unknown model: %s." typeid))))
-  (select-sql [me sql params]
-    (let [{:keys [vendor runc]} me]
+
+  (sq-select-sql [me sql params]
+    (let [{:keys [runc vendor]} me]
       (runc #(do-query vendor %1 sql params))))
-  (exec-with-output [me sql pms]
-    (let [{:keys [schema vendor runc]} me
-          {{:keys [col-rowid]} :config} @schema]
+
+  (sq-exec-with-output [me sql pms]
+    (let [ {:keys [runc ____meta models vendor]} me
+          {:keys [col-rowid]} ____meta]
       (runc #(do-exec+ vendor
                        %1
                        sql pms {:pkey col-rowid}))))
-  (exec-sql [me sql pms]
-    (let [{:keys [vendor runc]} me]
+
+  (sq-exec-sql [me sql pms]
+    (let [{:keys [runc vendor]} me]
       (runc #(do-exec vendor %1 sql pms))))
-  (count-objs [me typeid]
-    (let [{:keys [models vendor runc]} me]
+
+  (sq-count-objs [me typeid]
+    (let [{:keys [models runc vendor]} me]
       (if-some [m (models typeid)]
         (runc #(do-count vendor %1 m))
         (h/dberr! "Unknown model: %s." typeid))))
-  (purge-objs [me typeid]
-    (let [{:keys [models vendor runc]} me]
+
+  (sq-purge-objs [me typeid]
+    (let [{:keys [models runc vendor]} me]
       (if-some [m (models typeid)]
         (runc #(do-purge vendor %1 m))
         (h/dberr! "Unknown model: %s." typeid)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(defn sqlr<> ""
-  [db runc]
+(defn sqlr<>
+  "" [db runc]
   {:pre [(fn? runc)]}
-  (let [{:keys [schema vendor]} db]
-    (assoc (SQLrObj.)
-           :models (:models @schema)
-           :schema schema :vendor vendor :runc runc)))
+  (let [{:keys [schema vendor]} db
+        {:keys [models ____meta]} @schema]
+    (c/object<> SQLrImpl
+                :____meta ____meta
+                :vendor vendor
+                :runc runc
+                :models models
+                :schema schema)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;EOF

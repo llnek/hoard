@@ -14,8 +14,7 @@
   (:require [czlab.hoard.sql :as q]
             [czlab.basal.log :as l]
             [czlab.basal.core :as c]
-            [czlab.hoard.core
-             :as h :refer [fmt-sqlid]])
+            [czlab.hoard.core :as h])
 
   (:import [java.sql
             Connection
@@ -24,20 +23,13 @@
            [czlab.hoard TLocalMap]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(defprotocol DbApi
-  (db-composite [_] "Transaction enabled session")
+(defprotocol DbObj ""
   (db-simple [_] "Auto commit session")
+  (db-open [_] "Jdbc connection")
   (db-finz [_])
-  (db-open [_] "Jdbc connection"))
+  (db-composite [_] "Transaction enabled session"))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(defrecord DbObj []
-  DbApi
-  (db-composite [me] (:co me))
-  (db-simple [me] (:si me))
-  (db-finz [me] (c/if-fn? [f (:finz me)] (f me)))
-  (db-open [me] (c/if-fn? [f (:open me)] (f me))))
-
 ;;The calculation of pool size in order to avoid deadlock is a
 ;;fairly simple resource allocation formula:
 ;;pool size = Tn x (Cm - 1) + 1
@@ -55,24 +47,19 @@
                          :poolName "" })
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(defmethod fmt-sqlid DbObj
-  ([db idstr] (fmt-sqlid db idstr nil))
-  ([db idstr quote?]
-   (fmt-sqlid (:vendor db) idstr quote?)))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defn- register-jdbc-tl
   "Add a thread-local db pool."
-  [jdbc options]
-  (let [^Map c (.get (TLocalMap/cache))
-        hc (:id jdbc)]
+  [spec options]
+  (let [hc (:id spec)
+        ^Map c (.get (TLocalMap/cache))]
     (when-not (.containsKey c hc)
-      (l/debug "No db-pool in thread-local, creating one.")
-      (->> (merge pool-cfg options) (h/dbpool<> jdbc) (.put c hc)))
+      (l/debug "no db-pool in thread-local, creating one.")
+      (->> (merge pool-cfg options) (h/dbpool<> spec) (.put c hc)))
     (.get c hc)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(defn- gconn "Connect to db." ^Connection [db cfg]
+(defn- gconn
+  "Connect to db." ^Connection [db cfg]
   (let [{:keys [isolation auto?]} cfg
         ^Connection c ((:open db) db)
         how (or isolation
@@ -80,12 +67,6 @@
     (doto c
       (.setAutoCommit (c/!false? auto?))
       (.setTransactionIsolation (int how)))))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(defn- sim-sqlr [db]
-  (let [cfg {:isolation
-             Connection/TRANSACTION_SERIALIZABLE}]
-    (q/sqlr<> db #(c/wo* [c2 (gconn db cfg)] (% c2)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defmacro ^:private undo
@@ -96,27 +77,39 @@
   [c] `(.commit ~(with-meta c {:tag 'Connection})))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(defrecord TransactableObj []
-  czlab.hoard.core.Transactable
-  (transact! [me cb cfg]
-    (let [{:keys [db]} me]
+(defn- tx-sqlr<> [db]
+  (reify
+    czlab.hoard.core.Transactable
+    (tx-transact! [_ cb cfg]
       (c/wo* [c (gconn db (assoc cfg :auto? false))]
-        (try (let [rc (cb (q/sqlr<> db #(% c)))]
-               (commit c)
-               rc)
+        (try (c/do-with [rc (cb (q/sqlr<> db #(% c)))]
+                        (commit c))
              (catch Throwable _
-               (undo c) (l/warn _ "") (throw _))))))
-  (transact! [me cb]
-    (.transact! me cb nil)))
+               (undo c)
+               (throw _)))))
+    (tx-transact! [_ cb]
+      (h/tx-transact! _ cb nil))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(defn- tx-sqlr [db] (assoc (TransactableObj.) :db db))
+(defn- sim-sqlr<> [db]
+  (let [cfg {:isolation
+             Connection/TRANSACTION_SERIALIZABLE}]
+    (q/sqlr<> db #(c/wo* [c2 (gconn db cfg)] (% c2)))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(defrecord DbObjImpl []
+  DbObj
+  (db-composite [me] (:co me))
+  (db-simple [me] (:si me))
+  (db-finz [me] (c/if-fn? [f (:finz me)] (f me)))
+  (db-open [me] (c/if-fn? [f (:open me)] (f me))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(defmacro ^:private dbobj<> [m]
-  `(let [db# ~m]
-     (merge (DbObj.)
-            (assoc db# :co (tx-sqlr db#) :si (sim-sqlr db#)))))
+(defn- dbobj<> [dbm]
+  (c/object<> DbObjImpl
+              (assoc dbm
+                     :co (tx-sqlr<> dbm)
+                     :si (sim-sqlr<> dbm))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defn dbio<>
@@ -140,8 +133,8 @@
                :vendor vendor
                :jdbc jdbc
                :pool pool
-               :open #(h/p-next (:pool %))
-               :finz #(h/p-close (:pool %))}))))
+               :open #(h/jp-next (:pool %))
+               :finz #(h/jp-close (:pool %))}))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;EOF
