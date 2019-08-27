@@ -119,7 +119,7 @@
    (dbobj<> {:schema schema
              :jdbc jdbc
              :open #(h/conn<> (:jdbc %))
-             :vendor (h/resolve-vendor jdbc)})))
+             :vendor (c/wo* [c (h/conn<> jdbc)] (h/db-vendor c))})))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defn dbio<+>

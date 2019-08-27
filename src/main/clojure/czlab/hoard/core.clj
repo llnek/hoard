@@ -46,6 +46,53 @@
 (def ddl-sep "-- :")
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(declare conn<> dbfields dft-fld<> dft-rel<>)
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(defprotocol PojoAPI ""
+  (bind-model [_ model] "")
+  (db-get-fld [_ fld] "Get field.")
+  (db-clr-fld [_ fld] "Remove field.")
+  (db-set-fld [_ fld value] "Set value to a field."))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(defprotocol JdbcSpecAPI ""
+  (testing? [_] "Test connect to db.")
+  (load-driver [_] "Load the jdbc driver class."))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(defprotocol Matchers ""
+  (match-url?? [_] "")
+  (match-spec?? [_] ""))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(defprotocol SchemaQuery ""
+  (find-model [_ id] "Find model."))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(defprotocol FieldQuery
+  (find-col [_] "Find column name,"))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(defprotocol ModelQuery ""
+  (with-joined [_ lhs rhs] "")
+  (with-table [_ table] "")
+  (find-assoc [_ id] "")
+  (gschema [_] "")
+  (find-table [_] "")
+  (find-id [_]  "")
+  (find-field [_ id] ""))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(defprotocol ConnectionQuery ""
+  (table-exist? [_ table] "")
+  (row-exist? [_ table] "")
+  (upload-ddl [_ ddl] "")
+  (db-vendor [_] "")
+  (db-meta [_] "")
+  (table-meta [_ table] ""))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defprotocol Transactable ""
   (tx-transact! [_ func]
                 [_ func cfg] "Run function inside a transaction."))
@@ -76,8 +123,10 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defrecord DbioField [])
 (defrecord DbioModel [])
-(defrecord JdbcSpec [])
 (defrecord DbioAssoc [])
+
+(defrecord JdbcSpec [])
+(defrecord VendorGist [])
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defmacro ^:private relok? [x] `(contains? REL-TYPES ~x))
@@ -134,33 +183,48 @@
                pk# (:pkey (czlab.hoard.core/gmodel o#))] (pk# o#)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(defn gschema
-  "Get schema." [model]
-  {:pre [(some? model)]}
-  (:schema (meta model)))
+(extend-protocol SchemaQuery
+  clojure.lang.Atom
+  (find-model [schema typeid]
+    (or (get (:models @schema) typeid)
+        (l/warn "find-model %s failed!" typeid))))
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(defn find-model
-  "Get model from schema."
-  [schema typeid]
-  {:pre [(some? schema)]}
-  (if-some [m (get (:models @schema) typeid)]
-    m
-    (l/warn "find-model %s failed!" typeid)))
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(extend-protocol FieldQuery
+  DbioField
+  (find-col [_] (:column _)))
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(defn find-field
-  "Get field-def from model."
-  [model fieldid]
-  {:pre [(some? model)]}
-  (get (:fields model) fieldid))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(defn find-assoc
-  "Get assoc-def from model."
-  [model relid]
-  {:pre [(some? model)]}
-  (get (:rels model) relid))
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(extend-protocol ModelQuery
+  DbioModel
+  (with-table [_ table]
+    (assoc _ :table (clean-name table)))
+  (with-joined [model lhs rhs]
+    {:pre [(c/is-scoped-keyword? lhs)
+           (c/is-scoped-keyword? rhs)]}
+    ;meta was injected by our framework
+    (let [{c_lhs :col-lhs-rowid
+           c_rhs :col-rhs-rowid} dft-options
+          {{:keys [col-lhs-rowid
+                   col-rhs-rowid]} :____meta} model]
+      (-> (dbfields model
+                    {:lhs-rowid
+                     (mkfld :domain :Long :null? false
+                            :column (s/stror col-lhs-rowid c_lhs))
+                     :rhs-rowid
+                     (mkfld :domain :Long :null? false
+                            :column (s/stror col-rhs-rowid c_rhs))})
+          (assoc :rels
+                 {:lhs (mkrel :kind :mxm :other lhs :fkey :lhs-rowid)
+                  :rhs (mkrel :kind :mxm :other rhs :fkey :rhs-rowid)}))))
+  (gschema [_]
+    (:schema (meta _)))
+  (find-field [model fieldid]
+    (get (:fields model) fieldid))
+  (find-table [_] (:table _))
+  (find-id [_] (:id _))
+  (find-assoc [model relid]
+    (get (:rels model) relid)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defn fmt-sqlid
@@ -198,32 +262,10 @@
   [m1 m2] {:pre [(map? m1)
                  (or (nil? m2)(map? m2))]} (merge m1 m2))
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(defn dbtag
-  "The id (type) for this model."
-  {:tag Keyword}
-  ([model] (:id model))
-  ([typeid schema]
-   (dbtag (find-model schema typeid))))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(defn dbtable
-  "The table-name for this model."
-  {:tag String}
-  ([model] (:table model))
-  ([typeid schema]
-   (dbtable (find-model schema typeid))))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(defn dbcol
-  "The column-name for this field."
-  {:tag String}
-  ([fdef] (:column fdef))
-  ([col model]
-   (dbcol (find-field model col))))
-
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defrecord JdbcPoolImpl []
+  java.io.Closeable
+  (close [_] (jp-close _))
   JdbcPool
   (jp-close [me]
     (c/do#nil
@@ -253,9 +295,13 @@
                :id (str (u/jid<>) "#" (u/seqint2)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(defn load-driver
-  ^Driver [spec]
-  (c/if-string [s (:url spec)] (DriverManager/getDriver s)))
+(extend-protocol JdbcSpecAPI
+  JdbcSpec
+  (testing? [_]
+    (try (c/do#true (.close ^Connection (conn<> _)))
+         (catch SQLException _ false)))
+  (load-driver [_]
+    (c/if-string [s (:url _)] (DriverManager/getDriver s))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (def Postgresql :postgresql)
@@ -294,19 +340,16 @@
   "For o2o & o2m relations."
   [tn rn] `(s/x->kw "fk_" (name ~tn) "_" (name ~rn)))
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(defn match-spec??
-  "Ensure db-type is supported."
-  ^Keyword [spec]
-  (let [kw (keyword (s/lcase spec))]
-    (if (contains? *db-types* kw) kw)))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(defn match-url??
-  "From jdbc url, get db-type."
-  ^Keyword [dburl]
-  (c/if-some+ [ss (s/split (str dburl) ":")]
-    (if (> (count ss) 1) (match-spec?? (second ss)))))
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(extend-protocol Matchers
+  String
+  (match-spec?? [spec]
+    (let [kw (keyword (s/lcase spec))]
+      (if (contains? *db-types* kw) kw)))
+  (match-url?? [dburl]
+    (c/if-some+
+      [ss (s/split (str dburl) ":")]
+      (if (> (count ss) 1) (match-spec?? (second ss))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; DATA MODELING
@@ -387,28 +430,6 @@
   {:pre [(map? flddefs)]}
   (reduce #(dbfield<> %1 (first %2) (last %2)) pojo flddefs))
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(defn with-joined
-  "A special model with 2 relations,
-   left hand side and right hand side. *internal*"
-  [pojo lhs rhs]
-  {:pre [(c/is-scoped-keyword? lhs)
-         (c/is-scoped-keyword? rhs)]}
-  ;meta was injected by our framework
-  (let [{c_lhs :col-lhs-rowid
-         c_rhs :col-rhs-rowid} dft-options
-        {{:keys [col-lhs-rowid
-                 col-rhs-rowid]} :____meta} pojo]
-    (-> (dbfields pojo
-                  {:lhs-rowid
-                   (mkfld :domain :Long :null? false
-                          :column (s/stror col-lhs-rowid c_lhs))
-                   :rhs-rowid
-                   (mkfld :domain :Long :null? false
-                          :column (s/stror col-rhs-rowid c_rhs))})
-        (assoc :rels
-               {:lhs (mkrel :kind :mxm :other lhs :fkey :lhs-rowid)
-                :rhs (mkrel :kind :mxm :other rhs :fkey :rhs-rowid)}))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defmacro dbjoined<>
@@ -420,13 +441,6 @@
      `(-> (czlab.hoard.core/dbdef<> ~modelname ~options')
           (czlab.hoard.core/with-joined ~lhs ~rhs)
           (czlab.hoard.core/dbuniques {:i1 #{:lhs-rowid :rhs-rowid}})))))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(defn with-table
-  "Set the table name."
-  [pojo table]
-  {:pre [(map? pojo)]}
-  (assoc pojo :table (clean-name table)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;merge new stuff onto old stuff
@@ -643,9 +657,9 @@
                             (vary-meta m assoc :schema sch))) m2))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(defn dbg-show-schema
+(defn dbg-schema
   "" {:tag String}
-  ([schema] (dbg-show-schema schema true))
+  ([schema] (dbg-schema schema true))
   ([schema simple?]
    {:pre [(some? schema)]}
    (if simple?
@@ -662,7 +676,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defn- safe-get-conn
   ^Connection [jdbc]
-  (let [d (load-driver jdbc)
+  (let [^Driver d (load-driver jdbc)
         p (Properties.)
         {:keys [url user
                 driver passwd]} jdbc]
@@ -697,64 +711,13 @@
         Connection/TRANSACTION_SERIALIZABLE))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(defn test-connect?
-  "Test connect to the database?"
-  [jdbc] (try (c/do#true (.close (conn<> jdbc)))
-              (catch SQLException _ false)))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(defn resolve-vendor
-  "Find type of database." [in]
-  (cond
-    (c/is? JdbcSpec in)
-    (c/wo* [c (conn<> in)] (resolve-vendor c))
-    (c/is? Connection in)
-    (let [m (.getMetaData ^Connection in)
-          rc {:id (maybe-get-vendor (.getDatabaseProductName m))
-              :qstr (s/strim (.getIdentifierQuoteString m))
-              :version (.getDatabaseProductVersion m)
-              :name (.getDatabaseProductName m)
-              :url (.getURL m)
-              :user (.getUserName m)
-              :lcs? (.storesLowerCaseIdentifiers m)
-              :ucs? (.storesUpperCaseIdentifiers m)
-              :mcs? (.storesMixedCaseIdentifiers m)}]
-      (assoc rc :fmt-id (partial fmt-sqlid rc)))))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(defn table-exist?
-  "Is this table defined?" [in table]
-  (cond
-    (satisfies? JdbcPool in)
-    (c/wo* [^Connection
-            c (jp-next in)]
-           (table-exist? c table))
-    (c/is? JdbcSpec in)
-    (c/wo* [c (conn<> in)]
-           (table-exist? c table))
-    (c/is? Connection in)
-    (c/try!
-      (let [dbv (resolve-vendor in)
-            m (.getMetaData ^Connection in)]
-        (c/wo* [res (.getColumns m
-                                 nil
-                                 (if (= (:id dbv) :oracle) "%")
-                                 (fmt-sqlid in table false) "%")]
-          (and res (.next res)))))))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(defn row-exist?
-  "Data in the table?" [in table]
-  (cond
-    (c/is? JdbcSpec in)
-    (c/wo* [c (conn<> in)] (row-exist? c table))
-    (c/is? Connection in)
-    (c/try!
-      (let [sql (str "select count(*) from "
-                     (fmt-sqlid in table))]
-        (c/wo* [res (-> (.createStatement ^Connection in)
-                        (.executeQuery sql))]
-          (and res (.next res) (pos? (.getInt res (int 1)))))))))
+(defn- maybe-ok?
+  [dbn ^Throwable e]
+  (let [ee (c/cast? SQLException (u/root-cause e))
+        ec (some-> ee .getErrorCode)]
+    (or (and (s/embeds? dbn "oracle")
+             (some? ec)
+             (== 942 ec) (== 1418 ec) (== 2289 ec) (== 0 ec)) (throw e))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defn- load-columns
@@ -797,19 +760,67 @@
                 :supportsTransactions?
                 (.supportsTransactions m)})))
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(defn load-table-meta
-  "Fetch metadata of this table from db."
-  [^Connection conn ^String table]
-  {:pre [(some? conn)]}
-  (let [dbv (resolve-vendor conn)
-        mt (.getMetaData conn)
-        catalog nil
-        tbl (fmt-sqlid conn table false)
-        schema (if (= (:id dbv) :oracle) "%")]
-    ;; not good, try mixed case... arrrrhhhhhh
-    ;;rs = m.getTables( catalog, schema, "%", null)
-    (load-columns mt catalog schema tbl)))
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(extend-protocol ConnectionQuery
+  Connection
+  (upload-ddl [_ ddl]
+    (let [lines (mapv #(s/strim %)
+                      (cs/split ddl (re-pattern ddl-sep)))
+          ^Connection conn _
+          dbn (s/lcase (some-> conn
+                               .getMetaData
+                               .getDatabaseProductName))]
+      (.setAutoCommit conn true)
+      ;(l/debug "\n%s" ddl)
+      (doseq [s lines
+              :let [ln (s/strim-any s ";" true)]
+              :when (and (s/hgl? ln)
+                         (not= (s/lcase ln) "go"))]
+        (c/wo* [s (.createStatement conn)]
+          (try (.executeUpdate s ln)
+               (catch SQLException _ (maybe-ok? dbn _)))))))
+  (table-exist? [c table]
+    (c/try!
+      (let [m (db-meta c)
+            dbv (db-vendor c)]
+        (c/wo* [res (.getColumns ^DatabaseMetaData m
+                                 nil
+                                 (if (= (:id dbv) :oracle) "%")
+                                 (fmt-sqlid c table false) "%")]
+          (and res (.next res))))))
+  (row-exist? [c table]
+    (c/try!
+      (let [sql (str "select count(*) from "
+                     (fmt-sqlid c table))]
+        (c/wo* [res (-> ^Connection c
+                        .createStatement (.executeQuery sql))]
+          (and res
+               (.next res)
+               (pos? (.getInt res (int 1))))))))
+  (db-vendor [_]
+    (let [m (.getMetaData ^Connection _)
+          rc (c/object<> VendorGist
+                         :id (maybe-get-vendor (.getDatabaseProductName m))
+                         :qstr (s/strim (.getIdentifierQuoteString m))
+                         :version (.getDatabaseProductVersion m)
+                         :name (.getDatabaseProductName m)
+                         :url (.getURL m)
+                         :user (.getUserName m)
+                         :lcs? (.storesLowerCaseIdentifiers m)
+                         :ucs? (.storesUpperCaseIdentifiers m)
+                         :mcs? (.storesMixedCaseIdentifiers m))]
+      (assoc rc :fmt-id (partial fmt-sqlid rc))))
+  (db-meta [_]
+    (.getMetaData ^Connection _))
+  (table-meta [conn table]
+    (let [mt (.getMetaData ^Connection conn)
+          tbl (fmt-sqlid conn table false)
+          dbv (db-vendor conn)
+          catalog nil
+          schema (if (= (:id dbv) :oracle) "%")]
+      ;; not good, try mixed case... arrrrhhhhhh
+      ;;rs = m.getTables( catalog, schema, "%", null)
+      (load-columns mt catalog schema tbl))))
 
 ;;Object
 ;;Clojure CLJ-1347
@@ -823,11 +834,10 @@
   "Create a db connection pool."
   ([jdbc] (dbpool<> jdbc nil))
   ([jdbc options]
-   (let [dbv (resolve-vendor jdbc)
+   (let [dbv (c/wo* [c (conn<> jdbc)] (db-vendor c))
+         {:keys [driver url passwd user]} jdbc
          options (or options {})
-         hc (HikariConfig.)
-         {:keys [driver url
-                 passwd user]} jdbc]
+         hc (HikariConfig.)]
      ;;(l/debug "pool-options: %s." options)
      ;;(l/debug "pool-jdbc: %s." jdbc)
      (if (s/hgl? driver)
@@ -840,52 +850,6 @@
          (.setPassword hc (i/x->str passwd))))
      (l/debug "[hikari]\n%s." (str hc))
      (jdbc-pool<> dbv jdbc (HikariDataSource. hc)))))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(defn- maybe-ok?
-  [dbn ^Throwable e]
-  (let [ee (c/cast? SQLException (u/root-cause e))
-        ec (some-> ee .getErrorCode)]
-    (or (and (s/embeds? dbn "oracle")
-             (some? ec)
-             (== 942 ec) (== 1418 ec) (== 2289 ec) (== 0 ec)) (throw e))))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(defn upload-ddl
-  "Upload DDL to DB."
-  [in ddl]
-  (cond
-    (satisfies? JdbcPool in)
-    (c/wo* [^Connection
-            c (jp-next in)] (upload-ddl c ddl))
-    (c/is? JdbcSpec in)
-    (c/wo* [c (conn<> in)] (upload-ddl c ddl))
-    (c/is? Connection in)
-    (let [lines (mapv #(s/strim %)
-                      (cs/split ddl (re-pattern ddl-sep)))
-          ^Connection conn in
-          dbn (s/lcase (some-> conn
-                               .getMetaData
-                               .getDatabaseProductName))]
-      (.setAutoCommit conn true)
-      (l/debug "\n%s" ddl)
-      (doseq [s lines
-              :let [ln (s/strim-any s ";" true)]
-              :when (and (s/hgl? ln)
-                         (not= (s/lcase ln) "go"))]
-        (c/wo* [s (.createStatement conn)]
-          (try (.executeUpdate s ln)
-               (catch SQLException _ (maybe-ok? dbn _))))))))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(defn bind-model
-  "*internal*" [pojo _model]
-  {:pre [(map? pojo)(map? _model)]}
-  (let [m (meta pojo)
-        {:keys [model]} m]
-    (if (nil? model)
-      (with-meta pojo (assoc m :model _model))
-      (c/raise! "Cannot bind model %s twice!" model))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defrecord DbioPojo [])
@@ -905,14 +869,15 @@
     (with-meta (assoc out pk (goid obj)) (meta obj))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(defprotocol FieldModifier ""
-  (db-get-fld [_ fld] "Get field.")
-  (db-clr-fld [_ fld] "Remove field.")
-  (db-set-fld [_ fld value] "Set value to a field."))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(extend-protocol FieldModifier
+(extend-protocol PojoAPI
   DbioPojo
+  (bind-model [p _model]
+    {:pre [(c/is? DbioModel _model)]}
+    (let [m (meta p)
+          {:keys [model]} m]
+      (if (nil? model)
+        (with-meta p (assoc m :model _model))
+        (c/raise! "Cannot bind model %s twice!" model))))
   (db-clr-fld [pojo fld] (dissoc pojo fld))
   (db-get-fld [pojo fld] (get pojo fld))
   (db-set-fld [pojo fld value]

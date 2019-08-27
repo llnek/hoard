@@ -45,7 +45,7 @@
 (defn- fmt-update-where
   "Filter on primary key."
   [vendor model]
-  (str (h/fmt-sqlid vendor (h/dbcol (:pkey model) model)) "=?"))
+  (str (h/fmt-sqlid vendor (h/find-col (h/find-field model (:pkey model)))) "=?"))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defn- sql-filter-clause
@@ -267,13 +267,11 @@
                (do
                  (s/sbf-join sb1
                              "," (h/fmt-sqlid vendor
-                                              (h/dbcol fd)))
+                                              (h/find-col fd)))
                  (s/sbf-join sb2
                              "," (if (nil? v) "null" "?"))
                  (if v (conj! %1 v) %1))
                %1)) obj)]
-    (l/debug "obj = %s" (i/fmt->edn vendor))
-    (l/debug "s1= %s\ns2=%s\n" sb1 sb2)
     [(str sb1) (str sb2) ps]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -292,7 +290,7 @@
                (do
                  (s/sbf-join sb1
                              "," (h/fmt-sqlid vendor
-                                              (h/dbcol fd)))
+                                              (h/find-col fd)))
                  (s/sbf+ sb1 (if (nil? v) "=null" "=?"))
                  (if v (conj! %1 v) %1))
                %1)) obj)]
@@ -334,7 +332,7 @@
     [rc (do-query vendor
                   conn
                   (str "select count(*) from "
-                       (h/fmt-sqlid vendor (h/dbtable model))) [])]
+                       (h/fmt-sqlid vendor (h/find-table model))) [])]
     (if (not-empty rc)
       (c/_E (c/_1 (seq (c/_1 rc)))))))
 
@@ -342,7 +340,7 @@
 (defn- do-purge
   [vendor conn model]
   (let [sql (str "delete from "
-                 (h/fmt-sqlid vendor (h/dbtable model)))]
+                 (h/fmt-sqlid vendor (h/find-table model)))]
     (sql-exec vendor conn sql []) 0))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -352,7 +350,7 @@
     (do-exec vendor
              conn
              (str "delete from "
-                  (->> (h/dbtable mcz)
+                  (->> (h/find-table mcz)
                        (h/fmt-sqlid vendor))
                   " where "
                   (fmt-update-where vendor mcz))
@@ -370,18 +368,17 @@
                     vendor
                     conn
                     (str "insert into "
-                         (->> (h/dbtable mcz)
+                         (->> (h/find-table mcz)
                               (h/fmt-sqlid vendor))
                          " (" s1 ") values (" s2 ")")
                     pms
-                    {:pkey (h/dbcol pkey mcz)})]
+                    {:pkey (h/find-col (h/find-field mcz pkey))})]
           (if (not-empty out)
             (l/debug "Exec-with-out %s." out)
             (h/dberr! "rowid must be returned."))
           (let [n (:1 out)]
             (if-not (number? n)
               (h/dberr! "rowid must be a Long."))
-            (l/debug "PKEY ==== %s, n= %s" pkey n)
             (assoc obj pkey n)))))
     (h/dberr! "Unknown model for: %s." obj)))
 
@@ -395,7 +392,7 @@
         (do-exec vendor
                  conn
                  (str "update "
-                      (->> (h/dbtable mcz)
+                      (->> (h/find-table mcz)
                            (h/fmt-sqlid vendor))
                       " set " sb1 " where "
                       (fmt-update-where vendor mcz))

@@ -139,8 +139,8 @@
        (dbio-get-relation mA rid kind)]
       (let [rt (or kast other)
             mB (h/find-model s rt)
-            tn (h/dbtable mB)
-            cn (h/dbcol fkey mB)]
+            tn (h/find-table mB)
+            cn (h/find-col (h/find-field mB fkey))]
         (h/sq-exec-sql
           sqlr
           (if-not cascade?
@@ -207,15 +207,15 @@
             (h/sq-exec-sql sqlr
                            (format
                              "delete from %s where %s=?"
-                             (h/sq-fmt-id sqlr (h/dbtable mm))
-                             (h/sq-fmt-id sqlr (h/dbcol (fields ka))))
+                             (h/sq-fmt-id sqlr (h/find-table mm))
+                             (h/sq-fmt-id sqlr (h/find-col (fields ka))))
                            [(h/goid objA)])
             (h/sq-exec-sql sqlr
                            (format
                              "delete from %s where %s=? and %s=?"
-                             (h/sq-fmt-id sqlr (h/dbtable mm))
-                             (h/sq-fmt-id sqlr (h/dbcol (fields ka)))
-                             (h/sq-fmt-id sqlr (h/dbcol (fields kb))))
+                             (h/sq-fmt-id sqlr (h/find-table mm))
+                             (h/sq-fmt-id sqlr (h/find-col (fields ka)))
+                             (h/sq-fmt-id sqlr (h/find-col (fields kb))))
                            [(h/goid objA) (h/goid objB)])))
         (h/dberr! "Unkown relation: %s." jon)))))
 
@@ -242,12 +242,12 @@
                                 "join %s %s on "
                                 "%s.%s=? and %s.%s=%s.%s")
                            RS
-                           (h/sq-fmt-id sqlr (h/dbtable tm))
+                           (h/sq-fmt-id sqlr (h/find-table tm))
                            RS
-                           (h/sq-fmt-id sqlr (h/dbtable mm))
+                           (h/sq-fmt-id sqlr (h/find-table mm))
                            MM
-                           MM (h/sq-fmt-id sqlr (h/dbcol (ka fields)))
-                           MM (h/sq-fmt-id sqlr (h/dbcol (kb fields)))
+                           MM (h/sq-fmt-id sqlr (h/find-col (ka fields)))
+                           MM (h/sq-fmt-id sqlr (h/find-col (kb fields)))
                            RS (h/sq-fmt-id sqlr col-rowid))
                          [(h/goid pojo)]))
       (h/dberr! "Unknown joined model: %s." jon))))

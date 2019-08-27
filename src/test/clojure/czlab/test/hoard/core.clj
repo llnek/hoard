@@ -25,7 +25,7 @@
             [czlab.basal.core
              :refer [ensure?? ensure-thrown??] :as c])
 
-  (:import [java.io File]
+  (:import [java.io File Closeable]
            [java.sql Connection]
            [czlab.hoard.core JdbcSpec]
            [java.util GregorianCalendar Calendar]))
@@ -106,14 +106,14 @@
                          url "sa" "hello")
         ddl (d/get-ddl meta-cc :h2)
         db (cn/dbio<+> jdbc meta-cc)]
-    (println "db==== " (i/fmt->edn db))
     (when false
-      (let [s (h/dbg-show-schema meta-cc true)]
+      (let [s (h/dbg-schema meta-cc true)]
         ;(println "\n\n" ddl)
         (println "\n\n" s)
         (i/spit-utf8 (i/tmpfile "dbtest.out") s)))
     (alter-var-root #'jdbc-spec (constantly jdbc))
-    (h/upload-ddl jdbc ddl)
+    (c/wo* [c (h/conn<> jdbc)]
+           (h/upload-ddl c ddl))
     (alter-var-root #'DB (constantly db))
     (alter-var-root #'DBID (constantly dbid))
     (if (fn? f) (f))))
@@ -209,10 +209,10 @@
                   conn (cn/db-open db)
                   a (h/fmt-sqlid vendor "hello")
                   b (h/fmt-sqlid conn "hello")
-                  id (h/dbtag ::Person schema)
-                  t (h/dbtable ::Person schema)
                   m (h/find-model schema ::Person)
-                  cn (h/dbcol :iq m)
+                  id (h/find-id m)
+                  t (h/find-table m)
+                  cn (h/find-col (h/find-field m :iq ))
                   ks1 (h/match-spec?? "h2")
                   ks2 (h/match-url?? url)]
               (try (and (some? c)
@@ -237,10 +237,10 @@
                   conn (cn/db-open db)
                   a (h/fmt-sqlid vendor "hello")
                   b (h/fmt-sqlid conn "hello")
-                  id (h/dbtag ::Person schema)
-                  t (h/dbtable ::Person schema)
                   m (h/find-model schema ::Person)
-                  cn (h/dbcol :iq m)
+                  t (h/find-table m)
+                  id (h/find-id m)
+                  cn (h/find-col (h/find-field m :iq))
                   ks1 (h/match-spec?? "h2")
                   ks2 (h/match-url?? url)]
               (try (and (some? c)
@@ -259,23 +259,21 @@
   (ensure?? "conn<>"
             (let [c (h/conn<> jdbc-spec)]
               (try
-                (map? (h/load-table-meta c "Person"))
+                (map? (h/table-meta c "Person"))
                 (finally (i/klose c)))))
 
   (ensure?? "test-connect?"
-            (h/test-connect? jdbc-spec))
+            (h/testing? jdbc-spec))
 
-  (ensure?? "resolve-vendor"
-            (map? (h/resolve-vendor jdbc-spec)))
+  (ensure?? "db-vendor"
+            (map? (c/wo* [c (h/conn<> jdbc-spec)] (h/db-vendor c))))
 
   (ensure?? "table-exist?"
-            (h/table-exist? jdbc-spec "Person"))
+            (c/wo* [c (h/conn<> jdbc-spec)] (h/table-exist? c "Person")))
 
   (ensure?? "dbpool<>"
-            (let [p (h/dbpool<> jdbc-spec)]
-              (try (h/table-exist? p "Person")
-                   (finally
-                     (h/jp-close p)))))
+            (c/wo* [^Closeable p (h/dbpool<> jdbc-spec)]
+              (c/wo* [^Connection c (h/jp-next p)] (h/table-exist? c "Person"))))
 
   (ensure?? "add-obj"
             (pos? (:rowid
@@ -283,7 +281,7 @@
                                    "blog" "male"))))
 
   (ensure?? "row-exists?"
-            (h/row-exist? jdbc-spec "Person"))
+            (c/wo* [c (h/conn<> jdbc-spec)] (h/row-exist? c "Person")))
 
   (ensure?? "add-obj"
             (pos? (:rowid (create-emp "joe" "blog"
@@ -346,8 +344,7 @@
             (h/tx-transact!
               (cn/db-composite DB)
               #(let
-                 [_ (l/debug "GGGGGGG ==== %s" %)
-                  e (fetch-emp "joeb")
+                 [e (fetch-emp "joeb")
                   pm (r/db-get-o2o
                        {:with % :as :person} e)
                   w (r/db-get-o2o
