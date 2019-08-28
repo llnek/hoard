@@ -46,7 +46,7 @@
 (def ddl-sep "-- :")
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(declare conn<> dbfields dft-fld<> dft-rel<>)
+(declare conn<> dbo2o dbo2m dbm2m dbfields dft-fld<>)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defprotocol PojoAPI ""
@@ -121,25 +121,21 @@
   (jp-next [_] "Next free connection from the pool."))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(defrecord DbioField [])
 (defrecord DbioModel [])
-(defrecord DbioAssoc [])
-
-(defrecord JdbcSpec [])
-(defrecord VendorGist [])
+(defrecord DbioM2MRel [])
+(defrecord DbioO2ORel [])
+(defrecord DbioO2MRel [])
+(defrecord DbioField [])
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(defmacro ^:private relok? [x] `(contains? REL-TYPES ~x))
+(defrecord JdbcSpec [])
+(defrecord VendorGist [])
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defn dberr!
   "Throw a SQL execption."
   [fmt & more]
   (c/trap! SQLException (str (apply format fmt more))))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(defmacro ^:private mkrel
-  [& args] `(merge (dft-rel<>) (hash-map ~@args )))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defmacro ^:private mkfld
@@ -214,9 +210,7 @@
                      :rhs-rowid
                      (mkfld :domain :Long :null? false
                             :column (s/stror col-rhs-rowid c_rhs))})
-          (assoc :rels
-                 {:lhs (mkrel :kind :mxm :other lhs :fkey :lhs-rowid)
-                  :rhs (mkrel :kind :mxm :other rhs :fkey :rhs-rowid)}))))
+          (dbm2m lhs rhs))))
   (gschema [_]
     (:schema (meta _)))
   (find-field [model fieldid]
@@ -406,13 +400,6 @@
                               :table (clean-name mname)} options)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(defn- dft-rel<>
-  ([] (dft-rel<> nil))
-  ([id]
-   (c/object<> DbioAssoc
-               :id id :other nil :fkey nil :kind nil)))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defn dbfield<>
   "Add a new field."
   [pojo fid fdef]
@@ -493,25 +480,48 @@
   (with-xxx-sets pojo uniqs :uniques))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(defn dbassoc<>
+(defn- dbassoc<>
   "Define an relation between 2 models."
-  [{:keys [id] :as pojo} rid rel]
-  (let [rd (merge {:cascade? false :fkey nil} rel)]
-    (update-in pojo
+  [{:keys [id] :as model} rel args]
+  (let [{fk :fkey rid :id :as R}
+        (merge rel {:fkey nil
+                    :cascade? false} args)]
+    (update-in model
                [:rels]
                assoc
                rid
-               (if (relok? (:kind rd))
-                 (assoc rd
-                        :fkey (fmt-fkey id rid))
-                 (dberr! "Invalid relation: %s." rid)))))
+               (assoc R
+                      :fkey
+                      (or fk
+                          (fmt-fkey id rid))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(defn dbassocs
-  "Define a set of associations."
-  [pojo reldefs]
-  {:pre [(map? reldefs)]}
-  (reduce #(dbassoc<> %1 (first %2) (last %2)) pojo reldefs))
+(defn- dbm2m
+  [model lhs rhs]
+  (dbassoc<> model
+             (DbioM2MRel.)
+             {:owner (find-id model)
+              :id :mxm
+              :lhs [lhs :lhs-rowid]
+              :rhs [rhs :rhs-rowid]}))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(defn dbo2m
+  "Define a one to many association."
+  [model id & args]
+  {:pre [(not-empty args)]}
+  (dbassoc<> model
+             (DbioO2MRel.)
+             (assoc (c/kvs->map args) :id id)))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(defn dbo2o
+  "Define a one to one association."
+  [model id & args]
+  {:pre [(not-empty args)]}
+  (dbassoc<> model
+             (DbioO2ORel.)
+             (assoc (c/kvs->map args) :id id)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defmacro ^:private with-abstract
@@ -554,8 +564,8 @@
             :when (and (not abstract?)
                        (not-empty rels))]
       (doseq [[_ r] rels
-              :let [{:keys [other kind fkey]} r]
-              :when (or (= :o2o kind) (= :o2m kind))]
+              :let [{:keys [other fkey]} r]
+              :when (not (c/is? DbioM2MRel r))]
         (var-set phd
                  (assoc! @phd
                          other
@@ -577,29 +587,29 @@
   ;deal with dbjoined<> decls
   (with-local-vars [mms (c/tmap*)]
     (doseq [[k m] metas
-            :let [{:keys [mxm?
-                          rels
-                          fields]} m] :when mxm?]
+            :let [{:keys [mxm? rels fields]} m
+                  {:keys [lhs rhs] :as R}
+                  (get rels :mxm)]
+            :when (and mxm? R)]
       ;make foreign keys to have the same attributes
       ;as the linked tables primary keys.
       (->>
         (c/preduce<map>
           #(let
              [[side kee] %2
-              other (get-in rels [side :other])
-              mz (metas other)
-              pke ((:fields mz) (:pkey mz))
+              mz (metas side)
+              pke ((:pkey mz)
+                   (:fields mz))
               d (merge (kee fields)
                        (select-keys pke
                                     [:domain :size]))]
              (assoc! %1 kee d))
-          [[:lhs :lhs-rowid]
-           [:rhs :rhs-rowid]])
+          [lhs rhs])
         (merge fields)
-        (assoc m :fields )
+        (assoc m :fields)
         (assoc! @mms k)
         (var-set mms)))
-    (merge metas (c/ps! @mms))))
+    (merge metas (persistent! @mms))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defn- colmap-fields

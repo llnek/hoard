@@ -63,9 +63,8 @@
     (h/dbindexes
       {:i1 #{ :first_name :last_name }
        :i2 #{ :bday } })
-    (h/dbassocs
-      {:addrs {:kind :o2m :other ::Address :cascade? true}
-       :spouse {:kind :o2o :other ::Person } }))
+    (h/dbo2o :spouse :other ::Person)
+    (h/dbo2m :addrs :other ::Address :cascade? true))
   (h/dbmodel<> ::Employee
     (h/dbfields
       {:salary { :domain :Float :null? false }
@@ -74,8 +73,7 @@
        :desc {}
        :login {:null? false} })
     (h/dbindexes {:i1 #{ :login } } )
-    (h/dbassocs
-      {:person {:kind :o2o :other ::Person } }))
+    (h/dbo2o :person :other ::Person))
   (h/dbmodel<> ::Department
     (h/dbfields
       {:dname { :null? false } })
@@ -86,12 +84,10 @@
       {:revenue { :domain :Double :null? false }
        :cname { :null? false }
        :logo { :domain :Bytes } })
-    (h/dbassocs
-      {:depts {:kind :o2m :other ::Department :cascade? true}
-       :emps {:kind :o2m :other ::Employee :cascade? true}
-       :hq {:kind :o2o :other ::Address :cascade? true}})
-    (h/dbuniques
-      {:u1 #{ :cname } } ))
+    (h/dbo2m :depts :other ::Department :cascade? true)
+    (h/dbo2m :emps :other ::Employee :cascade? true)
+    (h/dbo2o :hq :other ::Address :cascade? true)
+    (h/dbuniques {:u1 #{ :cname } } ))
   (h/dbjoined<> ::EmpDepts ::Department ::Employee))
 
 (def ^:private jdbc-spec nil)
@@ -108,7 +104,7 @@
         db (cn/dbio<+> jdbc meta-cc)]
     (when false
       (let [s (h/dbg-schema meta-cc true)]
-        ;(println "\n\n" ddl)
+        (println "\n\n" ddl)
         (println "\n\n" s)
         (i/spit-utf8 (i/tmpfile "dbtest.out") s)))
     (alter-var-root #'jdbc-spec (constantly jdbc))
@@ -166,14 +162,13 @@
                                    lname sex)
                          (h/sq-add-obj %))
                   e (->> (emp<> login)
-                         (h/sq-add-obj %))]
-              (r/db-set-o2o
-                {:with % :as :person}
-                e
-                (h/sq-find-one %
-                               ::Person
-                               {:first_name fname
-                                :last_name lname})))]
+                         (h/sq-add-obj %))
+                  r (h/find-assoc (h/gmodel e) :person)]
+              (r/db-set-o2o r % e
+                            (h/sq-find-one %
+                                           ::Person
+                                           {:first_name fname
+                                            :last_name lname})))]
     (c/_1 (h/tx-transact! tx cb))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -326,17 +321,17 @@
                   (cn/db-composite DB)
                   #(let
                      [pm (r/db-get-o2o
-                           {:with % :as :person} e)
+                           (h/find-assoc (h/gmodel e) :person) % e)
                       [p1 w1]
                       (r/db-set-o2o
-                        {:as :spouse :with %} pm w)
+                        (h/find-assoc (h/gmodel pm) :spouse) % pm w)
                       [w2 p2]
                       (r/db-set-o2o
-                        {:as :spouse :with %} w1 p1)
+                        (h/find-assoc (h/gmodel w1) :spouse) % w1 p1)
                       w3 (r/db-get-o2o
-                           {:as :spouse :with %} p2)
+                           (h/find-assoc (h/gmodel p2) :spouse) % p2)
                       p3 (r/db-get-o2o
-                           {:as :spouse :with %} w3)]
+                           (h/find-assoc (h/gmodel w3) :spouse) % w3)]
                      (and (some? w3)
                           (some? p3))))))
 
@@ -346,17 +341,17 @@
               #(let
                  [e (fetch-emp "joeb")
                   pm (r/db-get-o2o
-                       {:with % :as :person} e)
+                       (h/find-assoc (h/gmodel e) :person) % e)
                   w (r/db-get-o2o
-                      {:as :spouse :with %} pm)
+                      (h/find-assoc (h/gmodel pm) :spouse) % pm)
                   p2 (r/db-clr-o2o
-                       {:as :spouse :with %} pm)
+                       (h/find-assoc (h/gmodel pm) :spouse) % pm)
                   w2 (r/db-clr-o2o
-                       {:as :spouse :with %} w)
+                       (h/find-assoc (h/gmodel w) :spouse) % w)
                   w3 (r/db-get-o2o
-                       {:as :spouse :with %} p2)
+                       (h/find-assoc (h/gmodel p2) :spouse) % p2)
                   p3 (r/db-get-o2o
-                       {:as :spouse :with %} w2)]
+                       (h/find-assoc (h/gmodel w2) :spouse) % w2)]
                  (and (nil? w3)
                       (nil? p3)
                       (some? w)))))
@@ -367,24 +362,26 @@
               #(let
                  [c (h/sq-add-obj % (company<> "acme"))
                   _ (r/db-set-o2m
-                      {:as :depts :with %}
-                      c
+                      (h/find-assoc (h/gmodel c) :depts)
+                      % c
                       (h/sq-add-obj % (dept<> "d1")))
                   _ (r/db-set-o2m*
-                      {:as :depts :with %}
+                      (h/find-assoc (h/gmodel c) :depts)
+                      %
                       c
-                      (h/sq-add-obj % (dept<> "d2"))
-                      (h/sq-add-obj % (dept<> "d3")))
+                      [(h/sq-add-obj % (dept<> "d2"))
+                       (h/sq-add-obj % (dept<> "d3"))])
                   _ (r/db-set-o2m*
-                      {:as :emps :with %}
+                      (h/find-assoc (h/gmodel c) :emps)
+                      %
                       c
-                      (h/sq-add-obj % (emp<> "e1"))
-                      (h/sq-add-obj % (emp<> "e2"))
-                      (h/sq-add-obj % (emp<> "e3")))
+                      [(h/sq-add-obj % (emp<> "e1"))
+                       (h/sq-add-obj % (emp<> "e2"))
+                       (h/sq-add-obj % (emp<> "e3"))])
                   ds (r/db-get-o2m
-                       {:as :depts :with %} c)
+                       (h/find-assoc (h/gmodel c) :depts) % c)
                   es (r/db-get-o2m
-                       {:as :emps :with %} c)]
+                       (h/find-assoc (h/gmodel c) :emps) % c)]
                  (and (= (count ds) 3)
                       (= (count es) 3)))))
 
@@ -396,15 +393,16 @@
                                    ::Company
                                    {:cname "acme"})
                   ds (r/db-get-o2m
-                       {:as :depts :with %} c)
+                       (h/find-assoc (h/gmodel c) :depts) % c)
                   es (r/db-get-o2m
-                       {:as :emps :with %} c)
+                       (h/find-assoc (h/gmodel c) :emps) % c)
                   _
                   (doseq [d ds
                           :when (= (:dname d) "d2")]
                     (doseq [e es]
                       (r/db-set-m2m
-                        {:joined ::EmpDepts :with %} d e)))
+                        (h/find-assoc (h/find-model meta-cc ::EmpDepts) :mxm)
+                        % d e)))
                   _
                   (doseq [e es
                           :when (= (:login e) "e2")]
@@ -412,13 +410,16 @@
                             :let [dn (:dname d)]
                             :when (not= dn "d2")]
                       (r/db-set-m2m
-                        {:joined ::EmpDepts :with %} e d)))
+                        (h/find-assoc (h/find-model meta-cc ::EmpDepts) :mxm)
+                        % e d)))
                   s1 (r/db-get-m2m
-                       {:joined ::EmpDepts :with %}
+                       (h/find-assoc (h/find-model meta-cc ::EmpDepts) :mxm)
+                       %
                        (some (fn [x]
                                (if (= (:dname x) "d2") x)) ds))
                   s2 (r/db-get-m2m
-                       {:joined ::EmpDepts :with %}
+                       (h/find-assoc (h/find-model meta-cc ::EmpDepts) :mxm)
+                       %
                        (some (fn [x]
                                (if (= (:login x) "e2") x)) es))]
                  (and (== (count s1) 3)
@@ -435,13 +436,17 @@
                                     ::Employee
                                     {:login "e2"})
                   _ (r/db-clr-m2m
-                      {:joined ::EmpDepts :with %} d2)
+                      (h/find-assoc (h/find-model meta-cc ::EmpDepts) :mxm)
+                      % d2)
                   _ (r/db-clr-m2m
-                      {:joined ::EmpDepts :with %} e2)
+                      (h/find-assoc (h/find-model meta-cc ::EmpDepts) :mxm)
+                      % e2)
                   s1 (r/db-get-m2m
-                       {:joined ::EmpDepts :with %} d2)
+                       (h/find-assoc (h/find-model meta-cc ::EmpDepts) :mxm)
+                       % d2)
                   s2 (r/db-get-m2m
-                       {:joined ::EmpDepts :with %} e2)]
+                       (h/find-assoc (h/find-model meta-cc ::EmpDepts) :mxm)
+                       % e2)]
                  (and (== (count s1) 0)
                       (== (count s2) 0)))))
 
@@ -452,13 +457,13 @@
                                       ::Company
                                       {:cname "acme"})
                      _ (r/db-clr-o2m
-                         {:as :depts :with %} c)
+                         (h/find-assoc (h/gmodel c) :depts) % c)
                      _ (r/db-clr-o2m
-                         {:as :emps :with %} c)
+                         (h/find-assoc (h/gmodel c) :emps) % c)
                      s1 (r/db-get-o2m
-                          {:as :depts :with %} c)
+                          (h/find-assoc (h/gmodel c) :depts) % c)
                      s2 (r/db-get-o2m
-                          {:as :emps :with %} c)]
+                          (h/find-assoc (h/gmodel c) :emps) % c)]
                  (and (= (count s1) 0)
                       (= (count s2) 0)))))
 
