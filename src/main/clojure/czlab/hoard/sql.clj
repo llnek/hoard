@@ -42,44 +42,32 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;(set! *warn-on-reflection* true)
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(defn- fmt-update-where
+(defn- fmt-where
   "Filter on primary key."
   [vendor model]
-  (str (h/fmt-sqlid vendor (h/find-col (h/find-field model (:pkey model)))) "=?"))
+  (str (->> (:pkey model)
+            (h/find-field model)
+            (h/find-col)
+            (h/fmt-sqlid vendor)) "=?"))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(defn- sql-filter-clause
+(defn- filter-clause
   "[sql-filter-string, values]"
   [vendor model filters]
   ;;returns the where clause and parameters
   (let [{:keys [fields]} model]
     [(s/sreduce<>
        #(let [[k v] %2
-              fd (fields k)
-              c (s/stror (:column fd)
-                         (s/sname k))]
-          (s/sbf-join %1
-                      " and "
-                      (str (h/fmt-sqlid vendor c)
-                           (if (nil? v) " is null " " =? ")))) filters)
+              c (-> (fields k)
+                    (h/find-col)
+                    (s/stror (s/sname k)))]
+          (->> (str (h/fmt-sqlid vendor c)
+                    (if (nil? v) " is null " " =? "))
+               (s/sbf-join %1 " and "))) filters)
      (c/rnilv (vals filters))]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defn- read-col
-  "Read column value, handling blobs."
-  [pos ^ResultSet rset]
-  (let [obj (.getObject rset (int pos))
-        in (c/condp?? instance? obj
-             InputStream obj
-             Blob (.getBinaryStream ^Blob obj)
-             Reader obj
-             Clob (.getCharacterStream ^Clob obj))]
-    (condp instance? in
-      Reader (c/wo* [^Reader r in] (i/slurpc r))
-      InputStream (c/wo* [^InputStream p in] (i/slurpb p)) obj)))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(defn- read-one-col
   "Read a db column."
   [sqlType pos ^ResultSet rset]
   (let [c (d/gmt<>)
@@ -87,7 +75,15 @@
     (condp == (int sqlType)
       Types/TIMESTAMP (.getTimestamp rset pos c)
       Types/DATE (.getDate rset pos c)
-      (read-col pos rset))))
+      (let [obj (.getObject rset pos)
+            in (c/condp?? instance? obj
+                 InputStream obj
+                 Blob (.getBinaryStream ^Blob obj)
+                 Reader obj
+                 Clob (.getCharacterStream ^Clob obj))]
+        (condp instance? in
+          Reader (c/wo* [^Reader r in] (i/slurpc r))
+          InputStream (c/wo* [^InputStream p in] (i/slurpb p)) obj)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defn- model-injtor
@@ -104,8 +100,7 @@
 (defn- std-injtor
   "Generic resultset, no model defined
    Row is a transient object."
-  [row cn ct cv]
-  (assoc! row (keyword cn) cv))
+  [row cn ct cv] (assoc! row (keyword cn) cv))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defn- row->obj
@@ -118,7 +113,7 @@
               (finj %1
                     (.getColumnName rsmeta pos)
                     ct
-                    (read-one-col ct pos rs)))
+                    (read-col ct pos rs)))
            (range 1 (+ 1 (.getColumnCount rsmeta))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -151,7 +146,7 @@
     Calendar (.setTimestamp ps pos
                             (Timestamp. (.getTimeInMillis ^Calendar p))
                             (d/gmt<>))
-    (h/dberr! "Unsupported param-type: %s" (type p))))
+    (h/dberr! "Unsupported param-type: %s." (type p))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defn- mssql-tweak
@@ -177,16 +172,11 @@
   ^String [vendor sqlstr]
   (let [sql (s/strim sqlstr)
         lcs (s/lcase sql)]
-    (if (= h/SQLServer (:id vendor))
-      (cond
-        (cs/starts-with? lcs "select")
-        (mssql-tweak sql :where "nolock")
-        (cs/starts-with? lcs "delete")
-        (mssql-tweak sql :where "rowlock")
-        (cs/starts-with? lcs "update")
-        (mssql-tweak sql :set "rowlock")
-        :else sql)
-      sql)))
+    (s/stror (if (= h/SQLServer (:id vendor))
+               (c/condp?? #(cs/starts-with? %2 %1) lcs
+                 "select" (mssql-tweak sql :where "nolock")
+                 "update" (mssql-tweak sql :set "rowlock")
+                 "delete" (mssql-tweak sql :where "rowlock"))) sql)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defn- fmt-stmt
@@ -210,7 +200,7 @@
         (.getLong rs (str (:pkey args))))})
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(defn- sql-exec-with-output
+(defn- exec->output
   [vendor conn sql pms args]
   (c/wo*
     [s (fmt-stmt vendor conn sql pms)]
@@ -219,15 +209,15 @@
         (let [cnt (some-> rs
                           .getMetaData
                           .getColumnCount)]
-          (if (and cnt
-                   (pos? cnt)
+          (if (and (c/spos? cnt)
                    (.next rs))
             (handle-gkeys rs cnt args)))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defn- sqls+
   [vendor conn sql pms func post]
-  (c/wo* [s (fmt-stmt vendor conn sql pms)
+  (c/wo* [s (fmt-stmt vendor
+                      conn sql pms)
           rs (.executeQuery s)]
     (let [m (.getMetaData rs)]
       (loop [sum (c/tvec*)
@@ -253,47 +243,47 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defn- insert-flds
-  "Format sql for insert." [vendor obj flds]
+  "Format sql for insert."
+  [vendor obj flds]
   (let [sb2 (s/sbf<>)
         sb1 (s/sbf<>)
-        ps
-        (c/preduce<vec>
-          #(let [[k v] %2
-                 fd (get flds k)
-                 {:keys [auto? system?]} fd]
-             (if (and fd
-                      (not auto?)
-                      (not system?))
-               (do
-                 (s/sbf-join sb1
-                             "," (h/fmt-sqlid vendor
-                                              (h/find-col fd)))
-                 (s/sbf-join sb2
-                             "," (if (nil? v) "null" "?"))
-                 (if v (conj! %1 v) %1))
-               %1)) obj)]
-    [(str sb1) (str sb2) ps]))
+        p (c/preduce<vec>
+            #(let [[k v] %2
+                   {:keys [auto?
+                           system?] :as fd}
+                   (get flds k)]
+               (if (and fd
+                        (not auto?)
+                        (not system?))
+                 (do (s/sbf-join sb1
+                                 "," (h/fmt-sqlid vendor
+                                                  (h/find-col fd)))
+                     (s/sbf-join sb2
+                                 "," (if (nil? v) "null" "?"))
+                     (if v (conj! %1 v) %1))
+                 %1)) obj)]
+    [(str sb1)(str sb2) p]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defn- update-flds
   "Format sql for update." [vendor obj flds]
   (let [sb1 (s/sbf<>)
-        ps
-        (c/preduce<vec>
-          #(let [[k v] %2
-                 fd (get flds k)
-                 {:keys [auto? system? updatable?]} fd]
-             (if (and fd
-                      updatable?
-                      (not auto?)
-                      (not system?))
-               (do
-                 (s/sbf-join sb1
-                             "," (h/fmt-sqlid vendor
-                                              (h/find-col fd)))
-                 (s/sbf+ sb1 (if (nil? v) "=null" "=?"))
-                 (if v (conj! %1 v) %1))
-               %1)) obj)]
+        ps (c/preduce<vec>
+             #(let [[k v] %2
+                    {:keys [auto?
+                            system?
+                            updatable?] :as fd}
+                    (get flds k)]
+                (if (and fd
+                         updatable?
+                         (not auto?)
+                         (not system?))
+                  (do (s/sbf-join sb1
+                                  "," (h/fmt-sqlid vendor
+                                                   (h/find-col fd)))
+                      (s/sbf+ sb1 (if (nil? v) "=null" "=?"))
+                      (if v (conj! %1 v) %1))
+                  %1)) obj)]
     [(str sb1) ps]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -304,7 +294,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defn- do-exec+
   [vendor conn sql pms options]
-  (sql-exec-with-output vendor conn sql pms options))
+  (exec->output vendor conn sql pms options))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defn- do-exec
@@ -328,19 +318,20 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defn- do-count
   [vendor conn model]
-  (let
+  (c/if-some+
     [rc (do-query vendor
                   conn
                   (str "select count(*) from "
-                       (h/fmt-sqlid vendor (h/find-table model))) [])]
-    (if (not-empty rc)
-      (c/_E (c/_1 (seq (c/_1 rc)))))))
+                       (h/fmt-sqlid vendor
+                                    (h/find-table model))) [])]
+    (c/_E (c/_1 (seq (c/_1 rc))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defn- do-purge
   [vendor conn model]
   (let [sql (str "delete from "
-                 (h/fmt-sqlid vendor (h/find-table model)))]
+                 (h/fmt-sqlid vendor
+                              (h/find-table model)))]
     (sql-exec vendor conn sql []) 0))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -353,14 +344,16 @@
                   (->> (h/find-table mcz)
                        (h/fmt-sqlid vendor))
                   " where "
-                  (fmt-update-where vendor mcz))
+                  (fmt-where vendor mcz))
              [(h/goid obj)])
     (h/dberr! "Unknown model for: %s." obj)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defn- do-insert
   ^Object [vendor conn obj]
-  (if-some [{:keys [pkey fields] :as mcz} (h/gmodel obj)]
+  (if-some [{:keys [pkey fields]
+             :as mcz}
+            (h/gmodel obj)]
     (let [[s1 s2 pms]
           (insert-flds vendor obj fields)]
       (if (s/hgl? s1)
@@ -373,7 +366,7 @@
                          " (" s1 ") values (" s2 ")")
                     pms
                     {:pkey (h/find-col (h/find-field mcz pkey))})]
-          (if (not-empty out)
+          (if-not (empty? out)
             (l/debug "Exec-with-out %s." out)
             (h/dberr! "rowid must be returned."))
           (let [n (:1 out)]
@@ -395,26 +388,30 @@
                       (->> (h/find-table mcz)
                            (h/fmt-sqlid vendor))
                       " set " sb1 " where "
-                      (fmt-update-where vendor mcz))
+                      (fmt-where vendor mcz))
                  (conj pms (h/goid obj)))
         0))
     (h/dberr! "Unknown model for: %s." obj)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(defn- do-extra-sql ^String [sql extra] sql)
+(defn- do-extra-sql
+  ^String [sql extra] sql)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defrecord SQLrImpl []
   SQLr
   (sq-find-some [_ typeid filters]
     (h/sq-find-some _ typeid filters {}))
+
   (sq-find-all [_ typeid extra]
     (h/sq-find-some _ typeid {} extra))
+
   (sq-find-all [_ typeid]
     (h/sq-find-all _ typeid {}))
+
   (sq-find-one [_ typeid filters]
-    (c/if-some+ [rs (h/sq-find-some _ typeid filters)]
-                (first rs)))
+    (c/if-some+
+      [rs (h/sq-find-some _ typeid filters)] (first rs)))
 
   (sq-find-some [me typeid filters extraSQL]
     (let [{:keys [runc models vendor]} me]
@@ -422,7 +419,7 @@
         (runc #(let [s (str "select * from "
                             (h/fmt-sqlid vendor table))
                      [wc pms]
-                     (sql-filter-clause vendor mcz filters)]
+                     (filter-clause vendor mcz filters)]
                  (do-query+ vendor
                             %1
                             (do-extra-sql
@@ -457,7 +454,7 @@
       (runc #(do-query vendor %1 sql params))))
 
   (sq-exec-with-output [me sql pms]
-    (let [ {:keys [runc ____meta models vendor]} me
+    (let [{:keys [runc ____meta models vendor]} me
           {:keys [col-rowid]} ____meta]
       (runc #(do-exec+ vendor
                        %1
@@ -483,14 +480,10 @@
 (defn sqlr<>
   "" [db runc]
   {:pre [(fn? runc)]}
-  (let [{:keys [schema vendor]} db
-        {:keys [models ____meta]} @schema]
-    (c/object<> SQLrImpl
-                :____meta ____meta
-                :vendor vendor
-                :runc runc
-                :models models
-                :schema schema)))
+  (c/object<> SQLrImpl
+              (merge {:runc runc}
+                     (select-keys db [:schema :vendor])
+                     (select-keys @(:schema db) [:models :____meta]))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;EOF

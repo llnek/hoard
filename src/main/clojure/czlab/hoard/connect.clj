@@ -23,7 +23,8 @@
            [czlab.hoard TLocalMap]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(defprotocol DbObj ""
+(defprotocol DbObj
+  "Functions relating to a database."
   (db-simple [_] "Auto commit session")
   (db-open [_] "Jdbc connection")
   (db-finz [_])
@@ -39,12 +40,14 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;(set! *warn-on-reflection* true)
-
-(def ^:private pool-cfg {:connectionTimeout 30000 ;; how long in millis caller will wait
-                         :idleTimeout 600000 ;; idle time in pool
-                         :maximumPoolSize 10
-                         :minimumIdle 10
-                         :poolName "" })
+(def ^:private pool-cfg
+  {;; idle time in pool
+   :idleTimeout 600000
+   :poolName ""
+   :minimumIdle 10
+   :maximumPoolSize 10
+   ;; millis caller will wait
+   :connectionTimeout 30000})
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defn- register-jdbc-tl
@@ -54,12 +57,14 @@
         ^Map c (.get (TLocalMap/cache))]
     (when-not (.containsKey c hc)
       (l/debug "no db-pool in thread-local, creating one.")
-      (->> (merge pool-cfg options) (h/dbpool<> spec) (.put c hc)))
+      (->> (merge pool-cfg options)
+           (h/dbpool<> spec) (.put c hc)))
     (.get c hc)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defn- gconn
-  "Connect to db." ^Connection [db cfg]
+  "Connect to db."
+  ^Connection [db cfg]
   (let [{:keys [isolation auto?]} cfg
         ^Connection c ((:open db) db)
         how (or isolation
@@ -77,7 +82,8 @@
   [c] `(.commit ~(with-meta c {:tag 'Connection})))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(defn- tx-sqlr<> [db]
+(defn- tx-sqlr<>
+  [db]
   (reify
     czlab.hoard.core.Transactable
     (tx-transact! [_ cb cfg]
@@ -91,7 +97,8 @@
       (h/tx-transact! _ cb nil))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(defn- sim-sqlr<> [db]
+(defn- sim-sqlr<>
+  [db]
   (let [cfg {:isolation
              Connection/TRANSACTION_SERIALIZABLE}]
     (q/sqlr<> db #(c/wo* [c2 (gconn db cfg)] (% c2)))))
@@ -105,7 +112,8 @@
   (db-open [me] (c/if-fn? [f (:open me)] (f me))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(defn- dbobj<> [dbm]
+(defn- dbobj<>
+  [dbm]
   (c/object<> DbObjImpl
               (assoc dbm
                      :co (tx-sqlr<> dbm)
@@ -119,7 +127,8 @@
    (dbobj<> {:schema schema
              :jdbc jdbc
              :open #(h/conn<> (:jdbc %))
-             :vendor (c/wo* [c (h/conn<> jdbc)] (h/db-vendor c))})))
+             :vendor (c/wo* [^Connection
+                             c (h/conn<> jdbc)] (h/db-vendor c))})))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defn dbio<+>

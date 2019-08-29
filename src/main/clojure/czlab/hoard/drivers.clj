@@ -30,8 +30,7 @@
   {:tag String}
   ([idstr] (gsqlid idstr nil))
   ([idstr quote?]
-   (let [{:keys [case-fn qstr]}
-         h/*ddl-cfg*
+   (let [{:keys [case-fn qstr]} h/*ddl-cfg*
          id (case-fn idstr)]
      (if (false? quote?) id (str qstr id qstr)))))
 
@@ -50,9 +49,6 @@
   ([field] (gcolumn field nil))
   ([field quote?]
    {:pre [(map? field)]} (gsqlid (:column field) quote?)))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;(defmacro ^:private gcn "Get column name" [fields fid] `(genCol (get ~fields ~fid)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defn- gen-col-def
@@ -138,7 +134,7 @@
               p
               (conj! p fld))) fields)]
     (when (pos? (.length bf))
-      (when (not-empty pkeys)
+      (when-not (empty? pkeys)
         (s/sbf+ bf ",\n" (gen-pkey vt db
                                    model pkeys)))
       (let [s (gen-uniques vt db
@@ -536,5 +532,4 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;EOF
-
 

@@ -39,66 +39,76 @@
 (def ^:private dft-options {:col-rowid "CZLAB_ROWID"
                             :col-lhs-rowid "CZLAB_LHS_ROWID"
                             :col-rhs-rowid "CZLAB_RHS_ROWID"})
-
-(def ^:private REL-TYPES #{:o2o :o2m})
 (def ^:dynamic *ddl-cfg* nil)
 (def ^:dynamic *ddl-bvs* nil)
 (def ddl-sep "-- :")
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(declare conn<> dbo2o dbo2m dbm2m dbfields dft-fld<>)
+(declare dbo2o dbo2m dbm2m dbfields dft-fld<>)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(defprotocol PojoAPI ""
+(defprotocol PojoAPI
+  "Functions relating to a Pojo."
   (bind-model [_ model] "")
   (db-get-fld [_ fld] "Get field.")
   (db-clr-fld [_ fld] "Remove field.")
   (db-set-fld [_ fld value] "Set value to a field."))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(defprotocol JdbcSpecAPI ""
+(defprotocol JdbcSpecAPI
+  "Functions relating to jdbc properties."
   (testing? [_] "Test connect to db.")
+  (conn<> [_] "")
   (load-driver [_] "Load the jdbc driver class."))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(defprotocol Matchers ""
+(defprotocol Matchers
+  "Functions relating to jdbc protocol line."
   (match-url?? [_] "")
   (match-spec?? [_] ""))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(defprotocol SchemaQuery ""
+(defprotocol SchemaAPI
+  "Functions relating to a schema."
   (find-model [_ id] "Find model."))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(defprotocol FieldQuery
+(defprotocol FieldAPI
+  "Functions relating to a field."
   (find-col [_] "Find column name,"))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(defprotocol ModelQuery ""
-  (with-joined [_ lhs rhs] "")
-  (with-table [_ table] "")
+(defprotocol ModelAPI
+  "Functions relating to a model."
   (find-assoc [_ id] "")
   (gschema [_] "")
+  (gmxm [_] "")
   (find-table [_] "")
   (find-id [_]  "")
-  (find-field [_ id] ""))
+  (find-field [_ id] "")
+  (with-table [_ table] "")
+  (with-joined [_ lhs rhs] ""))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(defprotocol ConnectionQuery ""
-  (table-exist? [_ table] "")
+(defprotocol ConnectionAPI
+  "Functions relating to a jdbc connection."
   (row-exist? [_ table] "")
   (upload-ddl [_ ddl] "")
   (db-vendor [_] "")
   (db-meta [_] "")
-  (table-meta [_ table] ""))
+  (table-meta [_ table] "")
+  (table-exist? [_ table] ""))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(defprotocol Transactable ""
+(defprotocol Transactable
+  "Functions relating to a db transaction."
   (tx-transact! [_ func]
-                [_ func cfg] "Run function inside a transaction."))
+                [_ func cfg]
+                "Run function inside a transaction."))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(defprotocol SQLr ""
+(defprotocol SQLr
+  "Functions relating to SQL."
   (sq-find-some [_ model filters]
                 [_ model filters extras] "")
   (sq-find-all [_ model]
@@ -116,20 +126,24 @@
                  [_ model sql params] ""))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(defprotocol JdbcPool ""
+(defprotocol JdbcPool
+  "Functions relating to a jdbc connection pool."
   (jp-close [_] "Shut down this pool.")
   (jp-next [_] "Next free connection from the pool."))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defrecord DbioModel [])
-(defrecord DbioM2MRel [])
-(defrecord DbioO2ORel [])
-(defrecord DbioO2MRel [])
 (defrecord DbioField [])
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(defrecord JdbcSpec [])
+(defrecord DbioM2MRel [])
+(defrecord DbioO2ORel [])
+(defrecord DbioO2MRel [])
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defrecord VendorGist [])
+(defrecord JdbcSpec [])
+(defrecord DbioPojo [])
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defn dberr!
@@ -139,11 +153,11 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defmacro ^:private mkfld
-  [& args] `(merge (dft-fld<>) (hash-map ~@args )))
+  [& args] `(merge (dft-fld<>) (hash-map ~@args)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defmacro dbmodel<>
-  "Define a data model inside dbschema<>."
+  "Define a data model inside a schema."
   [name & body]
   (let [p1 (first body)
         [options defs]
@@ -166,57 +180,77 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defmacro gmodel
-  "Get object's model." [obj] `(:model (meta ~obj)))
+  "Get object's model."
+  [pojo] `(:model (meta ~pojo)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defmacro gtype
-  "Get object's type." [obj] `(:id (czlab.hoard.core/gmodel ~obj)))
+  "Get object's type."
+  [pojo] `(:id (czlab.hoard.core/gmodel ~pojo)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defmacro goid
   "Get object's id."
-  [obj] `(let [o# ~obj
-               pk# (:pkey (czlab.hoard.core/gmodel o#))] (pk# o#)))
+  [pojo]
+  `(let [o# ~pojo
+         pk# (:pkey (czlab.hoard.core/gmodel o#))] (pk# o#)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(extend-protocol SchemaQuery
+(extend-protocol SchemaAPI
   clojure.lang.Atom
+
   (find-model [schema typeid]
     (or (get (:models @schema) typeid)
         (l/warn "find-model %s failed!" typeid))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(extend-protocol FieldQuery
+(extend-protocol FieldAPI
   DbioField
+
   (find-col [_] (:column _)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(extend-protocol ModelQuery
+(extend-protocol ModelAPI
   DbioModel
-  (with-table [_ table]
-    (assoc _ :table (clean-name table)))
+
   (with-joined [model lhs rhs]
     {:pre [(c/is-scoped-keyword? lhs)
            (c/is-scoped-keyword? rhs)]}
     ;meta was injected by our framework
-    (let [{c_lhs :col-lhs-rowid
-           c_rhs :col-rhs-rowid} dft-options
-          {{:keys [col-lhs-rowid
+    (let [{{:keys [col-lhs-rowid
                    col-rhs-rowid]} :____meta} model]
+      ;create the fields to store the pkeys of
+      ;both lhs & rhs
       (-> (dbfields model
                     {:lhs-rowid
-                     (mkfld :domain :Long :null? false
-                            :column (s/stror col-lhs-rowid c_lhs))
+                     (mkfld :domain :Long
+                            :null? false
+                            :column col-lhs-rowid)
                      :rhs-rowid
-                     (mkfld :domain :Long :null? false
-                            :column (s/stror col-rhs-rowid c_rhs))})
+                     (mkfld :domain :Long
+                            :null? false
+                            :column col-rhs-rowid)})
+          ;create a mxm relation
           (dbm2m lhs rhs))))
+
+  (with-table [_ table]
+    (assoc _ :table (clean-name table)))
+
   (gschema [_]
     (:schema (meta _)))
+
   (find-field [model fieldid]
     (get (:fields model) fieldid))
+
   (find-table [_] (:table _))
+
   (find-id [_] (:id _))
+
+  (gmxm [model]
+    (assert (:mxm? model)
+            "Not a joined model.")
+    (get (:rels model) :mxm))
+
   (find-assoc [model relid]
     (get (:rels model) relid)))
 
@@ -262,13 +296,12 @@
   (close [_] (jp-close _))
   JdbcPool
   (jp-close [me]
-    (c/do#nil
-      (l/debug "finz: %s." (:impl me))
-      (.close ^HikariDataSource (:impl me))))
+    (c/let#nil [{:keys [impl]} me]
+      (l/debug "finz: %s." impl)
+      (.close ^HikariDataSource impl)))
   (jp-next [me]
     (try (.getConnection ^HikariDataSource (:impl me))
-         (catch Throwable _
-           (dberr! "No free connection.") nil))))
+         (catch Throwable _ (dberr! "No free connection.") nil))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defn- jdbc-pool<>
@@ -288,12 +321,45 @@
                :passwd (i/x->chars passwd)
                :id (str (u/jid<>) "#" (u/seqint2)))))
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(defn- safe-get-conn
+  ^Connection [jdbc]
+  (let [^Driver d (load-driver jdbc)
+        p (Properties.)
+        {:keys [url user
+                driver passwd]} jdbc]
+    (when (s/hgl? user)
+      (doto p
+        (.put "user" user)
+        (.put "username" user))
+      (if passwd
+        (.put p "password" (i/x->str passwd))))
+    (if (nil? d)
+      (dberr! "Can't load Jdbc Url: %s." url))
+    (if (and (s/hgl? driver)
+             (not= (-> d
+                       .getClass
+                       .getName) driver))
+      (l/warn "want %s, got %s." driver (class d)))
+    (.connect d url p)))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (extend-protocol JdbcSpecAPI
   JdbcSpec
   (testing? [_]
     (try (c/do#true (.close ^Connection (conn<> _)))
          (catch SQLException _ false)))
+  (conn<> [jdbc]
+    (let [{:keys [url user]} jdbc
+          ^Connection
+          c (if (s/hgl? user)
+              (safe-get-conn jdbc)
+              (DriverManager/getConnection url))]
+      (if (nil? c)
+        (dberr! "Failed to connect: %s." url))
+      (doto c
+        (.setTransactionIsolation
+          Connection/TRANSACTION_SERIALIZABLE))))
   (load-driver [_]
     (c/if-string [s (:url _)] (DriverManager/getDriver s))))
 
@@ -374,12 +440,12 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defn- dbcfg
   "Set the column name for the primary key.  *internal*"
-  [pojo]
+  [model]
   (let [{:keys [pkey]
-         {:keys [col-rowid]} :____meta} pojo]
+         {:keys [col-rowid]} :____meta} model]
     (if (s/nichts? col-rowid)
-      pojo
-      (update-in pojo [:fields pkey] assoc :column col-rowid))))
+      model
+      (update-in model [:fields pkey] assoc :column col-rowid))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defn dbdef<>
@@ -402,9 +468,9 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defn dbfield<>
   "Add a new field."
-  [pojo fid fdef]
+  [model fid fdef]
   {:pre [(keyword? fid)(map? fdef)]}
-  (update-in pojo
+  (update-in model
              [:fields]
              assoc
              fid
@@ -413,10 +479,9 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defn dbfields
   "Add a bunch of fields."
-  [pojo flddefs]
+  [model flddefs]
   {:pre [(map? flddefs)]}
-  (reduce #(dbfield<> %1 (first %2) (last %2)) pojo flddefs))
-
+  (reduce #(dbfield<> %1 (c/_1 %2) (c/_E %2)) model flddefs))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defmacro dbjoined<>
@@ -431,8 +496,8 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;merge new stuff onto old stuff
-(defn- with-xxx-sets [pojo kvs fld]
-  (update-in pojo
+(defn- with-xxx-sets [model kvs fld]
+  (update-in model
              [fld]
              merge
              (c/preduce<map>
@@ -444,15 +509,15 @@
 ;;indices = { :a #{ :f1 :f2} ] :b #{:f3 :f4} }
 (defn dbindexes
   "Set indexes to the model."
-  [pojo indexes]
+  [model indexes]
   {:pre [(map? indexes)]}
-  (with-xxx-sets pojo indexes :indexes))
+  (with-xxx-sets model indexes :indexes))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defn dbkey
   "Declare your own primary key."
-  [pojo pke]
-  (let [{:keys [fields pkey]} pojo
+  [model pke]
+  (let [{:keys [fields pkey]} model
         {:keys [domain id
                 auto?
                 column size]} pke
@@ -468,16 +533,16 @@
                     :column column
                     :size (c/num?? size 255))
              (assoc fields oid)
-             (assoc pojo :fields))
+             (assoc model :fields))
         (assoc :pkey oid))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;uniques = { :a #{ :f1 :f2 } :b #{ :f3 :f4 } }
 (defn dbuniques
   "Set uniques to the model."
-  [pojo uniqs]
+  [model uniqs]
   {:pre [(map? uniqs)]}
-  (with-xxx-sets pojo uniqs :uniques))
+  (with-xxx-sets model uniqs :uniques))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defn- dbassoc<>
@@ -525,11 +590,11 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defmacro ^:private with-abstract
-  [pojo] `(assoc ~pojo :abstract? true))
+  [model] `(assoc ~model :abstract? true))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defmacro ^:private with-system
-  [pojo] `(assoc ~pojo :system? true))
+  [model] `(assoc ~model :system? true))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defn- check-field? [pojo fld]
@@ -563,9 +628,11 @@
                   kt (:domain (pkey fields))]
             :when (and (not abstract?)
                        (not-empty rels))]
+      ;only deal with o2o, o2m assocs
       (doseq [[_ r] rels
               :let [{:keys [other fkey]} r]
               :when (not (c/is? DbioM2MRel r))]
+        ;inject a new field to the *other* type
         (var-set phd
                  (assoc! @phd
                          other
@@ -615,8 +682,9 @@
 (defn- colmap-fields
   "Create a map of fields keyed by the column name."
   [flds]
-  (c/preduce<map> #(let [[_ v] %2]
-                     (assoc! %1 (s/ucase (:column v)) v)) flds))
+  (c/preduce<map>
+    #(let [[_ v] %2]
+       (assoc! %1 (s/ucase (:column v)) v)) flds))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defn- meta-models
@@ -682,44 +750,6 @@
                                  :META (meta %2)}))
        (vals (:models @schema))))))
 
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(defn- safe-get-conn
-  ^Connection [jdbc]
-  (let [^Driver d (load-driver jdbc)
-        p (Properties.)
-        {:keys [url user
-                driver passwd]} jdbc]
-    (when (s/hgl? user)
-      (doto p
-        (.put "user" user)
-        (.put "username" user))
-      (if passwd
-        (.put p "password" (i/x->str passwd))))
-    (if (nil? d)
-      (dberr! "Can't load Jdbc Url: %s." url))
-    (if (and (s/hgl? driver)
-             (not= (-> d
-                       .getClass
-                       .getName) driver))
-      (l/warn "want %s, got %s." driver (class d)))
-    (.connect d url p)))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(defn conn<>
-  "Connect to db."
-  ^Connection
-  [{:keys [url user] :as jdbc}]
-  (let [^Connection
-        c (if (s/hgl? user)
-            (safe-get-conn jdbc)
-            (DriverManager/getConnection url))]
-    (if (nil? c)
-      (dberr! "Failed to connect: %s." url))
-    (doto c
-      (.setTransactionIsolation
-        Connection/TRANSACTION_SERIALIZABLE))))
-
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defn- maybe-ok?
   [dbn ^Throwable e]
@@ -771,7 +801,7 @@
                 (.supportsTransactions m)})))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(extend-protocol ConnectionQuery
+(extend-protocol ConnectionAPI
   Connection
   (upload-ddl [_ ddl]
     (let [lines (mapv #(s/strim %)
@@ -844,7 +874,8 @@
   "Create a db connection pool."
   ([jdbc] (dbpool<> jdbc nil))
   ([jdbc options]
-   (let [dbv (c/wo* [c (conn<> jdbc)] (db-vendor c))
+   (let [dbv (c/wo* [^Connection
+                     c (conn<> jdbc)] (db-vendor c))
          {:keys [driver url passwd user]} jdbc
          options (or options {})
          hc (HikariConfig.)]
@@ -861,8 +892,6 @@
      (l/debug "[hikari]\n%s." (str hc))
      (jdbc-pool<> dbv jdbc (HikariDataSource. hc)))))
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(defrecord DbioPojo [])
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defn dbpojo<>
   "Create object of type."
@@ -901,7 +930,10 @@
   "Set field+values as: f1 v1 f2 v2 ... fn vn."
   [pojo & fvs]
   {:pre [(c/n#-even? fvs)]}
-  (reduce #(db-set-fld %1 (first %2) (last %2)) pojo (partition 2 fvs)))
+  (reduce #(db-set-fld %1
+                       (c/_1 %2)
+                       (c/_E %2))
+          pojo (partition 2 fvs)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;EOF

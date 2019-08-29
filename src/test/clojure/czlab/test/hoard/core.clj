@@ -108,7 +108,8 @@
         (println "\n\n" s)
         (i/spit-utf8 (i/tmpfile "dbtest.out") s)))
     (alter-var-root #'jdbc-spec (constantly jdbc))
-    (c/wo* [c (h/conn<> jdbc)]
+    (c/wo* [^Connection
+            c (h/conn<> jdbc)]
            (h/upload-ddl c ddl))
     (alter-var-root #'DB (constantly db))
     (alter-var-root #'DBID (constantly dbid))
@@ -261,10 +262,12 @@
             (h/testing? jdbc-spec))
 
   (ensure?? "db-vendor"
-            (map? (c/wo* [c (h/conn<> jdbc-spec)] (h/db-vendor c))))
+            (map? (c/wo* [^Connection
+                          c (h/conn<> jdbc-spec)] (h/db-vendor c))))
 
   (ensure?? "table-exist?"
-            (c/wo* [c (h/conn<> jdbc-spec)] (h/table-exist? c "Person")))
+            (c/wo* [^Connection
+                    c (h/conn<> jdbc-spec)] (h/table-exist? c "Person")))
 
   (ensure?? "dbpool<>"
             (c/wo* [^Closeable p (h/dbpool<> jdbc-spec)]
@@ -276,7 +279,8 @@
                                    "blog" "male"))))
 
   (ensure?? "row-exists?"
-            (c/wo* [c (h/conn<> jdbc-spec)] (h/row-exist? c "Person")))
+            (c/wo* [^Connection
+                    c (h/conn<> jdbc-spec)] (h/row-exist? c "Person")))
 
   (ensure?? "add-obj"
             (pos? (:rowid (create-emp "joe" "blog"
@@ -401,7 +405,8 @@
                           :when (= (:dname d) "d2")]
                     (doseq [e es]
                       (r/db-set-m2m
-                        (h/find-assoc (h/find-model meta-cc ::EmpDepts) :mxm)
+                        (h/gmxm (h/find-model
+                                  meta-cc ::EmpDepts))
                         % d e)))
                   _
                   (doseq [e es
@@ -410,15 +415,18 @@
                             :let [dn (:dname d)]
                             :when (not= dn "d2")]
                       (r/db-set-m2m
-                        (h/find-assoc (h/find-model meta-cc ::EmpDepts) :mxm)
+                        (h/gmxm (h/find-model
+                                  meta-cc ::EmpDepts))
                         % e d)))
                   s1 (r/db-get-m2m
-                       (h/find-assoc (h/find-model meta-cc ::EmpDepts) :mxm)
+                       (h/gmxm (h/find-model
+                                 meta-cc ::EmpDepts))
                        %
                        (some (fn [x]
                                (if (= (:dname x) "d2") x)) ds))
                   s2 (r/db-get-m2m
-                       (h/find-assoc (h/find-model meta-cc ::EmpDepts) :mxm)
+                       (h/gmxm (h/find-model
+                                 meta-cc ::EmpDepts))
                        %
                        (some (fn [x]
                                (if (= (:login x) "e2") x)) es))]
@@ -436,16 +444,20 @@
                                     ::Employee
                                     {:login "e2"})
                   _ (r/db-clr-m2m
-                      (h/find-assoc (h/find-model meta-cc ::EmpDepts) :mxm)
+                      (h/gmxm (h/find-model
+                                meta-cc ::EmpDepts))
                       % d2)
                   _ (r/db-clr-m2m
-                      (h/find-assoc (h/find-model meta-cc ::EmpDepts) :mxm)
+                      (h/gmxm (h/find-model
+                                meta-cc ::EmpDepts))
                       % e2)
                   s1 (r/db-get-m2m
-                       (h/find-assoc (h/find-model meta-cc ::EmpDepts) :mxm)
+                       (h/gmxm (h/find-model
+                                 meta-cc ::EmpDepts))
                        % d2)
                   s2 (r/db-get-m2m
-                       (h/find-assoc (h/find-model meta-cc ::EmpDepts) :mxm)
+                       (h/gmxm (h/find-model
+                                 meta-cc ::EmpDepts))
                        % e2)]
                  (and (== (count s1) 0)
                       (== (count s2) 0)))))
@@ -472,9 +484,9 @@
   (ensure?? "test-end" (= 1 1)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(ct/deftest ^:test-core basal-test-core
-  (ct/is (let [[ok? r]
-               (c/runtest test-core "test-core")] (println r) ok?)))
+(ct/deftest
+  ^:test-core basal-test-core
+  (ct/is (c/clj-test?? test-core)))
 
 ;(println (u/sys-tmp-dir))
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
