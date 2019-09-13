@@ -15,8 +15,7 @@
             [clojure.java.io :as io]
             [clojure.string :as cs]
             [czlab.hoard.core :as h]
-            [czlab.basal.core :as c]
-            [czlab.basal.str :as s])
+            [czlab.basal.core :as c])
 
   (:import [clojure.lang Var]
            [java.io File]
@@ -58,17 +57,17 @@
          (c/vt-run?? vt :genCol [db field])
          " " typedef " "
          (c/vt-run?? vt :nullClause [db (:null? field)])
-         (if (s/hgl? dft) (str " default " dft) ""))))
+         (if (c/hgl? dft) (str " default " dft) ""))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defn- gen-ex-indexes
   "External indexes."
   ^String [vt db schema fields model]
-  (s/sreduce<>
+  (c/sreduce<>
     (fn [b [k v]]
       (if (empty? v)
         b
-        (s/sbf+ b
+        (c/sbf+ b
                 "create index "
                 (c/vt-run?? vt :genIndex [db model (name k)])
                 " on "
@@ -83,11 +82,11 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defn- gen-uniques
   ^String [vt db schema fields model]
-  (s/sreduce<>
+  (c/sreduce<>
     (fn [b [_ v]]
       (if (empty? v)
         b
-        (s/sbf-join b
+        (c/sbf-join b
                     ",\n"
                     (str (c/vt-run?? vt :getPad [db])
                          "unique("
@@ -108,11 +107,11 @@
 (defn- gen-body
   ^String [vt db schema model]
   (let [{:keys [fields pkey]} model
-        bf (s/sbf<>)
+        bf (c/sbf<>)
         pkeys
         (c/preduce<vec>
           (fn [p [k fld]]
-            (s/sbf-join bf ",\n"
+            (c/sbf-join bf ",\n"
               (case (:domain fld)
                 :Timestamp (c/vt-run?? vt :genTimestamp [db fld])
                 :Date (c/vt-run?? vt :genDate [db fld])
@@ -135,12 +134,12 @@
               (conj! p fld))) fields)]
     (when (pos? (.length bf))
       (when-not (empty? pkeys)
-        (s/sbf+ bf ",\n" (gen-pkey vt db
+        (c/sbf+ bf ",\n" (gen-pkey vt db
                                    model pkeys)))
       (let [s (gen-uniques vt db
                            schema fields model)]
-        (when (s/hgl? s)
-          (s/sbf+ bf ",\n" s))))
+        (when (c/hgl? s)
+          (c/sbf+ bf ",\n" s))))
     [(str bf)
      (gen-ex-indexes vt db schema fields model)]))
 
@@ -482,11 +481,11 @@
   #(if (or (= "12c+" (h/*ddl-cfg* :db-version))
            (= "12c" (h/*ddl-cfg* :db-version)))
      ""
-     (s/sreduce<>
+     (c/sreduce<>
        (fn [bd [model fields]]
          (reduce
            (fn [bd [_ fld]]
-             (s/sbf+ bd
+             (c/sbf+ bd
                      (create-seq %2 model fld)))
            bd fields))
        (deref h/*ddl-bvs*)))
@@ -509,7 +508,7 @@
   {:tag String}
   ([schema db] (get-ddl schema db nil))
   ([schema db dbver]
-   (binding [h/*ddl-cfg* {:db-version (s/strim dbver)
+   (binding [h/*ddl-cfg* {:db-version (c/strim dbver)
                           :use-sep? true
                           :qstr ""
                           :case-fn clojure.string/upper-case}
@@ -519,15 +518,15 @@
                 (find-vtbl db)
                 (do (assert (map? db)) db))
            dbID (:id vt)
-           drops (s/sbf<>)
-           body (s/sbf<>)]
+           drops (c/sbf<>)
+           body (c/sbf<>)]
        (doseq [[id model] ms
                :let [tbl (:table model)]
                :when (and (not (:abstract? model))
-                          (s/hgl? tbl))]
+                          (c/hgl? tbl))]
          (l/debug "model id: %s, table: %s." (name id) tbl)
-         (s/sbf+ drops (c/vt-run?? vt :genDrop [dbID model]))
-         (s/sbf+ body (gen-one-table vt dbID schema model)))
+         (c/sbf+ drops (c/vt-run?? vt :genDrop [dbID model]))
+         (c/sbf+ body (gen-one-table vt dbID schema model)))
        (str drops body (c/vt-run?? vt :genEndSQL [dbID]))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

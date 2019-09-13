@@ -14,10 +14,8 @@
   (:require [czlab.basal.util :as u]
             [clojure.java.io :as io]
             [clojure.string :as cs]
-            [czlab.basal.str :as s]
             [czlab.basal.io :as i]
             [czlab.basal.log :as l]
-            [czlab.basal.meta :as m]
             [czlab.basal.core :as c]
             [czlab.hoard.core :as h])
 
@@ -90,12 +88,12 @@
         cn (h/find-col (h/find-field mB fkey))]
     (h/sq-exec-sql ctx
                    (if-not cascade?
-                     (s/fmt
+                     (c/fmt
                        "update %s set %s= null where %s=?"
                        (h/sq-fmt-id ctx tn)
                        (h/sq-fmt-id ctx cn)
                        (h/sq-fmt-id ctx cn))
-                     (s/fmt
+                     (c/fmt
                        "delete from %s where %s=?"
                        (h/sq-fmt-id ctx tn)
                        (h/sq-fmt-id ctx cn)))
@@ -129,7 +127,7 @@
            out (c/tvec*)
            [b & xs] rhsObjs]
       (if (nil? b)
-        (c/cc+1 a (c/ps! out))
+        (c/cc+1 a (c/persist! out))
         (let [[x y]
               (dbio-set-o2x rel ctx a b)]
           (recur x (conj! out y) xs)))))
@@ -179,7 +177,7 @@
             (h/dberr! "Unknown model: %s." t2))
           (h/sq-select-sql ctx
                            t2
-                           (s/fmt
+                           (c/fmt
                              (str "select distinct %s.* from %s %s "
                                   "join %s %s on "
                                   "%s.%s=? and %s.%s=%s.%s")
@@ -207,13 +205,13 @@
                kb (c/_1 (select-side rel objB))]
            (if (nil? objB)
              (h/sq-exec-sql ctx
-                            (s/fmt
+                            (c/fmt
                               "delete from %s where %s=?"
                               (h/sq-fmt-id ctx (h/find-table mm))
                               (h/sq-fmt-id ctx (h/find-col (fields ka))))
                             [(h/goid objA)])
              (h/sq-exec-sql ctx
-                            (s/fmt
+                            (c/fmt
                               "delete from %s where %s=? and %s=?"
                               (h/sq-fmt-id ctx (h/find-table mm))
                               (h/sq-fmt-id ctx (h/find-col (fields ka)))

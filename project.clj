@@ -13,9 +13,9 @@
                  [com.h2database/h2 "1.4.199"]
                  [io.czlab/basal "1.1.0"]]
 
-  :plugins [[cider/cider-nrepl "0.21.1"]
-            [lein-cprint "1.3.1"]
-            [lein-codox "0.10.7"]]
+  :plugins [[cider/cider-nrepl "0.22.2"]
+            [lein-codox "0.10.7"]
+            [lein-cprint "1.3.1"]]
 
   :profiles {:provided {:dependencies
                         [[org.clojure/clojure "1.10.1" :scope "provided"]]}
@@ -35,7 +35,7 @@
   :test-paths ["src/test/clojure"]
 
   :jvm-opts ["-Dlog4j.configurationFile=file:attic/log4j2.xml"]
-  :javac-options ["-source" "8"
+  :javac-options [;"-source" "8"
                   "-Xlint:unchecked" "-Xlint:-options" "-Xlint:deprecation"])
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

@@ -19,7 +19,6 @@
             [clojure.java.io :as io]
             [clojure.string :as cs]
             [czlab.basal.core :as c]
-            [czlab.basal.str :as s]
             [czlab.hoard.core :as h :refer [SQLr]])
 
   (:import [java.util Calendar TimeZone GregorianCalendar]
@@ -56,14 +55,14 @@
   [vendor model filters]
   ;;returns the where clause and parameters
   (let [{:keys [fields]} model]
-    [(s/sreduce<>
+    [(c/sreduce<>
        #(let [[k v] %2
               c (-> (fields k)
                     (h/find-col)
-                    (s/stror (s/sname k)))]
+                    (c/stror (c/sname k)))]
           (->> (str (h/fmt-sqlid vendor c)
                     (if (nil? v) " is null " " =? "))
-               (s/sbf-join %1 " and "))) filters)
+               (c/sbf-join %1 " and "))) filters)
      (c/rnilv (vals filters))]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -93,7 +92,7 @@
   (if-some
     [fdef (-> (meta model)
               :columns
-              (get (s/ucase cn)))] (assoc! row
+              (get (c/ucase cn)))] (assoc! row
                                            (:id fdef) cv) row))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -118,7 +117,7 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defmacro ^:private insert?
-  [sql] `(cs/starts-with? (s/lcase (s/strim ~sql)) "insert"))
+  [sql] `(cs/starts-with? (c/lcase (c/strim ~sql)) "insert"))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defn- set-bind-var
@@ -151,14 +150,14 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defn- mssql-tweak
   [sqlstr token cmd]
-  (loop [target (s/sname token)
+  (loop [target (c/sname token)
          start 0 stop? false sql sqlstr]
     (if stop?
       sql
-      (let [pos (cs/index-of (s/lcase sql)
+      (let [pos (cs/index-of (c/lcase sql)
                              target start)
             rc (if (number? pos)
-                 (s/fmt "%s with (%s) %s"
+                 (c/fmt "%s with (%s) %s"
                         (subs sql 0 pos)
                         cmd
                         (subs sql pos)))]
@@ -170,9 +169,9 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defn- jiggle-sql
   ^String [vendor sqlstr]
-  (let [sql (s/strim sqlstr)
-        lcs (s/lcase sql)]
-    (s/stror (if (= h/SQLServer (:id vendor))
+  (let [sql (c/strim sqlstr)
+        lcs (c/lcase sql)]
+    (c/stror (if (= h/SQLServer (:id vendor))
                (c/condp?? #(cs/starts-with? %2 %1) lcs
                  "select" (mssql-tweak sql :where "nolock")
                  "update" (mssql-tweak sql :set "rowlock")
@@ -223,7 +222,7 @@
       (loop [sum (c/tvec*)
              ok (.next rs)]
         (if-not ok
-          (c/ps! sum)
+          (c/persist! sum)
           (recur (conj! sum
                         (post (func rs m)))
                  (.next rs)))))))
@@ -245,8 +244,8 @@
 (defn- insert-flds
   "Format sql for insert."
   [vendor obj flds]
-  (let [sb2 (s/sbf<>)
-        sb1 (s/sbf<>)
+  (let [sb2 (c/sbf<>)
+        sb1 (c/sbf<>)
         p (c/preduce<vec>
             #(let [[k v] %2
                    {:keys [auto?
@@ -255,10 +254,10 @@
                (if (and fd
                         (not auto?)
                         (not system?))
-                 (do (s/sbf-join sb1
+                 (do (c/sbf-join sb1
                                  "," (h/fmt-sqlid vendor
                                                   (h/find-col fd)))
-                     (s/sbf-join sb2
+                     (c/sbf-join sb2
                                  "," (if (nil? v) "null" "?"))
                      (if v (conj! %1 v) %1))
                  %1)) obj)]
@@ -267,7 +266,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defn- update-flds
   "Format sql for update." [vendor obj flds]
-  (let [sb1 (s/sbf<>)
+  (let [sb1 (c/sbf<>)
         ps (c/preduce<vec>
              #(let [[k v] %2
                     {:keys [auto?
@@ -278,10 +277,10 @@
                          updatable?
                          (not auto?)
                          (not system?))
-                  (do (s/sbf-join sb1
+                  (do (c/sbf-join sb1
                                   "," (h/fmt-sqlid vendor
                                                    (h/find-col fd)))
-                      (s/sbf+ sb1 (if (nil? v) "=null" "=?"))
+                      (c/sbf+ sb1 (if (nil? v) "=null" "=?"))
                       (if v (conj! %1 v) %1))
                   %1)) obj)]
     [(str sb1) ps]))
@@ -356,7 +355,7 @@
             (h/gmodel obj)]
     (let [[s1 s2 pms]
           (insert-flds vendor obj fields)]
-      (if (s/hgl? s1)
+      (if (c/hgl? s1)
         (let [out (do-exec+
                     vendor
                     conn
@@ -381,7 +380,7 @@
   (if-some [{:keys [fields] :as mcz} (h/gmodel obj)]
     (let [[sb1 pms]
           (update-flds vendor obj fields)]
-      (if (s/hgl? sb1)
+      (if (c/hgl? sb1)
         (do-exec vendor
                  conn
                  (str "update "
@@ -423,7 +422,7 @@
                  (do-query+ vendor
                             %1
                             (do-extra-sql
-                              (if (s/hgl? wc)
+                              (if (c/hgl? wc)
                                 (str s " where " wc) s)
                               extraSQL)
                             pms mcz)))
