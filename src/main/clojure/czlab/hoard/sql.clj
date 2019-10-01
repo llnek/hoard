@@ -6,19 +6,21 @@
 ;; the terms of this license.
 ;; You must not remove this notice, or any other, from this software.
 
-(ns ^{:doc "Low level SQL JDBC functions."
-      :author "Kenneth Leung"}
+(ns
+  ^{:doc "Low level SQL JDBC functions."
+    :author "Kenneth Leung"}
 
   czlab.hoard.sql
 
-  (:require [czlab.basal.io :as i]
-            [czlab.basal.dates :as d]
-            [czlab.basal.meta :as m]
-            [czlab.basal.util :as u]
-            [czlab.basal.log :as l]
-            [clojure.java.io :as io]
+  (:require [clojure.java.io :as io]
             [clojure.string :as cs]
-            [czlab.basal.core :as c]
+            [czlab.basal
+             [dates :as d]
+             [meta :as m]
+             [util :as u]
+             [io :as i]
+             [log :as l]
+             [core :as c]]
             [czlab.hoard.core :as h :refer [SQLr]])
 
   (:import [java.util Calendar TimeZone GregorianCalendar]

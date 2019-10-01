@@ -6,16 +6,18 @@
 ;; the terms of this license.
 ;; You must not remove this notice, or any other, from this software.
 
-(ns ^{:doc "Utility functions for DDL generation."
-      :author "Kenneth Leung"}
+(ns
+  ^{:doc "Utility functions for DDL generation."
+    :author "Kenneth Leung"}
 
   czlab.hoard.drivers
 
-  (:require [czlab.basal.log :as l]
-            [clojure.java.io :as io]
+  (:require [clojure.java.io :as io]
             [clojure.string :as cs]
-            [czlab.hoard.core :as h]
-            [czlab.basal.core :as c])
+            [czlab.basal
+             [log :as l]
+             [core :as c]]
+            [czlab.hoard.core :as h])
 
   (:import [clojure.lang Var]
            [java.io File]

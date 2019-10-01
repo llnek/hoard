@@ -6,17 +6,19 @@
 ;; the terms of this license.
 ;; You must not remove this notice, or any other, from this software.
 
-(ns ^{:doc ""
-      :author "Kenneth Leung"}
+(ns
+  ^{:doc ""
+    :author "Kenneth Leung"}
 
   czlab.hoard.rels
 
-  (:require [czlab.basal.util :as u]
-            [clojure.java.io :as io]
+  (:require [clojure.java.io :as io]
             [clojure.string :as cs]
-            [czlab.basal.io :as i]
-            [czlab.basal.log :as l]
-            [czlab.basal.core :as c]
+            [czlab.basal
+             [util :as u]
+             [io :as i]
+             [log :as l]
+             [core :as c]]
             [czlab.hoard.core :as h])
 
   (:import [clojure.lang Keyword APersistentMap APersistentVector]))

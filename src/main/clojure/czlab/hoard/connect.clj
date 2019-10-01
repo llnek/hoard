@@ -6,15 +6,18 @@
 ;; the terms of this license.
 ;; You must not remove this notice, or any other, from this software.
 
-(ns ^{:doc "Database connections."
-      :author "Kenneth Leung"}
+(ns
+  ^{:doc "Database connections."
+    :author "Kenneth Leung"}
 
   czlab.hoard.connect
 
-  (:require [czlab.hoard.sql :as q]
-            [czlab.basal.log :as l]
-            [czlab.basal.core :as c]
-            [czlab.hoard.core :as h])
+  (:require [czlab.hoard
+             [sql :as q]
+             [core :as h]]
+            [czlab.basal
+             [log :as l]
+             [core :as c]])
 
   (:import [java.sql
             Connection

@@ -8,8 +8,8 @@
   :description "SQL orm"
   :url "https://github.com/llnek/hoard"
 
-  :dependencies [[org.postgresql/postgresql "42.2.6"]
-                 [com.zaxxer/HikariCP "3.3.1"]
+  :dependencies [[org.postgresql/postgresql "42.2.8"]
+                 [com.zaxxer/HikariCP "3.4.1"]
                  [com.h2database/h2 "1.4.199"]
                  [io.czlab/basal "1.1.0"]]
 

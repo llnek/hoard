@@ -6,24 +6,27 @@
 ;; the terms of this license.
 ;; You must not remove this notice, or any other, from this software.
 
-(ns ^{:doc ""
-      :author "Kenneth Leung"}
+(ns
+  ^{:doc ""
+    :author "Kenneth Leung"}
 
   czlab.test.hoard.core
 
-  (:require [czlab.hoard.connect :as cn]
-            [czlab.hoard.drivers :as d]
-            [clojure.java.io :as io]
-            [czlab.hoard.sql :as q]
-            [czlab.hoard.rels :as r]
-            [czlab.hoard.core :as h]
-            [clojure.string :as cs]
-            [clojure.test :as ct]
-            [czlab.basal.log :as l]
-            [czlab.basal.io :as i]
-            [czlab.basal.util :as u]
-            [czlab.basal.core
-             :refer [ensure?? ensure-thrown??] :as c])
+  (:require [clojure.java.io :as io]
+            [czlab.hoard
+             [sql :as q]
+             [rels :as r]
+             [core :as h]
+             [drivers :as d]
+             [connect :as cn]]
+            [clojure
+             [test :as ct]
+             [string :as cs]]
+            [czlab.basal
+             [log :as l]
+             [io :as i]
+             [util :as u]
+             [core :refer [ensure?? ensure-thrown??] :as c]])
 
   (:import [java.io File Closeable]
            [java.sql Connection]
