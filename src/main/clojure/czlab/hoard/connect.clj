@@ -6,32 +6,28 @@
 ;; the terms of this license.
 ;; You must not remove this notice, or any other, from this software.
 
-(ns
-  ^{:doc "Database connections."
-    :author "Kenneth Leung"}
+(ns czlab.hoard.connect
 
-  czlab.hoard.connect
+  "Database connections."
 
-  (:require [czlab.hoard
-             [sql :as q]
-             [core :as h]]
-            [czlab.basal
-             [log :as l]
-             [core :as c]])
+  (:require [czlab.hoard.sql :as q]
+            [czlab.hoard.core :as h]
+            [czlab.basal.log :as l]
+            [czlab.basal.core :as c]
+            [czlab.basal.xpis :as po])
 
   (:import [java.sql
             Connection
             SQLException]
            [java.util Map]
+           [java.io Closeable]
            [czlab.hoard TLocalMap]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defprotocol DbObj
   "Functions relating to a database."
-  (db-simple [_] "Auto commit session")
-  (db-open [_] "Jdbc connection")
-  (db-finz [_])
-  (db-composite [_] "Transaction enabled session"))
+  (simple [_] "Auto commit session")
+  (composite [_] "Transaction enabled session"))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;The calculation of pool size in order to avoid deadlock is a
@@ -43,7 +39,7 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;(set! *warn-on-reflection* true)
-(def ^:private pool-cfg
+(c/def- pool-cfg
   {;; idle time in pool
    :idleTimeout 600000
    :poolName ""
@@ -54,8 +50,10 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defn- register-jdbc-tl
+
   "Add a thread-local db pool."
   [spec options]
+
   (let [hc (:id spec)
         ^Map c (.get (TLocalMap/cache))]
     (when-not (.containsKey c hc)
@@ -66,8 +64,10 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defn- gconn
+
   "Connect to db."
   ^Connection [db cfg]
+
   (let [{:keys [isolation auto?]} cfg
         ^Connection c ((:open db) db)
         how (or isolation
@@ -77,31 +77,35 @@
       (.setTransactionIsolation (int how)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(defmacro ^:private undo
+(c/defmacro- undo
+
   [c] `(c/try! (.rollback ~(with-meta c {:tag 'Connection}))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(defmacro ^:private commit
+(c/defmacro- commit
+
   [c] `(.commit ~(with-meta c {:tag 'Connection})))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defn- tx-sqlr<>
+
   [db]
+
   (reify
     czlab.hoard.core.Transactable
-    (tx-transact! [_ cb cfg]
+    (transact! [_ cb]
+      (h/transact! _ cb nil))
+    (transact! [_ cb cfg]
       (c/wo* [c (gconn db (assoc cfg :auto? false))]
         (try (c/do-with [rc (cb (q/sqlr<> db #(% c)))]
-                        (commit c))
-             (catch Throwable _
-               (undo c)
-               (throw _)))))
-    (tx-transact! [_ cb]
-      (h/tx-transact! _ cb nil))))
+               (commit c))
+             (catch Throwable _ (undo c) (throw _)))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defn- sim-sqlr<>
+
   [db]
+
   (let [cfg {:isolation
              Connection/TRANSACTION_SERIALIZABLE}]
     (q/sqlr<> db #(c/wo* [c2 (gconn db cfg)] (% c2)))))
@@ -109,14 +113,18 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defrecord DbObjImpl []
   DbObj
-  (db-composite [me] (:co me))
-  (db-simple [me] (:si me))
-  (db-finz [me] (c/if-fn? [f (:finz me)] (f me)))
-  (db-open [me] (c/if-fn? [f (:open me)] (f me))))
+  (composite [me] (:co me))
+  (simple [me] (:si me))
+  po/Finzable
+  (finz [me] (c/if-fn? [f (:finz me)] (f me)))
+  po/Openable
+  (open [me] (c/if-fn? [f (:open me)] (f me))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defn- dbobj<>
+
   [dbm]
+
   (c/object<> DbObjImpl
               (assoc dbm
                      :co (tx-sqlr<> dbm)
@@ -124,8 +132,11 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defn dbio<>
+
   "Open/access to a datasource."
+
   ([jdbc schema] (dbio<> jdbc schema nil))
+
   ([jdbc schema options]
    (dbobj<> {:schema schema
              :jdbc jdbc
@@ -135,8 +146,11 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defn dbio<+>
+
   "IO access to a datasource (pooled)."
+
   ([jdbc schema] (dbio<+> jdbc schema nil))
+
   ([jdbc schema options]
    (let [{:keys [vendor] :as pool}
          (h/dbpool<> jdbc
@@ -145,8 +159,8 @@
                :vendor vendor
                :jdbc jdbc
                :pool pool
-               :open #(h/jp-next (:pool %))
-               :finz #(h/jp-close (:pool %))}))))
+               :open #(h/next (:pool %))
+               :finz #(.close ^Closeable (:pool %))}))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;EOF

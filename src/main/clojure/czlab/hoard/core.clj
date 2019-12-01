@@ -6,22 +6,21 @@
 ;; the terms of this license.
 ;; You must not remove this notice, or any other, from this software.
 
-(ns
-  ^{:doc "Database and modeling functions."
-    :author "Kenneth Leung"}
+(ns czlab.hoard.core
 
-  czlab.hoard.core
+  "Database and modeling functions."
+
+  (:refer-clojure :exclude [next])
+
+  (:use [flatland.ordered.set])
 
   (:require [clojure.java.io :as io]
             [clojure.string :as cs]
-            [czlab.basal
-             [io :as i]
-             [log :as l]
-             [meta :as m]
-             [util :as u]
-             [core :as c]])
-
-  (:use [flatland.ordered.set])
+            [czlab.basal.io :as i]
+            [czlab.basal.log :as l]
+            [czlab.basal.meta :as m]
+            [czlab.basal.util :as u]
+            [czlab.basal.core :as c])
 
   (:import [java.util HashMap TimeZone Properties GregorianCalendar]
            [clojure.lang Keyword APersistentMap APersistentVector]
@@ -51,9 +50,9 @@
 (defprotocol PojoAPI
   "Functions relating to a Pojo."
   (bind-model [_ model] "")
-  (db-get-fld [_ fld] "Get field.")
-  (db-clr-fld [_ fld] "Remove field.")
-  (db-set-fld [_ fld value] "Set value to a field."))
+  (get-fld [_ fld] "Get field.")
+  (clr-fld [_ fld] "Remove field.")
+  (set-fld [_ fld value] "Set value to a field."))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defprotocol JdbcSpecAPI
@@ -103,34 +102,33 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defprotocol Transactable
   "Functions relating to a db transaction."
-  (tx-transact! [_ func]
-                [_ func cfg]
-                "Run function inside a transaction."))
+  (transact! [_ func]
+             [_ func cfg]
+             "Run function inside a transaction."))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defprotocol SQLr
   "Functions relating to SQL."
-  (sq-find-some [_ model filters]
-                [_ model filters extras] "")
-  (sq-find-all [_ model]
-               [_ model extras] "")
-  (sq-find-one [_ model filters] "")
-  (sq-fmt-id [_ s] "")
-  (sq-mod-obj [_ obj] "")
-  (sq-del-obj [_ obj] "")
-  (sq-add-obj [_ obj] "")
-  (sq-exec-sql [_ sql params] "")
-  (sq-count-objs [_ model] "")
-  (sq-purge-objs [_ model] "")
-  (sq-exec-with-output [_ sql params] "")
-  (sq-select-sql [_ sql params]
-                 [_ model sql params] ""))
+  (find-some [_ model filters]
+             [_ model filters extras] "")
+  (find-all [_ model]
+            [_ model extras] "")
+  (find-one [_ model filters] "")
+  (fmt-id [_ s] "")
+  (mod-obj [_ obj] "")
+  (del-obj [_ obj] "")
+  (add-obj [_ obj] "")
+  (exec-sql [_ sql params] "")
+  (count-objs [_ model] "")
+  (purge-objs [_ model] "")
+  (exec-with-output [_ sql params] "")
+  (select-sql [_ sql params]
+              [_ model sql params] ""))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defprotocol JdbcPool
   "Functions relating to a jdbc connection pool."
-  (jp-close [_] "Shut down this pool.")
-  (jp-next [_] "Next free connection from the pool."))
+  (next [_] "Next free connection from the pool."))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defrecord DbioModel [])
@@ -148,31 +146,39 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defn dberr!
+
   "Throw a SQL execption."
   [fmt & more]
+
   (c/trap! SQLException (str (apply format fmt more))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (c/defmacro- mkfld
-  [& args] `(merge (dft-fld<>) (hash-map ~@args)))
+
+  [& args] `(merge (dft-fld<>) (array-map ~@args)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defmacro dbmodel<>
+
   "Define a data model inside a schema."
   [name & body]
+
   (let [p1 (first body)
         [options defs]
-        (if (map? p1)
-          [p1 (drop 1 body)] [nil body])]
+        (if-not (map? p1)
+          [nil body]
+          [p1 (drop 1 body)])]
   `(-> (czlab.hoard.core/dbdef<> ~name ~options) ~@defs)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defmacro tstamp<>
+
   "Sql timestamp."
   [] `(java.sql.Timestamp. (.getTime (java.util.Date.))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defn- clean-name
+
   [s] (str (some-> s
                    name
                    (cs/replace #"[^a-zA-Z0-9_-]" "")
@@ -180,17 +186,24 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defmacro gmodel
-  "Get object's model." [pojo] `(:model (meta ~pojo)))
+
+  "Get object's model."
+  [pojo] `(:model (meta ~pojo)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defmacro gtype
+
   "Get object's type."
-  [pojo] `(:id (czlab.hoard.core/gmodel ~pojo)))
+  [pojo]
+
+  `(:id (czlab.hoard.core/gmodel ~pojo)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defmacro goid
+
   "Get object's id."
   [pojo]
+
   `(let [o# ~pojo
          pk# (:pkey (czlab.hoard.core/gmodel o#))] (pk# o#)))
 
@@ -210,8 +223,6 @@
 (extend-protocol ModelAPI
   DbioModel
   (with-joined [model lhs rhs]
-    {:pre [(c/is-scoped-keyword? lhs)
-           (c/is-scoped-keyword? rhs)]}
     ;meta was injected by our framework
     (let [{{:keys [col-lhs-rowid
                    col-rhs-rowid]} :____meta} model]
@@ -245,10 +256,13 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defn fmt-sqlid
+
   "Format SQL identifier."
   {:tag String}
+
   ([info idstr]
    (fmt-sqlid info idstr nil))
+
   ([info idstr quote?]
    (cond
      (map? info)
@@ -275,6 +289,7 @@
 ;; have to be function , not macro as this is passed into another higher
 ;; function - merge.
 (defn- merge-meta
+
   "Merge 2 meta maps."
   [m1 m2] {:pre [(map? m1)
                  (or (nil? m2)(map? m2))]} (merge m1 m2))
@@ -282,26 +297,29 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defrecord JdbcPoolImpl []
   java.io.Closeable
-  (close [_] (jp-close _))
-  JdbcPool
-  (jp-close [me]
+  (close [me]
     (c/let#nil [{:keys [impl]} me]
       (l/debug "finz: %s." impl)
       (.close ^HikariDataSource impl)))
-  (jp-next [me]
+  JdbcPool
+  (next [me]
     (try (.getConnection ^HikariDataSource (:impl me))
          (catch Throwable _ (dberr! "No free connection.") nil))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defn- jdbc-pool<>
+
   [vendor jdbc impl]
   (c/object<> JdbcPoolImpl
               :vendor vendor :jdbc jdbc :impl impl))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defn dbspec<>
+
   "Basic jdbc parameters."
+
   ([url] (dbspec<> nil url nil nil))
+
   ([driver url user passwd]
    (c/object<> JdbcSpec
                :driver (str driver)
@@ -312,7 +330,9 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defn- safe-get-conn
+
   ^Connection [jdbc]
+
   (let [^Driver d (load-driver jdbc)
         p (Properties.)
         {:keys [url user
@@ -372,8 +392,10 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defn- maybe-get-vendor
+
   "Detect the database vendor."
   [product]
+
   (let [fc #(c/embeds? %2 %1)
         lp (c/lcase product)]
     (condp fc lp
@@ -386,6 +408,7 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (c/defmacro- fmt-fkey
+
   "For o2o & o2m relations."
   [tn rn] `(c/x->kw "fk_" (name ~tn) "_" (name ~rn)))
 
@@ -404,7 +427,9 @@
 ;; DATA MODELING
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defn- dft-fld<>
+
   ([] (dft-fld<> nil))
+
   ([fid]
    (c/object<> DbioField
                :domain :String
@@ -428,8 +453,10 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defn- dbcfg
+
   "Set the column name for the primary key.  *Internal*"
   [model]
+
   (let [{:keys [pkey]
          {:keys [col-rowid]} :____meta} model]
     (if (c/nichts? col-rowid)
@@ -438,8 +465,11 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defn dbdef<>
+
   "Define a generic model. *internal*"
+
   ([mname] (dbdef<> mname nil))
+
   ([mname options]
    {:pre [(c/is-scoped-keyword? mname)]}
    (dbcfg (c/object<> DbioModel
@@ -456,9 +486,11 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defn dbfield<>
+
   "Add a new field."
   [model fid fdef]
   {:pre [(keyword? fid)(map? fdef)]}
+
   (update-in model
              [:fields]
              assoc
@@ -467,16 +499,21 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defn dbfields
+
   "Add a bunch of fields."
   [model flddefs]
   {:pre [(map? flddefs)]}
+
   (reduce #(dbfield<> %1 (c/_1 %2) (c/_E %2)) model flddefs))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defmacro dbjoined<>
+
   "Define a joined data model."
+
   ([modelname lhs rhs]
    `(dbjoined<> ~modelname nil ~lhs ~rhs))
+
   ([modelname options lhs rhs]
    (let [options' (merge options {:mxm? true})]
      `(-> (czlab.hoard.core/dbdef<> ~modelname ~options')
@@ -486,7 +523,9 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;merge new stuff onto old stuff
 (defn- with-xxx-sets
+
   [model kvs fld]
+
   (update-in model
              [fld]
              merge
@@ -498,15 +537,19 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;indices = { :a #{ :f1 :f2} ] :b #{:f3 :f4} }
 (defn dbindexes
+
   "Set indexes to the model."
   [model indexes]
   {:pre [(map? indexes)]}
+
   (with-xxx-sets model indexes :indexes))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defn dbkey
+
   "Declare your own primary key."
   [model pke]
+
   (let [{:keys [fields pkey]} model
         {:keys [domain id
                 auto?
@@ -532,15 +575,19 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;uniques = { :a #{ :f1 :f2 } :b #{ :f3 :f4 } }
 (defn dbuniques
+
   "Set uniques to the model."
   [model uniqs]
   {:pre [(map? uniqs)]}
+
   (with-xxx-sets model uniqs :uniques))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defn- dbassoc<>
+
   "Define an relation between 2 models."
   [{:keys [id] :as model} rel args]
+
   (let [{fk :fkey rid :id :as R}
         (merge rel {:fkey nil
                     :cascade? false} args)]
@@ -555,6 +602,7 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defn- dbm2m
+
   [model lhs rhs]
   (dbassoc<> model
              (DbioM2MRel.)
@@ -565,33 +613,41 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defn dbo2m
+
   "Define a one to many association."
   [model id & args]
   {:pre [(not-empty args)]}
+
   (dbassoc<> model
              (DbioO2MRel.)
              (assoc (c/kvs->map args) :id id)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defn dbo2o
+
   "Define a one to one association."
   [model id & args]
   {:pre [(not-empty args)]}
+
   (dbassoc<> model
              (DbioO2ORel.)
              (assoc (c/kvs->map args) :id id)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (c/defmacro- with-abstract
+
   [model] `(assoc ~model :abstract? true))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (c/defmacro- with-system
+
   [model] `(assoc ~model :system? true))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defn- check-field?
+
   [pojo fld]
+
   (boolean
     (if-some [f (find-field (gmodel pojo) fld)]
       (not (or (:auto? f)
@@ -599,15 +655,18 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (c/defmacro- mkfkdef<>
+
   [fid ktype] `(assoc (dft-fld<> ~fid)
                       :rel-key? true :domain ~ktype))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defn- resolve-assocs
+
   "Walk through all models, for each model, study its relations.
   For o2o or o2m assocs, we need to artificially inject a new
   field/column into the (other/rhs) model (foreign key)."
   [metas]
+
   ;; 1st, create placeholder maps for each model,
   ;; to hold new fields from rels
   (with-local-vars
@@ -645,7 +704,9 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defn- resolve-mxms
+
   [metas]
+
   ;deal with dbjoined<> decls
   (with-local-vars [mms (c/tmap*)]
     (doseq [[k m] metas
@@ -675,17 +736,21 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defn- colmap-fields
+
   "Create a map of fields keyed by the column name."
   [flds]
+
   (c/preduce<map>
     #(let [[_ v] %2]
        (assoc! %1 (c/ucase (:column v)) v)) flds))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defn- meta-models
+
   "Inject extra meta-data properties into each model.  Each model will have
    its (complete) set of fields keyed by column name or field id."
   [metas schema]
+
   (c/preduce<map>
     #(let [[k m] %2
            {:keys [fields]} m]
@@ -697,7 +762,9 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defmacro defschema
-  "" [name & models]
+
+  [name & models]
+
   (let [m (meta name)
         options (merge m dft-options)
         options' {:____meta options}]
@@ -712,8 +779,10 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defn dbschema*
+
   "Stores metadata for all models.  *internal*"
   [options & models]
+
   (let [ms (if-not (empty? models)
              (c/preduce<map>
                #(assoc! %1 (:id %2) %2) models))
@@ -731,8 +800,11 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defn dbg-schema
-  "" {:tag String}
+
+  {:tag String}
+
   ([schema] (dbg-schema schema true))
+
   ([schema simple?]
    {:pre [(some? schema)]}
    (if simple?
@@ -747,7 +819,9 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defn- maybe-ok?
+
   [dbn ^Throwable e]
+
   (let [ee (c/cast? SQLException (u/root-cause e))
         ec (some-> ee .getErrorCode)]
     (or (and (c/embeds? dbn "oracle")
@@ -756,9 +830,11 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defn- load-columns
+
   "Read each column's metadata."
   [^DatabaseMetaData m
    ^String catalog ^String schema ^String table]
+
   (with-local-vars [pkeys #{} cms {}]
     (c/wo* [rs (.getPrimaryKeys m
                                 catalog schema table)]
@@ -866,8 +942,11 @@
 ;;(.shutdown this)))
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defn dbpool<>
+
   "Create a db connection pool."
+
   ([jdbc] (dbpool<> jdbc nil))
+
   ([jdbc options]
    (let [dbv (c/wo* [^Connection
                      c (conn<> jdbc)] (db-vendor c))
@@ -889,15 +968,21 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defn dbpojo<>
+
   "Create object of type."
+
   ([] (DbioPojo.))
+
   ([model]
    {:pre [(some? model)]}
    (bind-model (DbioPojo.) model)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defn mock-pojo<>
-  "Clone object with pkey only." [obj]
+
+  "Clone object with pkey only."
+  [obj]
+
   (let [out (DbioPojo.)
         pk (:pkey (gmodel obj))]
     (with-meta (assoc out pk (goid obj)) (meta obj))))
@@ -912,9 +997,9 @@
       (if (nil? model)
         (with-meta p (assoc m :model _model))
         (c/raise! "Cannot bind model %s twice!" model))))
-  (db-clr-fld [pojo fld] (dissoc pojo fld))
-  (db-get-fld [pojo fld] (get pojo fld))
-  (db-set-fld [pojo fld value]
+  (clr-fld [pojo fld] (dissoc pojo fld))
+  (get-fld [pojo fld] (get pojo fld))
+  (set-fld [pojo fld value]
     {:pre [(keyword? fld)]}
     (if (check-field? pojo fld)
       (assoc pojo fld value)
@@ -922,22 +1007,25 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defn db-set-flds*
+
   "Set field+values as: f1 v1 f2 v2 ... fn vn."
   [pojo & fvs]
   {:pre [(c/n#-even? fvs)]}
-  (reduce #(db-set-fld %1
-                       (c/_1 %2)
-                       (c/_E %2))
-          pojo (partition 2 fvs)))
+
+  (reduce #(set-fld %1
+                    (c/_1 %2)
+                    (c/_E %2)) pojo (partition 2 fvs)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defn db-set-flds
+
   "Set field+values as: f1 v1 f2 v2 ... fn vn."
   [pojo fvs]
   {:pre [(map? fvs)]}
-  (reduce #(db-set-fld %1
-                       (c/_1 %2)
-                       (c/_E %2)) pojo fvs))
+
+  (reduce #(set-fld %1
+                    (c/_1 %2)
+                    (c/_E %2)) pojo fvs))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;EOF

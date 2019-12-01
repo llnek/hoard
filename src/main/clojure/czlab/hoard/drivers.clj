@@ -6,17 +6,14 @@
 ;; the terms of this license.
 ;; You must not remove this notice, or any other, from this software.
 
-(ns
-  ^{:doc "Utility functions for DDL generation."
-    :author "Kenneth Leung"}
+(ns czlab.hoard.drivers
 
-  czlab.hoard.drivers
+  "Utility functions for DDL generation."
 
   (:require [clojure.java.io :as io]
             [clojure.string :as cs]
-            [czlab.basal
-             [log :as l]
-             [core :as c]]
+            [czlab.basal.log :as l]
+            [czlab.basal.core :as c]
             [czlab.hoard.core :as h])
 
   (:import [clojure.lang Var]
@@ -27,9 +24,12 @@
 ;;(set! *warn-on-reflection* true)
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defn- gsqlid
+
   "Format SQL identifier."
   {:tag String}
+
   ([idstr] (gsqlid idstr nil))
+
   ([idstr quote?]
    (let [{:keys [case-fn qstr]} h/*ddl-cfg*
          id (case-fn idstr)]
@@ -37,23 +37,31 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defn- gtable
+
   "Get the table name (quoted)."
   {:tag String}
+
   ([model] (gtable model nil))
+
   ([model quote?]
    {:pre [(map? model)]} (gsqlid (:table model) quote?)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defn- gcolumn
+
   "Get the column name (quoted)."
   {:tag String}
+
   ([field] (gcolumn field nil))
+
   ([field quote?]
    {:pre [(map? field)]} (gsqlid (:column field) quote?)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defn- gen-col-def
+
   ^String [vt db typedef field]
+
   (let [dft (c/_1 (:dft field))]
     (str (c/vt-run?? vt :getPad [db])
          (c/vt-run?? vt :genCol [db field])
@@ -63,8 +71,10 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defn- gen-ex-indexes
+
   "External indexes."
   ^String [vt db schema fields model]
+
   (c/sreduce<>
     (fn [b [k v]]
       (if (empty? v)
@@ -83,7 +93,9 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defn- gen-uniques
+
   ^String [vt db schema fields model]
+
   (c/sreduce<>
     (fn [b [_ v]]
       (if (empty? v)
@@ -100,14 +112,18 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defn- gen-pkey
+
   ^String [vt db model pks]
+
   (str (c/vt-run?? vt :getPad [db])
        "primary key("
        (cs/join "," (map #(c/vt-run?? vt :genCol [db %]) pks)) ")"))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defn- gen-body
+
   ^String [vt db schema model]
+
   (let [{:keys [fields pkey]} model
         bf (c/sbf<>)
         pkeys
@@ -147,7 +163,9 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defn- gen-one-table
+
   ^String [vt db schema model]
+
   (let [d (gen-body vt db schema model)
         b (c/vt-run?? vt :genBegin [db model])
         e (c/vt-run?? vt :genEnd [db])]
@@ -156,139 +174,144 @@
          (c/vt-run?? vt :genGrant [db model]))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(def ^:private ddl-base
+(c/def- ddl-base
   (c/vtbl*
-  :genExec #(str ";\n" (c/vt-run?? %1 :genSep [%2]))
+    :genExec #(str ";\n" (c/vt-run?? %1 :genSep [%2]))
 
-  :getNotNull "not null"
-  :getNull "null"
+    :getNotNull "not null"
+    :getNull "null"
 
-  :nullClause #(if %3
-                 (c/vt-run?? %1 :getNull [%2])
-                 (c/vt-run?? %1 :getNotNull [%2]))
+    :nullClause #(if %3
+                   (c/vt-run?? %1 :getNull [%2])
+                   (c/vt-run?? %1 :getNotNull [%2]))
 
-  :genSep (c/fn_2
-            (if (:use-sep? h/*ddl-cfg*) h/ddl-sep ""))
+    :genSep (c/fn_2
+              (if (:use-sep? h/*ddl-cfg*) h/ddl-sep ""))
 
-  :genDrop
-  #(str "drop table "
-        (gtable %3) (c/vt-run?? %1 :genExec [%2]) "\n\n")
+    :genDrop
+    #(str "drop table "
+          (gtable %3) (c/vt-run?? %1 :genExec [%2]) "\n\n")
 
-  :genBegin
-  #(str "create table " (gtable %3) " (\n")
+    :genBegin
+    #(str "create table " (gtable %3) " (\n")
 
-  :genEnd
-  #(str "\n) " (c/vt-run?? %1 :genExec [%2]) "\n\n")
+    :genEnd
+    #(str "\n) " (c/vt-run?? %1 :genExec [%2]) "\n\n")
 
-  :genEndSQL ""
-  :genGrant ""
+    :genEndSQL ""
+    :genGrant ""
 
-  :genIndex #(gsqlid (str (:table %3) "_" %4))
+    :genIndex #(gsqlid (str (:table %3) "_" %4))
 
-  :genTable #(gtable %3)
+    :genTable #(gtable %3)
 
-  :genCol #(gcolumn %3)
+    :genCol #(gcolumn %3)
 
-  :getPad "    "
+    :getPad "    "
 
-  ;; data types
+    ;; data types
 
-  :genBytes
-  #(gen-col-def %1 %2 (c/vt-run?? %1 :getBlobKwd [%2]) %3)
+    :genBytes
+    #(gen-col-def %1 %2 (c/vt-run?? %1 :getBlobKwd [%2]) %3)
 
-  :genString
-  #(gen-col-def %1 %2
-              (str (c/vt-run?? %1 :getStringKwd [%2])
-                   "(" (:size %3) ")") %3)
+    :genString
+    #(gen-col-def %1 %2
+                  (str (c/vt-run?? %1 :getStringKwd [%2])
+                       "(" (:size %3) ")") %3)
 
-  :genInteger
-  #(gen-col-def %1 %2 (c/vt-run?? %1 :getIntKwd [%2]) %3)
+    :genInteger
+    #(gen-col-def %1 %2 (c/vt-run?? %1 :getIntKwd [%2]) %3)
 
-  :genAutoInteger ""
+    :genAutoInteger ""
 
-  :genDouble
-  #(gen-col-def %1 %2 (c/vt-run?? %1 :getDoubleKwd [%2]) %3)
+    :genDouble
+    #(gen-col-def %1 %2 (c/vt-run?? %1 :getDoubleKwd [%2]) %3)
 
-  :genFloat
-  #(gen-col-def %1 %2 (c/vt-run?? %1 :getFloatKwd [%2]) %3)
+    :genFloat
+    #(gen-col-def %1 %2 (c/vt-run?? %1 :getFloatKwd [%2]) %3)
 
-  :genLong
-  #(gen-col-def %1 %2 (c/vt-run?? %1 :getLongKwd [%2]) %3)
+    :genLong
+    #(gen-col-def %1 %2 (c/vt-run?? %1 :getLongKwd [%2]) %3)
 
-  :genAutoLong ""
+    :genAutoLong ""
 
-  :getTSDefault "CURRENT_TIMESTAMP"
+    :getTSDefault "CURRENT_TIMESTAMP"
 
-  :genTimestamp
-  #(gen-col-def %1 %2 (c/vt-run?? %1 :getTSKwd [%2]) %3)
+    :genTimestamp
+    #(gen-col-def %1 %2 (c/vt-run?? %1 :getTSKwd [%2]) %3)
 
-  :genDate
-  #(gen-col-def %1 %2 (c/vt-run?? %1 :getDateKwd [%2]) %3)
+    :genDate
+    #(gen-col-def %1 %2 (c/vt-run?? %1 :getDateKwd [%2]) %3)
 
-  :genCaldr
-  #(c/vt-run?? %1 :genTimestamp [%2 %3])
+    :genCaldr
+    #(c/vt-run?? %1 :genTimestamp [%2 %3])
 
-  :genBool
-  #(gen-col-def %1 %2 (c/vt-run?? %1 :getBoolKwd [%2]) %3)
+    :genBool
+    #(gen-col-def %1 %2 (c/vt-run?? %1 :getBoolKwd [%2]) %3)
 
-  ;; keywords
-  :getDoubleKwd "double precision"
-  :getStringKwd "varchar"
-  :getFloatKwd "float"
-  :getIntKwd "integer"
-  :getTSKwd "timestamp"
-  :getDateKwd "date"
-  :getBoolKwd "integer"
-  :getLongKwd "bigint"
-  :getBlobKwd "blob"))
+    ;; keywords
+    :getDoubleKwd "double precision"
+    :getStringKwd "varchar"
+    :getFloatKwd "float"
+    :getIntKwd "integer"
+    :getTSKwd "timestamp"
+    :getDateKwd "date"
+    :getBoolKwd "integer"
+    :getLongKwd "bigint"
+    :getBlobKwd "blob"))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;H2 database
-(def ^:dynamic *h2-mem-url* "jdbc:h2:mem:{{dbid}};DB_CLOSE_DELAY=-1" )
-(def ^:dynamic *h2-server-url* "jdbc:h2:tcp://host/path/db" )
-(def ^:dynamic *h2-file-url* "jdbc:h2:{{path}};MVCC=TRUE" )
-(def ^:dynamic *h2-driver* "org.h2.Driver" )
-(def ^:dynamic *h2-mvcc* ";MVCC=TRUE" )
+(def h2-mem-url "jdbc:h2:mem:{{dbid}};DB_CLOSE_DELAY=-1")
+(def h2-server-url "jdbc:h2:tcp://host/path/db")
+;h2-database 1.4.199 works but 1.4.200 fails with MVCC
+;(def h2-file-url "jdbc:h2:{{path}};MVCC=TRUE")
+(def h2-file-url "jdbc:h2:{{path}}")
+(def h2-driver "org.h2.Driver")
+(def h2-mvcc ";MVCC=TRUE")
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; H2
-(def ^:private ddl-h2
+(c/def- ddl-h2
   (c/vtbl** ddl-base
 
-  :id :h2
+    :id :h2
 
-  :getDateKwd  "timestamp"
-  :getDoubleKwd  "double"
-  :getBlobKwd  "blob"
-  :getFloatKwd   "float"
+    :getDateKwd  "timestamp"
+    :getDoubleKwd  "double"
+    :getBlobKwd  "blob"
+    :getFloatKwd   "float"
 
-  :genAutoInteger
-  (fn [vt db model field]
-    (str (c/vt-run?? vt :getPad [db])
-         (c/vt-run?? vt :genCol [db field])
-         " "
-         (c/vt-run?? vt :getIntKwd [db])
-         (if (:pkey field)
-           " identity(1) " " auto_increment(1) ")))
+    :genAutoInteger
+    (fn [vt db model field]
+      (str (c/vt-run?? vt :getPad [db])
+           (c/vt-run?? vt :genCol [db field])
+           " "
+           (c/vt-run?? vt :getIntKwd [db])
+           (if (:pkey field)
+             " identity(1) " " auto_increment(1) ")))
 
-  :genAutoLong
-  (fn [vt db model field]
-    (str (c/vt-run?? vt :getPad [db])
-         (c/vt-run?? vt :genCol [db field])
-         " "
-         (c/vt-run?? vt :getLongKwd [db])
-         (if (:pkey field)
-           " identity(1) " " auto_increment(1) ")))
-  :genBegin
-  #(str "create cached table " (gtable %3) " (\n" )
-  :genDrop
-  #(str "drop table "
-        (gtable %3)
-        " if exists cascade"
-        (c/vt-run?? %1 :genExec [%2]) "\n\n")))
+    :genAutoLong
+    (fn [vt db model field]
+      (str (c/vt-run?? vt :getPad [db])
+           (c/vt-run?? vt :genCol [db field])
+           " "
+           (c/vt-run?? vt :getLongKwd [db])
+           (if (:pkey field)
+             " identity(1) " " auto_increment(1) ")))
+
+    :genBegin
+    #(str "create cached table " (gtable %3) " (\n" )
+
+    :genDrop
+    #(str "drop table "
+          (gtable %3)
+          " if exists cascade"
+          (c/vt-run?? %1 :genExec [%2]) "\n\n")))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defn h2db
+
   "Create a H2 database"
   [dbDir ^String dbid ^String user ^String pwd]
 
@@ -298,7 +321,7 @@
 
   (let [url (doto (io/file dbDir dbid) (.mkdirs))
         u (.getCanonicalPath url)
-        dbUrl (cs/replace *h2-file-url* "{{path}}" u)]
+        dbUrl (cs/replace h2-file-url "{{path}}" u)]
     (l/debug "Creating H2: %s." dbUrl)
     (c/wo* [c1 (DriverManager/getConnection dbUrl user pwd)]
       (.setAutoCommit c1 true)
@@ -311,14 +334,16 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defn close-h2db
+
   "Close an existing H2 database"
   [dbDir ^String dbid ^String user ^String pwd]
+
   (c/test-some "file-dir" dbDir)
   (c/test-hgl "db-id" dbid)
   (c/test-hgl "user" user)
   (let [url (io/file dbDir dbid)
         u (.getCanonicalPath url)
-        dbUrl (cs/replace *h2-file-url* "{{path}}" u)]
+        dbUrl (cs/replace h2-file-url "{{path}}" u)]
     (l/debug "Closing H2: %s." dbUrl)
     (c/wo* [c1 (DriverManager/getConnection dbUrl user pwd)]
       (.setAutoCommit c1 true)
@@ -326,101 +351,113 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;MySQL
-(def ^:dynamic *mysql-driver* "com.mysql.jdbc.Driver")
+(def mysql-driver "com.mysql.jdbc.Driver")
 
-(def ^:private ddl-mysql
+(c/def- ddl-mysql
   (c/vtbl** ddl-base
 
-  :id :mysql
+    :id :mysql
 
-  :getBlobKwd "longblob"
-  :getTSKwd "timestamp"
-  :getDoubleKwd "double"
-  :getFloatKwd "double"
-  :genEnd #(str "\n) type=InnoDB"
-                (c/vt-run?? %1 :genExec [%2]) "\n\n")
-  :genAutoInteger #(str (c/vt-run?? %1 :getPad [%2])
-                        (c/vt-run?? %1 :genCol [%2 %3])
-                        " "
-                        (c/vt-run?? %1 :getIntKwd [%2])
-                        " not null auto_increment")
-  :genAutoLong #(str (c/vt-run?? %1 :getPad [%2])
-                     (c/vt-run?? %1 :genCol [%2 %3])
-                     " "
-                     (c/vt-run?? %1 :getLongKwd [%2])
-                     " not null auto_increment")
-  :genDrop #(str "drop table if exists "
-                 (gtable %3)
-                 (c/vt-run?? %1 :genExec [%2]) "\n\n")))
+    :getBlobKwd "longblob"
+    :getTSKwd "timestamp"
+    :getDoubleKwd "double"
+    :getFloatKwd "double"
+    :genEnd #(str "\n) type=InnoDB"
+                  (c/vt-run?? %1 :genExec [%2]) "\n\n")
+
+    :genAutoInteger #(str (c/vt-run?? %1 :getPad [%2])
+                          (c/vt-run?? %1 :genCol [%2 %3])
+                          " "
+                          (c/vt-run?? %1 :getIntKwd [%2])
+                          " not null auto_increment")
+
+    :genAutoLong #(str (c/vt-run?? %1 :getPad [%2])
+                       (c/vt-run?? %1 :genCol [%2 %3])
+                       " "
+                       (c/vt-run?? %1 :getLongKwd [%2])
+                       " not null auto_increment")
+
+    :genDrop #(str "drop table if exists "
+                   (gtable %3)
+                   (c/vt-run?? %1 :genExec [%2]) "\n\n")))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;PostgreSQL
-(def ^:dynamic *postgresql-url* "jdbc:postgresql://{{host}}:{{port}}/{{db}}")
-(def ^:dynamic *postgresql-driver* "org.postgresql.Driver")
+(def postgresql-url "jdbc:postgresql://{{host}}:{{port}}/{{db}}")
+(def postgresql-driver "org.postgresql.Driver")
 
-(def ^:private ddl-postgres
+(c/def- ddl-postgres
   (c/vtbl** ddl-base
 
-  :id :postgres
+    :id :postgres
 
-  :getTSKwd "timestamp with time zone"
-  :getBlobKwd "bytea"
-  :getDoubleKwd "double precision"
-  :getFloatKwd "real"
-  :genCaldr #(c/vt-run?? %1 :genTimestamp [%2 %3])
-  :genAutoInteger #(str (c/vt-run?? %1 :getPad [%2])
-                        (c/vt-run?? %1 :genCol [%2 %3])
-                        " serial"
-                        " not null auto_increment")
-  :genAutoLong #(str (c/vt-run?? %1 :getPad [%2])
-                     (c/vt-run?? %1 :genCol [%2 %3])
-                     " bigserial"
-                     " not null auto_increment")
-  :genDrop #(str "drop table if exists "
-                 (gtable %3)
-                 " cascade "
-                 (c/vt-run?? %1 :genExec [%2]) "\n\n")))
+    :getTSKwd "timestamp with time zone"
+    :getBlobKwd "bytea"
+    :getDoubleKwd "double precision"
+    :getFloatKwd "real"
+    :genCaldr #(c/vt-run?? %1 :genTimestamp [%2 %3])
+
+    :genAutoInteger #(str (c/vt-run?? %1 :getPad [%2])
+                          (c/vt-run?? %1 :genCol [%2 %3])
+                          " serial"
+                          " not null auto_increment")
+
+    :genAutoLong #(str (c/vt-run?? %1 :getPad [%2])
+                       (c/vt-run?? %1 :genCol [%2 %3])
+                       " bigserial"
+                       " not null auto_increment")
+
+    :genDrop #(str "drop table if exists "
+                   (gtable %3)
+                   " cascade "
+                   (c/vt-run?? %1 :genExec [%2]) "\n\n")))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; SQLServer
-
-(def ^:private ddl-sqlserver
+(c/def- ddl-sqlserver
   (c/vtbl** ddl-base
 
-  :id :sqlserver
+    :id :sqlserver
 
-  :getDoubleKwd "float(53)"
-  :getFloatKwd "float(53)"
-  :getBlobKwd "image"
-  :getTSKwd "datetime"
-  :genAutoInteger #(str (c/vt-run?? %1 :getPad [%2])
-                        (c/vt-run?? %1 :genCol [%2 %3])
-                        " "
-                        (c/vt-run?? %1 :getIntKwd [%2])
-                        (if (:pkey %3)
-                          " identity (1,1) "
-                          " autoincrement "))
-  :genAutoLong #(str (c/vt-run?? %1 :getPad [%2])
-                     (c/vt-run?? %1 :genCol [%2 %3])
-                     " "
-                     (c/vt-run?? %1 :getLongKwd [%2])
-                     (if (:pkey %3)
-                       " identity (1,1) "
-                       " autoincrement "))
-  :genDrop #(str "if exists (select * from "
-                 "dbo.sysobjects where id=object_id('"
-                 (gtable %3 false)
-                 "')) drop table "
-                 (gtable %3)
-                 (c/vt-run?? %1 :genExec [%2]) "\n\n")))
+    :getDoubleKwd "float(53)"
+    :getFloatKwd "float(53)"
+    :getBlobKwd "image"
+    :getTSKwd "datetime"
+
+    :genAutoInteger #(str (c/vt-run?? %1 :getPad [%2])
+                          (c/vt-run?? %1 :genCol [%2 %3])
+                          " "
+                          (c/vt-run?? %1 :getIntKwd [%2])
+                          (if (:pkey %3)
+                            " identity (1,1) "
+                            " autoincrement "))
+
+    :genAutoLong #(str (c/vt-run?? %1 :getPad [%2])
+                       (c/vt-run?? %1 :genCol [%2 %3])
+                       " "
+                       (c/vt-run?? %1 :getLongKwd [%2])
+                       (if (:pkey %3)
+                         " identity (1,1) "
+                         " autoincrement "))
+
+    :genDrop #(str "if exists (select * from "
+                   "dbo.sysobjects where id=object_id('"
+                   (gtable %3 false)
+                   "')) drop table "
+                   (gtable %3)
+                   (c/vt-run?? %1 :genExec [%2]) "\n\n")))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;Oracle
-(defn- create-seq [vt db m fd]
+(defn- create-seq
+
+  [vt db m fd]
+
   (let [s (gsqlid (str "S_"
                        (:table m) "_" (:column fd)))
         t (gsqlid (str "T_"
                        (:table m) "_" (:column fd)))]
+
     (str "create sequence "
          s
          " start with 1 increment by 1"
@@ -443,9 +480,11 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defn- maybe-track-fields
+
   [model field]
-  (if-not (or (= "12c+" (h/*ddl-cfg* :db-version))
-              (= "12c" (h/*ddl-cfg* :db-version)))
+
+  (if-not (or (.equals "12c+" (h/*ddl-cfg* :db-version))
+              (.equals "12c" (h/*ddl-cfg* :db-version)))
     (c/let#true [m (deref h/*ddl-bvs*)
                  t (:id model)
                  r (or (m t) {})]
@@ -456,48 +495,57 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defn- auto-xxx
+
   [vt db model fld]
+
   (str (c/vt-run?? vt :getPad [db])
        (c/vt-run?? vt :genCol [db fld])
        " "
        "number generated by default on null as identity."))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(def ^:private ddl-oracle
+(c/def- ddl-oracle
   (c/vtbl** ddl-base
 
-  :id :oracle
+    :id :oracle
 
-  :getTSDefault "default systimestamp"
-  :getStringKwd "varchar2"
-  :getLongKwd "number(38)"
-  :getDoubleKwd "binary_double"
-  :getFloatKwd "binary_float"
-  :genAutoInteger #(if (maybe-track-fields %3 %4)
-                     (c/vt-run?? %1 :genInteger [%2 %4])
-                     (c/vt-run?? %1 :autoXXX [%2 %3 %4]))
-  :genAutoLong #(if (maybe-track-fields %3 %4)
-                  (c/vt-run?? %1 :genLong [%2 %4])
-                  (auto-xxx %2 %3 %4))
-  :genEndSQL
-  #(if (or (= "12c+" (h/*ddl-cfg* :db-version))
-           (= "12c" (h/*ddl-cfg* :db-version)))
-     ""
-     (c/sreduce<>
-       (fn [bd [model fields]]
-         (reduce
-           (fn [bd [_ fld]]
-             (c/sbf+ bd
-                     (create-seq %2 model fld)))
-           bd fields))
-       (deref h/*ddl-bvs*)))
-  :genDrop #(str "drop table "
-                 (gtable %3)
-                 " cascade constraints purge"
-                 (c/vt-run?? %1 :genExec [%2]) "\n\n")))
+    :getTSDefault "default systimestamp"
+    :getStringKwd "varchar2"
+    :getLongKwd "number(38)"
+    :getDoubleKwd "binary_double"
+    :getFloatKwd "binary_float"
+
+    :genAutoInteger #(if (maybe-track-fields %3 %4)
+                       (c/vt-run?? %1 :genInteger [%2 %4])
+                       (c/vt-run?? %1 :autoXXX [%2 %3 %4]))
+
+    :genAutoLong #(if (maybe-track-fields %3 %4)
+                    (c/vt-run?? %1 :genLong [%2 %4])
+                    (auto-xxx %2 %3 %4))
+
+    :genEndSQL
+    #(if (or (.equals "12c+" (h/*ddl-cfg* :db-version))
+             (.equals "12c" (h/*ddl-cfg* :db-version)))
+       ""
+       (c/sreduce<>
+         (fn [bd [model fields]]
+           (reduce
+             (fn [bd [_ fld]]
+               (c/sbf+ bd
+                       (create-seq %2 model fld)))
+             bd fields))
+         (deref h/*ddl-bvs*)))
+
+    :genDrop #(str "drop table "
+                   (gtable %3)
+                   " cascade constraints purge"
+                   (c/vt-run?? %1 :genExec [%2]) "\n\n")))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(defn- find-vtbl [dbID]
+(defn- find-vtbl
+
+  [dbID]
+
   (let [nsp "czlab.hoard.drivers/ddl-"
         v (-> (str nsp
                    (name dbID))
@@ -506,9 +554,12 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defn get-ddl
+
   "Generate database DDL for this schema."
   {:tag String}
+
   ([schema db] (get-ddl schema db nil))
+
   ([schema db dbver]
    (binding [h/*ddl-cfg* {:db-version (c/strim dbver)
                           :use-sep? true

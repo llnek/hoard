@@ -14,7 +14,6 @@ import java.util.HashMap;
 import java.util.Map;
 
 /**
- * @author Kenneth Leung
  */
 public enum TLocalMap {
 ;
