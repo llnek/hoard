@@ -13,8 +13,7 @@
   (:require [czlab.hoard.sql :as q]
             [czlab.hoard.core :as h]
             [czlab.basal.log :as l]
-            [czlab.basal.core :as c]
-            [czlab.basal.xpis :as po])
+            [czlab.basal.core :as c])
 
   (:import [java.sql
             Connection
@@ -115,9 +114,9 @@
   DbObj
   (composite [me] (:co me))
   (simple [me] (:si me))
-  po/Finzable
+  c/Finzable
   (finz [me] (c/if-fn? [f (:finz me)] (f me)))
-  po/Openable
+  c/Openable
   (open [me] (c/if-fn? [f (:open me)] (f me))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

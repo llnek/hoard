@@ -19,7 +19,6 @@
             [czlab.basal.log :as l]
             [czlab.basal.io :as i]
             [czlab.basal.util :as u]
-            [czlab.basal.xpis :as po]
             [czlab.basal.core
              :refer [ensure?? ensure-thrown??] :as c])
 
@@ -119,7 +118,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defn- finz-test
   []
-  (c/do#true (po/finz DB)
+  (c/do#true (c/finz DB)
              (d/close-h2db (u/sys-tmp-dir)
                            DBID "sa" "hello")))
 
@@ -227,7 +226,7 @@
                   c (cn/composite db)
                   s (cn/simple db)
                   {:keys [schema vendor]} db
-                  conn (po/open db)
+                  conn (c/open db)
                   a (h/fmt-sqlid vendor "hello")
                   b (h/fmt-sqlid conn "hello")
                   m (h/find-model schema ::Person)
@@ -247,7 +246,7 @@
                         (= ks1 ks2))
                    (finally
                      (i/klose conn)
-                     (po/finz db)))))
+                     (c/finz db)))))
 
   (ensure?? "dbio<>"
             (let [db (cn/dbio<> jdbc-spec meta-cc)
@@ -255,7 +254,7 @@
                   c (cn/composite db)
                   s (cn/simple db)
                   {:keys [schema vendor]} db
-                  conn (po/open db)
+                  conn (c/open db)
                   a (h/fmt-sqlid vendor "hello")
                   b (h/fmt-sqlid conn "hello")
                   m (h/find-model schema ::Person)
@@ -275,7 +274,7 @@
                         (= ks1 ks2))
                    (finally
                      (i/klose conn)
-                     (po/finz db)))))
+                     (c/finz db)))))
 
   (ensure?? "conn<>"
             (let [c (h/conn<> jdbc-spec)]
