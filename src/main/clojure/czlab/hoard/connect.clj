@@ -12,7 +12,6 @@
 
   (:require [czlab.hoard.sql :as q]
             [czlab.hoard.core :as h]
-            [czlab.basal.log :as l]
             [czlab.basal.core :as c])
 
   (:import [java.sql
@@ -56,7 +55,7 @@
   (let [hc (:id spec)
         ^Map c (.get (TLocalMap/cache))]
     (when-not (.containsKey c hc)
-      (l/debug "no db-pool in thread-local, creating one.")
+      (c/debug "no db-pool in thread-local, creating one.")
       (->> (merge pool-cfg options)
            (h/dbpool<> spec) (.put c hc)))
     (.get c hc)))

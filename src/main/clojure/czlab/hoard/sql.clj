@@ -16,7 +16,6 @@
             [czlab.basal.meta :as m]
             [czlab.basal.util :as u]
             [czlab.basal.io :as i]
-            [czlab.basal.log :as l]
             [czlab.basal.core :as c]
             [czlab.hoard.core :as h :refer [SQLr]])
 
@@ -208,7 +207,7 @@
             (.prepareStatement
               conn sql Statement/RETURN_GENERATED_KEYS)
             (.prepareStatement conn sql))]
-      (l/debug "SQLStmt: %s." sql)
+      (c/debug "SQLStmt: %s." sql)
       (doseq [n (range 0 (count params))]
         (set-bind-var ps (+ 1 n) (nth params n))))))
 
@@ -416,7 +415,7 @@
                     pms
                     {:pkey (h/find-col (h/find-field mcz pkey))})]
           (if-not (empty? out)
-            (l/debug "Exec-with-out %s." out)
+            (c/debug "Exec-with-out %s." out)
             (h/dberr! "rowid must be returned."))
           (let [n (:1 out)]
             (if-not (number? n)

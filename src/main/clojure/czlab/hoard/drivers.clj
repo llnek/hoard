@@ -12,7 +12,6 @@
 
   (:require [clojure.java.io :as io]
             [clojure.string :as cs]
-            [czlab.basal.log :as l]
             [czlab.basal.core :as c]
             [czlab.hoard.core :as h])
 
@@ -322,7 +321,7 @@
   (let [url (doto (io/file dbDir dbid) (.mkdirs))
         u (.getCanonicalPath url)
         dbUrl (cs/replace h2-file-url "{{path}}" u)]
-    (l/debug "Creating H2: %s." dbUrl)
+    (c/debug "Creating H2: %s." dbUrl)
     (c/wo* [c1 (DriverManager/getConnection dbUrl user pwd)]
       (.setAutoCommit c1 true)
       (c/wo* [s (.createStatement c1)]
@@ -344,7 +343,7 @@
   (let [url (io/file dbDir dbid)
         u (.getCanonicalPath url)
         dbUrl (cs/replace h2-file-url "{{path}}" u)]
-    (l/debug "Closing H2: %s." dbUrl)
+    (c/debug "Closing H2: %s." dbUrl)
     (c/wo* [c1 (DriverManager/getConnection dbUrl user pwd)]
       (.setAutoCommit c1 true)
       (c/wo* [s (.createStatement c1)] (.execute s "shutdown")))))
@@ -577,7 +576,7 @@
                :let [tbl (:table model)]
                :when (and (not (:abstract? model))
                           (c/hgl? tbl))]
-         (l/debug "model id: %s, table: %s." (name id) tbl)
+         (c/debug "model id: %s, table: %s." (name id) tbl)
          (c/sbf+ drops (c/vt-run?? vt :genDrop [dbID model]))
          (c/sbf+ body (gen-one-table vt dbID schema model)))
        (str drops body (c/vt-run?? vt :genEndSQL [dbID]))))))

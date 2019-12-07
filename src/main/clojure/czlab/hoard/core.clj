@@ -17,7 +17,6 @@
   (:require [clojure.java.io :as io]
             [clojure.string :as cs]
             [czlab.basal.io :as i]
-            [czlab.basal.log :as l]
             [czlab.basal.meta :as m]
             [czlab.basal.util :as u]
             [czlab.basal.core :as c])
@@ -212,7 +211,7 @@
   clojure.lang.Atom
   (find-model [schema typeid]
     (or (get (:models @schema) typeid)
-        (l/warn "find-model %s failed!" typeid))))
+        (c/warn "find-model %s failed!" typeid))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (extend-protocol FieldAPI
@@ -299,7 +298,7 @@
   java.io.Closeable
   (close [me]
     (c/let#nil [{:keys [impl]} me]
-      (l/debug "finz: %s." impl)
+      (c/debug "finz: %s." impl)
       (.close ^HikariDataSource impl)))
   JdbcPool
   (next [me]
@@ -349,7 +348,7 @@
              (not= (-> d
                        .getClass
                        .getName) driver))
-      (l/warn "want %s, got %s." driver (class d)))
+      (c/warn "want %s, got %s." driver (class d)))
     (.connect d url p)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -882,7 +881,7 @@
                                .getMetaData
                                .getDatabaseProductName))]
       (.setAutoCommit conn true)
-      ;(l/debug "\n%s" ddl)
+      ;(c/debug "\n%s" ddl)
       (doseq [s lines
               :let [ln (c/strim-any s ";" true)]
               :when (and (c/hgl? ln)
@@ -953,8 +952,8 @@
          {:keys [driver url passwd user]} jdbc
          options (or options {})
          hc (HikariConfig.)]
-     ;;(l/debug "pool-options: %s." options)
-     ;;(l/debug "pool-jdbc: %s." jdbc)
+     ;;(c/debug "pool-options: %s." options)
+     ;;(c/debug "pool-jdbc: %s." jdbc)
      (if (c/hgl? driver)
        (m/forname driver))
      (c/test-some "db-vendor" dbv)
@@ -963,7 +962,7 @@
        (.setUsername hc ^String user)
        (if passwd
          (.setPassword hc (i/x->str passwd))))
-     (l/debug "[hikari]\n%s." (str hc))
+     (c/debug "[hikari]\n%s." (str hc))
      (jdbc-pool<> dbv jdbc (HikariDataSource. hc)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

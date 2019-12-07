@@ -12,7 +12,6 @@
             [clojure.string :as cs]
             [czlab.basal.util :as u]
             [czlab.basal.io :as i]
-            [czlab.basal.log :as l]
             [czlab.basal.core :as c]
             [czlab.hoard.core :as h])
 
