@@ -114,9 +114,9 @@
   (composite [me] (:co me))
   (simple [me] (:si me))
   c/Finzable
-  (finz [me] (c/if-fn? [f (:finz me)] (f me)))
+  (finz [me] (c/if-fn [f (:finz me)] (f me)))
   c/Openable
-  (open [me] (c/if-fn? [f (:open me)] (f me))))
+  (open [me] (c/if-fn [f (:open me)] (f me))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defn- dbobj<>
