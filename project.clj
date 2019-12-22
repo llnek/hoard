@@ -8,14 +8,13 @@
   :description "SQL orm"
   :url "https://github.com/llnek/hoard"
 
-  :dependencies [[org.postgresql/postgresql "42.2.8"]
+  :dependencies [[org.postgresql/postgresql "42.2.9"]
                  [com.zaxxer/HikariCP "3.4.1"]
                  [com.h2database/h2 "1.4.200"]
                  [io.czlab/basal "1.1.0"]]
 
   :plugins [[cider/cider-nrepl "0.22.4"]
-            [lein-codox "0.10.7"]
-            [lein-cprint "1.3.2"]]
+            [lein-codox "0.10.7"]]
 
   :profiles {:provided {:dependencies
                         [[org.clojure/clojure "1.10.1" :scope "provided"]]}
