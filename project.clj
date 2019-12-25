@@ -20,6 +20,36 @@
                         [[org.clojure/clojure "1.10.1" :scope "provided"]]}
              :uberjar {:aot :all}}
 
+  :aliases {"tcp-stop" ["trampoline" "run" "-m" "czlab.hoard.h2db.server"
+                       "-tcpPassword" "admin123"
+                       "-trace"
+                       ;"-tcpShutdownForce"
+                       "-tcpShutdown" "tcp://localhost:9092"]
+            "web-run" ["trampoline" "run" "-m" "czlab.hoard.h2db.server"
+                      "-blocking"
+                      "-trace"
+                      "-web"
+                      "-browser"
+                      ;"-webAllowOthers"
+                      "-webDaemon"
+                      ;"-webSSL"
+                      "-webPort" "8082"
+                      "-webAdminPassword" "admin123"]
+            "tcp-run" ["trampoline" "run" "-m" "czlab.hoard.h2db.server"
+                      "-blocking"
+                      "-trace"
+                      "-user" "sa"
+                      "-passwd" "admin123"
+                      "-dbid" "poop"
+                      "-tcp"
+                      "-tcpPassword" "admin123"
+                      ;"-tcpAllowOthers"
+                      "-tcpDaemon"
+                      ;"-tcpSSL"
+                      "-tcpPort" "9092"
+                      "-baseDir" "/tmp"]}
+
+
   :test-selectors {:core :test-core}
 
   :global-vars {*warn-on-reflection* true}
