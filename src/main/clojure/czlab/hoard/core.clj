@@ -61,10 +61,11 @@
   (load-driver [_] "Load the jdbc driver class."))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(comment
 (defprotocol Matchers
   "Functions relating to jdbc protocol line."
   (match-url?? [_] "Check if url refers to a supported db.")
-  (match-spec?? [_] "Check if db is supported."))
+  (match-spec?? [_] "Check if db is supported.")))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defprotocol SchemaAPI
@@ -412,15 +413,22 @@
   [tn rn] `(c/x->kw "fk_" (name ~tn) "_" (name ~rn)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(extend-protocol Matchers
-  String
-  (match-spec?? [spec]
-    (let [kw (keyword (c/lcase spec))]
-      (if (contains? *db-types* kw) kw)))
-  (match-url?? [dburl]
-    (c/if-some+
-      [ss (c/split (str dburl) ":")]
-      (if (> (count ss) 1) (match-spec?? (second ss))))))
+(defn match-spec??
+
+  [spec]
+
+  (let [kw (if-not (string? spec)
+             spec (keyword (c/lcase spec)))]
+    (if (contains? *db-types* kw) kw)))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(defn match-url??
+
+  [dburl]
+
+  (c/if-some+
+    [ss (c/split (str dburl) ":")]
+    (if (> (count ss) 1) (match-spec?? (second ss)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; DATA MODELING

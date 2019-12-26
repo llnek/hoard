@@ -147,12 +147,13 @@
 
   "IO access to a datasource (pooled)."
 
-  ([jdbc schema] (dbio<+> jdbc schema nil))
+  ([in schema] (dbio<+> in schema nil))
 
-  ([jdbc schema options]
-   (let [{:keys [vendor] :as pool}
-         (h/dbpool<> jdbc
-                     (merge pool-cfg options))]
+  ([in schema options]
+   (let [{:keys [jdbc vendor] :as pool}
+         (if (c/sas? h/JdbcPool in)
+           in (h/dbpool<> in
+                          (merge pool-cfg options)))]
      (dbobj<> {:schema schema
                :vendor vendor
                :jdbc jdbc
