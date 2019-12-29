@@ -301,6 +301,8 @@
     (c/let#nil [{:keys [impl]} me]
       (c/debug "finz: %s." impl)
       (.close ^HikariDataSource impl)))
+  c/Finzable
+  (finz [_] (.close _))
   JdbcPool
   (next [me]
     (try (.getConnection ^HikariDataSource (:impl me))
