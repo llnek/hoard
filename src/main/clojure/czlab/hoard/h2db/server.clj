@@ -8,7 +8,7 @@
 
 (ns czlab.hoard.h2db.server
 
-  ""
+  (:gen-class)
 
   (:require [clojure.java.io :as io]
             [clojure.string :as cs]
@@ -115,7 +115,7 @@
     (when (and (c/hgl? dbid)
                (c/hgl? baseDir))
       (ensure-db baseDir dbid user passwd))
-    (c/prn!! "%s" ARGS)
+    ;(c/prn!! "%s" ARGS)
     (cond
       tcp (apply do-tcp ARGS)
       web (apply do-web ARGS)
