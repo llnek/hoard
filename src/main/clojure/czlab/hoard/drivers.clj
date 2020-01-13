@@ -1,4 +1,4 @@
-;; Copyright © 2013-2019, Kenneth Leung. All rights reserved.
+;; Copyright © 2013-2020, Kenneth Leung. All rights reserved.
 ;; The use and distribution terms for this software are covered by the
 ;; Eclipse Public License 1.0 (http://opensource.org/licenses/eclipse-1.0.php)
 ;; which can be found in the file epl-v10.html at the root of this distribution.
@@ -312,6 +312,7 @@
 (defn h2db
 
   "Create a H2 database"
+  {:arglists '([dbDir dbid user pwd])}
   [dbDir ^String dbid ^String user ^String pwd]
 
   (c/test-some "file-dir" dbDir)
@@ -335,6 +336,7 @@
 (defn close-h2db
 
   "Close an existing H2 database"
+  {:arglists '([dbDir dbid user pwd])}
   [dbDir ^String dbid ^String user ^String pwd]
 
   (c/test-some "file-dir" dbDir)
@@ -555,9 +557,12 @@
 (defn get-ddl
 
   "Generate database DDL for this schema."
-  {:tag String}
+  {:tag String
+   :arglists '([schema db]
+               [schema db dbver])}
 
-  ([schema db] (get-ddl schema db nil))
+  ([schema db]
+   (get-ddl schema db nil))
 
   ([schema db dbver]
    (binding [h/*ddl-cfg* {:db-version (c/strim dbver)

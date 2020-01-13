@@ -3,7 +3,7 @@ All notable changes to this project will be documented in this file. This change
 
 ## [Unreleased]
 
-## 1.1.0 - 2019-07-29
+## 1.1.0 - 2020-01-29
 ### Changed
 - Revised all APIs 
 - Removed dependency on jasal

@@ -1,4 +1,4 @@
-;; Copyright © 2013-2019, Kenneth Leung. All rights reserved.
+;; Copyright © 2013-2020, Kenneth Leung. All rights reserved.
 ;; The use and distribution terms for this software are covered by the
 ;; Eclipse Public License 1.0 (http://opensource.org/licenses/eclipse-1.0.php)
 ;; which can be found in the file epl-v10.html at the root of this distribution.
@@ -56,8 +56,7 @@
         ^Map c (.get (TLocalMap/cache))]
     (when-not (.containsKey c hc)
       (c/debug "no db-pool in thread-local, creating one.")
-      (->> (merge pool-cfg options)
-           (h/dbpool<> spec) (.put c hc)))
+      (->> options (merge pool-cfg) (h/dbpool<> spec) (.put c hc)))
     (.get c hc)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -132,8 +131,11 @@
 (defn dbio<>
 
   "Open/access to a datasource."
+  {:arglists '([jdbc schema]
+               [jdbc schema options])}
 
-  ([jdbc schema] (dbio<> jdbc schema nil))
+  ([jdbc schema]
+   (dbio<> jdbc schema nil))
 
   ([jdbc schema options]
    (dbobj<> {:schema schema
@@ -146,8 +148,11 @@
 (defn dbio<+>
 
   "IO access to a datasource (pooled)."
+  {:arglists '([in schema]
+               [in schema options])}
 
-  ([in schema] (dbio<+> in schema nil))
+  ([in schema]
+   (dbio<+> in schema nil))
 
   ([in schema options]
    (let [{:keys [jdbc vendor] :as pool}

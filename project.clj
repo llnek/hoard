@@ -9,7 +9,7 @@
   :url "https://github.com/llnek/hoard"
 
   :dependencies [[org.postgresql/postgresql "42.2.9"]
-                 [com.zaxxer/HikariCP "3.4.1"]
+                 [com.zaxxer/HikariCP "3.4.2"]
                  [com.h2database/h2 "1.4.200"]
                  [io.czlab/basal "1.1.0"]]
 

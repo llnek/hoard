@@ -1,4 +1,4 @@
-;; Copyright © 2013-2019, Kenneth Leung. All rights reserved.
+;; Copyright © 2013-2020, Kenneth Leung. All rights reserved.
 ;; The use and distribution terms for this software are covered by the
 ;; Eclipse Public License 1.0 (http://opensource.org/licenses/eclipse-1.0.php)
 ;; which can be found in the file epl-v10.html at the root of this distribution.
@@ -148,6 +148,7 @@
 (defn dberr!
 
   "Throw a SQL execption."
+  {:arglists '([fmt & more])}
   [fmt & more]
 
   (c/trap! SQLException (str (apply format fmt more))))
@@ -161,20 +162,23 @@
 (defmacro dbmodel<>
 
   "Define a data model inside a schema."
+  {:arglists '([name & body])}
   [name & body]
 
   (let [p1 (first body)
         [options defs]
         (if-not (map? p1)
-          [nil body]
-          [p1 (drop 1 body)])]
-  `(-> (czlab.hoard.core/dbdef<> ~name ~options) ~@defs)))
+          [nil body] [p1 (drop 1 body)])]
+    `(-> (czlab.hoard.core/dbdef<> ~name ~options) ~@defs)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defmacro tstamp<>
 
   "Sql timestamp."
-  [] `(java.sql.Timestamp. (.getTime (java.util.Date.))))
+  {:arglists '([])}
+  []
+
+  `(java.sql.Timestamp. (.getTime (java.util.Date.))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defn- clean-name
@@ -188,12 +192,16 @@
 (defmacro gmodel
 
   "Get object's model."
-  [pojo] `(:model (meta ~pojo)))
+  {:arglists '([pojo])}
+  [pojo]
+
+  `(:model (meta ~pojo)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defmacro gtype
 
   "Get object's type."
+  {:arglists '([pojo])}
   [pojo]
 
   `(:id (czlab.hoard.core/gmodel ~pojo)))
@@ -202,6 +210,7 @@
 (defmacro goid
 
   "Get object's id."
+  {:arglists '([pojo])}
   [pojo]
 
   `(let [o# ~pojo
@@ -258,7 +267,9 @@
 (defn fmt-sqlid
 
   "Format SQL identifier."
-  {:tag String}
+  {:tag String
+   :arglists '([info idstr]
+               [info idstr quote?])}
 
   ([info idstr]
    (fmt-sqlid info idstr nil))
@@ -319,8 +330,11 @@
 (defn dbspec<>
 
   "Basic jdbc parameters."
+  {:arglists '([url]
+               [driver url user passwd])}
 
-  ([url] (dbspec<> nil url nil nil))
+  ([url]
+   (dbspec<> nil url nil nil))
 
   ([driver url user passwd]
    (c/object<> JdbcSpec
@@ -417,6 +431,8 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defn match-spec??
 
+  "If the database is supported?"
+  {:arglists '([spec])}
   [spec]
 
   (let [kw (if-not (string? spec)
@@ -426,6 +442,8 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defn match-url??
 
+  "If the referred database is supported?"
+  {:arglists '([dburl])}
   [dburl]
 
   (c/if-some+
@@ -437,7 +455,8 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defn- dft-fld<>
 
-  ([] (dft-fld<> nil))
+  ([]
+   (dft-fld<> nil))
 
   ([fid]
    (c/object<> DbioField
@@ -476,8 +495,11 @@
 (defn dbdef<>
 
   "Define a generic model. *internal*"
+  {:arglists '([mname]
+               [mname options])}
 
-  ([mname] (dbdef<> mname nil))
+  ([mname]
+   (dbdef<> mname nil))
 
   ([mname options]
    {:pre [(c/is-scoped-keyword? mname)]}
@@ -497,6 +519,7 @@
 (defn dbfield<>
 
   "Add a new field."
+  {:arglists '([model fid fdef])}
   [model fid fdef]
   {:pre [(keyword? fid)(map? fdef)]}
 
@@ -510,6 +533,7 @@
 (defn dbfields
 
   "Add a bunch of fields."
+  {:arglists '([model flddefs])}
   [model flddefs]
   {:pre [(map? flddefs)]}
 
@@ -519,6 +543,8 @@
 (defmacro dbjoined<>
 
   "Define a joined data model."
+  {:arglists '([modelname lhs rhs]
+               [modelname options lhs rhs])}
 
   ([modelname lhs rhs]
    `(dbjoined<> ~modelname nil ~lhs ~rhs))
@@ -548,6 +574,7 @@
 (defn dbindexes
 
   "Set indexes to the model."
+  {:arglists '([model indexes])}
   [model indexes]
   {:pre [(map? indexes)]}
 
@@ -557,6 +584,7 @@
 (defn dbkey
 
   "Declare your own primary key."
+  {:arglists '([model pke])}
   [model pke]
 
   (let [{:keys [fields pkey]} model
@@ -586,6 +614,7 @@
 (defn dbuniques
 
   "Set uniques to the model."
+  {:arglists '([model uniqs])}
   [model uniqs]
   {:pre [(map? uniqs)]}
 
@@ -624,6 +653,7 @@
 (defn dbo2m
 
   "Define a one to many association."
+  {:arglists '([model id & args])}
   [model id & args]
   {:pre [(not-empty args)]}
 
@@ -635,6 +665,7 @@
 (defn dbo2o
 
   "Define a one to one association."
+  {:arglists '([model id & args])}
   [model id & args]
   {:pre [(not-empty args)]}
 
@@ -772,6 +803,8 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defmacro defschema
 
+  "Define a schema."
+  {:arglists '([name & model])}
   [name & models]
 
   (let [m (meta name)
@@ -790,6 +823,7 @@
 (defn dbschema*
 
   "Stores metadata for all models.  *internal*"
+  {:arglists '([options & models])}
   [options & models]
 
   (let [ms (if-not (empty? models)
@@ -810,9 +844,13 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defn dbg-schema
 
-  {:tag String}
+  "Debug print a schema."
+  {:tag String
+   :arglists '([schema]
+               [schema simple?])}
 
-  ([schema] (dbg-schema schema true))
+  ([schema]
+   (dbg-schema schema true))
 
   ([schema simple?]
    {:pre [(some? schema)]}
@@ -953,8 +991,11 @@
 (defn dbpool<>
 
   "Create a db connection pool."
+  {:arglists '([jdbc]
+               [jdbc options])}
 
-  ([jdbc] (dbpool<> jdbc nil))
+  ([jdbc]
+   (dbpool<> jdbc nil))
 
   ([jdbc options]
    (let [dbv (c/wo* [^Connection
@@ -979,8 +1020,10 @@
 (defn dbpojo<>
 
   "Create object of type."
+  {:arglists '([][model])}
 
-  ([] (DbioPojo.))
+  ([]
+   (DbioPojo.))
 
   ([model]
    {:pre [(some? model)]}
@@ -990,6 +1033,7 @@
 (defn mock-pojo<>
 
   "Clone object with pkey only."
+  {:arglists '([obj])}
   [obj]
 
   (let [out (DbioPojo.)
