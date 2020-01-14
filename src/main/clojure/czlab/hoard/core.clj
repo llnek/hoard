@@ -21,16 +21,25 @@
             [czlab.basal.util :as u]
             [czlab.basal.core :as c])
 
-  (:import [java.util HashMap TimeZone Properties GregorianCalendar]
-           [clojure.lang Keyword APersistentMap APersistentVector]
-           [com.zaxxer.hikari HikariConfig HikariDataSource]
+  (:import [java.util
+            HashMap
+            TimeZone
+            Properties
+            GregorianCalendar]
+           [clojure.lang
+            Keyword
+            APersistentMap
+            APersistentVector]
+           [com.zaxxer.hikari
+            HikariConfig
+            HikariDataSource]
+           [java.lang Math]
            [java.sql
             SQLException
             Connection
             Driver
             DriverManager
-            DatabaseMetaData]
-           [java.lang Math]))
+            DatabaseMetaData]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;(set! *warn-on-reflection* true)
@@ -46,60 +55,6 @@
 (declare dbo2o dbo2m dbm2m dbfields dft-fld<>)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(defprotocol PojoAPI
-  "Functions relating to a Pojo."
-  (bind-model [_ model] "")
-  (get-fld [_ fld] "Get field.")
-  (clr-fld [_ fld] "Remove field.")
-  (set-fld [_ fld value] "Set value to a field."))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(defprotocol JdbcSpecAPI
-  "Functions relating to jdbc properties."
-  (testing? [_] "Test connect to db.")
-  (conn<> [_] "Connect to db.")
-  (load-driver [_] "Load the jdbc driver class."))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(comment
-(defprotocol Matchers
-  "Functions relating to jdbc protocol line."
-  (match-url?? [_] "Check if url refers to a supported db.")
-  (match-spec?? [_] "Check if db is supported.")))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(defprotocol SchemaAPI
-  "Functions relating to a schema."
-  (find-model [_ id] "Find model."))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(defprotocol FieldAPI
-  "Functions relating to a field."
-  (find-col [_] "Find column name,"))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(defprotocol ModelAPI
-  "Functions relating to a model."
-  (find-assoc [_ id] "")
-  (gschema [_] "")
-  (gmxm [_] "")
-  (find-table [_] "")
-  (find-id [_]  "")
-  (find-field [_ id] "")
-  (with-table [_ table] "")
-  (with-joined [_ lhs rhs] ""))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(defprotocol ConnectionAPI
-  "Functions relating to a jdbc connection."
-  (row-exist? [_ table] "")
-  (upload-ddl [_ ddl] "")
-  (db-vendor [_] "")
-  (db-meta [_] "")
-  (table-meta [_ table] "")
-  (table-exist? [_ table] ""))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defprotocol Transactable
   "Functions relating to a db transaction."
   (transact! [_ func]
@@ -113,22 +68,17 @@
              [_ model filters extras] "")
   (find-all [_ model]
             [_ model extras] "")
-  (find-one [_ model filters] "")
+  ;(find-one [_ model filters] "")
   (fmt-id [_ s] "")
   (mod-obj [_ obj] "")
   (del-obj [_ obj] "")
   (add-obj [_ obj] "")
-  (exec-sql [_ sql params] "")
   (count-objs [_ model] "")
   (purge-objs [_ model] "")
+  (exec-sql [_ sql params] "")
   (exec-with-output [_ sql params] "")
   (select-sql [_ sql params]
               [_ model sql params] ""))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(defprotocol JdbcPool
-  "Functions relating to a jdbc connection pool."
-  (next [_] "Next free connection from the pool."))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defrecord DbioModel [])
@@ -151,7 +101,7 @@
   {:arglists '([fmt & more])}
   [fmt & more]
 
-  (c/trap! SQLException (str (apply format fmt more))))
+  (c/trap! SQLException (c/fmt fmt more)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (c/defmacro- mkfld
@@ -217,51 +167,121 @@
          pk# (:pkey (czlab.hoard.core/gmodel o#))] (pk# o#)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(extend-protocol SchemaAPI
-  clojure.lang.Atom
-  (find-model [schema typeid]
-    (or (get (:models @schema) typeid)
-        (c/warn "find-model %s failed!" typeid))))
+(defn find-model
+
+  "Find a model from the schema."
+  {:arglists '([schema typeid])}
+  [schema typeid]
+  {:pre [(c/atom? schema)]}
+
+  (or (get (:models @schema) typeid)
+      (c/warn "find-model %s failed!" typeid)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(extend-protocol FieldAPI
-  DbioField
-  (find-col [_] (:column _)))
+(defn find-col
+
+  "Look up the field's column name."
+  {:arglists '([f])}
+  [f]
+  {:pre [(c/is? DbioField f)]}
+
+  (:column f))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(extend-protocol ModelAPI
-  DbioModel
-  (with-joined [model lhs rhs]
-    ;meta was injected by our framework
-    (let [{{:keys [col-lhs-rowid
-                   col-rhs-rowid]} :____meta} model]
-      ;create the fields to store the pkeys of
-      ;both lhs & rhs
-      (-> (dbfields model
-                    {:lhs-rowid
-                     (mkfld :domain :Long
-                            :null? false
-                            :column col-lhs-rowid)
-                     :rhs-rowid
-                     (mkfld :domain :Long
-                            :null? false
-                            :column col-rhs-rowid)})
-          ;create a mxm relation
-          (dbm2m lhs rhs))))
-  (with-table [_ table]
-    (assoc _ :table (clean-name table)))
-  (gschema [_]
-    (:schema (meta _)))
-  (find-field [model fieldid]
-    (get (:fields model) fieldid))
-  (find-table [_] (:table _))
-  (find-id [_] (:id _))
-  (gmxm [model]
-    (assert (:mxm? model)
-            "Not a joined model.")
-    (find-assoc model :mxm))
-  (find-assoc [model relid]
-    (get (:rels model) relid)))
+(defn with-joined
+
+  "Define a joined table."
+  {:arglists '([model lhs rhs])}
+  [model lhs rhs]
+  {:pre [(c/is? DbioModel model)]}
+
+  ;meta was injected by our framework
+  (let [{{:keys [col-lhs-rowid
+                 col-rhs-rowid]} :____meta} model]
+    ;create the fields to store the pkeys of
+    ;both lhs & rhs
+    (-> (dbfields model
+                  {:lhs-rowid
+                   (mkfld :domain :Long
+                          :null? false
+                          :column col-lhs-rowid)
+                   :rhs-rowid
+                   (mkfld :domain :Long
+                          :null? false
+                          :column col-rhs-rowid)})
+        ;create a mxm relation
+        (dbm2m lhs rhs))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(defn with-table
+
+  "Define the name of a table."
+  {:arglists '([m table])}
+  [m table]
+  {:pre [(c/is? DbioModel m)]}
+
+  (assoc m :table (clean-name table)))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(defn gschema
+
+  "Get the schema containing this model."
+  {:arglists '([m])}
+  [m]
+  {:pre [(c/is? DbioModel m)]}
+
+  (:schema (meta m)))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(defn find-field
+
+  "Look up a field definition from the model."
+  {:arglists '([model fieldid])}
+  [model fieldid]
+  {:pre [(c/is? DbioModel model)]}
+
+  (get (:fields model) fieldid))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(defn find-table
+
+  "Get the table name from the model."
+  {:arglists '([m])}
+  [m]
+  {:pre [(c/is? DbioModel m)]}
+
+  (:table m))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(defn find-id
+
+  "Get the id of this model."
+  {:arglists '([m])}
+  [m]
+  {:pre [(c/is? DbioModel m)]}
+
+  (:id m))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(defn find-assoc
+
+  "Find the relation from the model."
+  {:arglists '([model relid])}
+  [m relid]
+  {:pre [(c/is? DbioModel m)]}
+
+  (get (:rels m) relid))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(defn gmxm
+
+  "Get the many-to-many relation from the model."
+  {:arglists '([model])}
+  [m]
+  {:pre [(c/is? DbioModel m)
+         (:mxm? m)]}
+
+  (find-assoc m :mxm))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defn fmt-sqlid
@@ -306,24 +326,23 @@
                  (or (nil? m2)(map? m2))]} (merge m1 m2))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(defrecord JdbcPoolImpl []
+(defrecord JdbcPool []
   java.io.Closeable
   (close [me]
-    (c/let#nil [{:keys [impl]} me]
-      (c/debug "finz: %s." impl)
-      (.close ^HikariDataSource impl)))
+    (let [s (:impl me)]
+      (c/debug "finz: %s." s)
+      (.close ^HikariDataSource s)))
   c/Finzable
   (finz [_] (.close _))
-  JdbcPool
+  c/Nextable
   (next [me]
     (try (.getConnection ^HikariDataSource (:impl me))
          (catch Throwable _ (dberr! "No free connection.") nil))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defn- jdbc-pool<>
-
   [vendor jdbc impl]
-  (c/object<> JdbcPoolImpl
+  (c/object<> JdbcPool
               :vendor vendor :jdbc jdbc :impl impl))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -344,12 +363,25 @@
                :passwd (i/x->chars passwd)
                :id (str (u/jid<>) "#" (u/seqint2)))))
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(defn load-driver
+
+  "Load a jdbc driver."
+  {:tag Driver
+   :arglists '([jdbc])}
+  [jdbc]
+  {:pre [(c/is? JdbcSpec jdbc)]}
+
+  (c/if-string
+    [s (:url jdbc)]
+    (DriverManager/getDriver s)))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defn- safe-get-conn
 
   ^Connection [jdbc]
 
-  (let [^Driver d (load-driver jdbc)
+  (let [d (load-driver jdbc)
         p (Properties.)
         {:keys [url user
                 driver passwd]} jdbc]
@@ -369,24 +401,36 @@
     (.connect d url p)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(extend-protocol JdbcSpecAPI
-  JdbcSpec
-  (testing? [_]
-    (try (c/do#true (.close ^Connection (conn<> _)))
-         (catch SQLException _ false)))
-  (conn<> [jdbc]
-    (let [{:keys [url user]} jdbc
-          ^Connection
-          c (if (c/hgl? user)
-              (safe-get-conn jdbc)
-              (DriverManager/getConnection url))]
-      (if (nil? c)
-        (dberr! "Failed to connect: %s." url))
-      (doto c
-        (.setTransactionIsolation
-          Connection/TRANSACTION_SERIALIZABLE))))
-  (load-driver [_]
-    (c/if-string [s (:url _)] (DriverManager/getDriver s))))
+(defn conn<>
+
+  "Make a jdbc connection."
+  {:tag Connection
+   :arglists '([jdbc])}
+  [jdbc]
+  {:pre [(c/is? JdbcSpec jdbc)]}
+
+  (let [{:keys [url user]} jdbc
+        ^Connection
+        c (if (c/hgl? user)
+            (safe-get-conn jdbc)
+            (DriverManager/getConnection url))]
+    (if (nil? c)
+      (dberr! "Failed to connect: %s." url))
+    (doto c
+      (.setTransactionIsolation
+        Connection/TRANSACTION_SERIALIZABLE))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(defn testing?
+
+  "Check if jdbc spec is valid?"
+  {:arglists '([s])}
+  [s]
+  {:pre [(c/is? JdbcSpec s)]}
+
+  (try (c/do#true
+         (.close (conn<> s)))
+       (catch SQLException _ false)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (def Postgresql :postgresql)
@@ -871,9 +915,11 @@
 
   (let [ee (c/cast? SQLException (u/root-cause e))
         ec (some-> ee .getErrorCode)]
-    (or (and (c/embeds? dbn "oracle")
+    (or (and (c/embeds? (c/lcase dbn) "oracle")
              (some? ec)
-             (== 942 ec) (== 1418 ec) (== 2289 ec) (== 0 ec)) (throw e))))
+             (== 942 ec)
+             (== 1418 ec)
+             (== 2289 ec) (== 0 ec)) (throw e))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defn- load-columns
@@ -919,66 +965,114 @@
                 (.supportsTransactions m)})))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(extend-protocol ConnectionAPI
-  Connection
-  (upload-ddl [_ ddl]
-    (let [lines (mapv #(c/strim %)
-                      (cs/split ddl (re-pattern ddl-sep)))
-          ^Connection conn _
-          dbn (c/lcase (some-> conn
-                               .getMetaData
-                               .getDatabaseProductName))]
-      (.setAutoCommit conn true)
-      ;(c/debug "\n%s" ddl)
-      (doseq [s lines
-              :let [ln (c/strim-any s ";" true)]
-              :when (and (c/hgl? ln)
-                         (not= (c/lcase ln) "go"))]
-        (c/wo* [s (.createStatement conn)]
-          (try (.executeUpdate s ln)
-               (catch SQLException _ (maybe-ok? dbn _)))))))
-  (table-exist? [c table]
-    (c/try!
-      (let [m (db-meta c)
-            dbv (db-vendor c)]
-        (c/wo* [res (.getColumns ^DatabaseMetaData m
-                                 nil
-                                 (if (= (:id dbv) :oracle) "%")
-                                 (fmt-sqlid c table false) "%")]
-          (and res (.next res))))))
-  (row-exist? [c table]
-    (c/try!
-      (let [sql (str "select count(*) from "
+(defn upload-ddl
+
+  "Update DDL commands to database."
+  {:arglists '([conn ddl])}
+  [c ddl]
+  {:pre [(c/is? Connection c)]}
+
+  (let [lines (map #(c/strim %)
+                   (cs/split ddl (re-pattern ddl-sep)))
+        c (c/cast? Connection c)
+        dbn (.. c
+                getMetaData
+                getDatabaseProductName)]
+    (.setAutoCommit c true)
+    ;(c/debug "\n%s" ddl)
+    (doseq [s lines
+            :let [ln (c/strim-any s ";" true)]
+            :when (and (c/hgl? ln)
+                       (not= (c/lcase ln) "go"))]
+      (c/wo* [s (.createStatement c)]
+        (try (.executeUpdate s ln)
+             (catch SQLException _ (maybe-ok? dbn _)))))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(defn db-meta
+
+  "Get the meta-data on the database."
+  {:arglists '([c])
+   :tag DatabaseMetaData}
+  [c]
+  {:pre [(c/is? Connection c)]}
+
+  (.getMetaData ^Connection c))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(defn db-vendor
+
+  "Get information about the database."
+  {:arglists '([c])}
+  [c]
+  {:pre [(c/is? Connection c)]}
+
+  (let [m (.getMetaData ^Connection c)
+        rc (c/object<> VendorGist
+                       :id (maybe-get-vendor (.getDatabaseProductName m))
+                       :qstr (c/strim (.getIdentifierQuoteString m))
+                       :version (.getDatabaseProductVersion m)
+                       :name (.getDatabaseProductName m)
+                       :url (.getURL m)
+                       :user (.getUserName m)
+                       :lcs? (.storesLowerCaseIdentifiers m)
+                       :ucs? (.storesUpperCaseIdentifiers m)
+                       :mcs? (.storesMixedCaseIdentifiers m))]
+    (assoc rc :fmt-id (partial fmt-sqlid rc))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(defn table-exist?
+
+  "If table is defined in the database?"
+  {:arglists '([c])}
+  [c table]
+  {:pre [(c/is? Connection c)]}
+
+  (c/try!
+    (let [m (db-meta c)
+          dbv (db-vendor c)]
+      (c/wo* [res (.getColumns m
+                               nil
+                               (if (= :oracle
+                                      (:id dbv)) "%")
+                               (fmt-sqlid c table false) "%")]
+        (and res (.next res))))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(defn row-exist?
+
+  "If table in database is not empty?"
+  {:arglists '([c])}
+  [c table]
+  {:pre [(c/is? Connection c)]}
+
+  (c/try!
+    (let [sql (c/fmt "select %s from %s"
+                     "count(*)"
                      (fmt-sqlid c table))]
-        (c/wo* [res (-> ^Connection c
-                        .createStatement (.executeQuery sql))]
-          (and res
-               (.next res)
-               (pos? (.getInt res (int 1))))))))
-  (db-vendor [_]
-    (let [m (.getMetaData ^Connection _)
-          rc (c/object<> VendorGist
-                         :id (maybe-get-vendor (.getDatabaseProductName m))
-                         :qstr (c/strim (.getIdentifierQuoteString m))
-                         :version (.getDatabaseProductVersion m)
-                         :name (.getDatabaseProductName m)
-                         :url (.getURL m)
-                         :user (.getUserName m)
-                         :lcs? (.storesLowerCaseIdentifiers m)
-                         :ucs? (.storesUpperCaseIdentifiers m)
-                         :mcs? (.storesMixedCaseIdentifiers m))]
-      (assoc rc :fmt-id (partial fmt-sqlid rc))))
-  (db-meta [_]
-    (.getMetaData ^Connection _))
-  (table-meta [conn table]
-    (let [mt (.getMetaData ^Connection conn)
-          tbl (fmt-sqlid conn table false)
-          dbv (db-vendor conn)
-          catalog nil
-          schema (if (= (:id dbv) :oracle) "%")]
-      ;; not good, try mixed case... arrrrhhhhhh
-      ;;rs = m.getTables( catalog, schema, "%", null)
-      (load-columns mt catalog schema tbl))))
+      (c/wo* [res (-> ^Connection c
+                      .createStatement
+                      (.executeQuery sql))]
+        (and res
+             (.next res)
+             (pos? (.getInt res (int 1))))))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(defn table-meta
+
+  "Get the meta-data on the table."
+  {:arglists '([conn table])}
+  [c table]
+  {:pre [(c/is? Connection c)]}
+
+  (let [mt (.getMetaData ^Connection c)
+        tbl (fmt-sqlid c table false)
+        dbv (db-vendor c)
+        catalog nil
+        schema (if (= (:id dbv) :oracle) "%")]
+    ;; not good, try mixed case... arrrrhhhhhh
+    ;;rs = m.getTables( catalog, schema, "%", null)
+    (load-columns mt catalog schema tbl)))
 
 ;;Object
 ;;Clojure CLJ-1347
@@ -1017,6 +1111,21 @@
      (jdbc-pool<> dbv jdbc (HikariDataSource. hc)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(defn bind-model
+
+  "Ensure pojo is bound to a model."
+  {:arglists '([p model])}
+  [p _model]
+  {:pre [(c/is? DbioPojo p)
+         (c/is? DbioModel _model)]}
+
+  (let [{:as m
+         :keys [model]} (meta p)]
+    (if (nil? model)
+      (c/wm* p (assoc m :model _model))
+      (c/raise! "Cannot bind model %s twice!" model))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defn dbpojo<>
 
   "Create object of type."
@@ -1038,25 +1147,37 @@
 
   (let [out (DbioPojo.)
         pk (:pkey (gmodel obj))]
-    (with-meta (assoc out pk (goid obj)) (meta obj))))
+    (c/wm* (assoc out pk (goid obj)) (meta obj))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(extend-protocol PojoAPI
-  DbioPojo
-  (bind-model [p _model]
-    {:pre [(c/is? DbioModel _model)]}
-    (let [m (meta p)
-          {:keys [model]} m]
-      (if (nil? model)
-        (with-meta p (assoc m :model _model))
-        (c/raise! "Cannot bind model %s twice!" model))))
-  (clr-fld [pojo fld] (dissoc pojo fld))
-  (get-fld [pojo fld] (get pojo fld))
-  (set-fld [pojo fld value]
-    {:pre [(keyword? fld)]}
-    (if (check-field? pojo fld)
-      (assoc pojo fld value)
-      (u/throw-BadData "Invalid field %s." fld))))
+(defn clr-fld
+
+  "Clear a field in the pojo."
+  {:arglists '([pojo fld])}
+  [pojo fld]
+
+  (dissoc pojo fld))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(defn get-fld
+
+  "Get a field value from the pojo."
+  {:arglists '([pojo fld])}
+  [pojo fld]
+
+  (get pojo fld))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(defn set-fld
+
+  "Assign a value to a field in the pojo."
+  {:arglists '([pojo fld value])}
+  [pojo fld value]
+  {:pre [(keyword? fld)]}
+
+  (if (check-field? pojo fld)
+    (assoc pojo fld value)
+    (u/throw-BadData "Invalid field %s." fld)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defn db-set-flds*

@@ -19,13 +19,8 @@
             SQLException]
            [java.util Map]
            [java.io Closeable]
-           [czlab.hoard TLocalMap]))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(defprotocol DbObj
-  "Functions relating to a database."
-  (simple [_] "Auto commit session")
-  (composite [_] "Transaction enabled session"))
+           [czlab.hoard TLocalMap]
+           [czlab.hoard.core JdbcPool]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;The calculation of pool size in order to avoid deadlock is a
@@ -108,21 +103,38 @@
     (q/sqlr<> db #(c/wo* [c2 (gconn db cfg)] (% c2)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(defrecord DbObjImpl []
-  DbObj
-  (composite [me] (:co me))
-  (simple [me] (:si me))
+(defrecord DbObj []
   c/Finzable
   (finz [me] (c/if-fn [f (:finz me)] (f me)))
   c/Openable
   (open [me] (c/if-fn [f (:open me)] (f me))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(defn composite
+
+  "Get the Transactable component."
+  {:arglists '([db])}
+  [db]
+  {:pre [(c/is? DbObj db)]}
+
+  (:co db))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(defn simple
+
+  "Get the simple component."
+  {:arglists '([db])}
+  [db]
+  {:pre [(c/is? DbObj db)]}
+
+  (:si db))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defn- dbobj<>
 
   [dbm]
 
-  (c/object<> DbObjImpl
+  (c/object<> DbObj
               (assoc dbm
                      :co (tx-sqlr<> dbm)
                      :si (sim-sqlr<> dbm))))
@@ -156,14 +168,14 @@
 
   ([in schema options]
    (let [{:keys [jdbc vendor] :as pool}
-         (if (c/sas? h/JdbcPool in)
+         (if (c/is? JdbcPool in)
            in (h/dbpool<> in
                           (merge pool-cfg options)))]
      (dbobj<> {:schema schema
                :vendor vendor
                :jdbc jdbc
                :pool pool
-               :open #(h/next (:pool %))
+               :open #(c/next (:pool %))
                :finz #(.close ^Closeable (:pool %))}))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

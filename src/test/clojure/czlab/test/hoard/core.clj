@@ -180,10 +180,11 @@
                          (h/add-obj %))
                   r (h/find-assoc (h/gmodel e) :person)]
               (r/set-o2o r % e
-                         (h/find-one %
-                                     ::Person
-                                     {:first_name fname
-                                     :last_name lname})))]
+                         (first
+                           (h/find-some %
+                                        ::Person
+                                        {:first_name fname
+                                         :last_name lname}))))]
     (c/_1 (h/transact! tx cb))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -192,8 +193,8 @@
   [fname lname]
 
   (-> (cn/simple DB)
-      (h/find-one ::Person
-                  {:first_name fname :last_name lname})))
+      (h/find-some ::Person
+                   {:first_name fname :last_name lname}) first))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defn- fetch-emp
@@ -201,7 +202,7 @@
   [login]
 
   (-> (cn/simple DB)
-      (h/find-one ::Employee {:login login})))
+      (h/find-some ::Employee {:login login}) first))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defn- create-person
@@ -294,7 +295,7 @@
 
   (ensure?? "dbpool<>"
             (c/wo* [^Closeable p (h/dbpool<> jdbc-spec)]
-              (c/wo* [^Connection c (h/next p)] (h/table-exist? c "Person"))))
+              (c/wo* [^Connection c (c/next p)] (h/table-exist? c "Person"))))
 
   (ensure?? "add-obj"
             (pos? (:rowid
@@ -320,9 +321,10 @@
             (some?
               (h/transact!
                 (cn/composite DB)
-                #(let [o2 (-> (h/find-one %
-                                          ::Employee
-                                          {:login "joeb"})
+                #(let [o2 (-> (h/find-some %
+                                           ::Employee
+                                           {:login "joeb"})
+                              first
                               (h/db-set-flds*
                                 :salary 99.9234 :desc "yo!"))]
                    (if (pos? (h/mod-obj % o2)) o2)))))
@@ -331,9 +333,9 @@
             (zero?
               (h/transact!
                 (cn/composite DB)
-                #(let [o1 (h/find-one %
-                                      ::Employee
-                                      {:login "joeb"})]
+                #(let [o1 (first (h/find-some %
+                                              ::Employee
+                                              {:login "joeb"}))]
                    (h/del-obj % o1)
                    (h/count-objs % ::Employee)))))
 
@@ -416,9 +418,9 @@
             (h/transact!
               (cn/composite DB)
               #(let
-                 [c (h/find-one %
-                                ::Company
-                                {:cname "acme"})
+                 [c (first (h/find-some %
+                                        ::Company
+                                        {:cname "acme"}))
                   ds (r/get-o2m
                        (h/find-assoc (h/gmodel c) :depts) % c)
                   es (r/get-o2m
@@ -460,12 +462,12 @@
             (h/transact!
               (cn/composite DB)
               #(let
-                 [d2 (h/find-one %
-                                 ::Department
-                                 {:dname "d2"})
-                  e2 (h/find-one %
-                                 ::Employee
-                                 {:login "e2"})
+                 [d2 (first (h/find-some %
+                                         ::Department
+                                         {:dname "d2"}))
+                  e2 (first (h/find-some %
+                                         ::Employee
+                                         {:login "e2"}))
                   _ (r/clr-m2m
                       (h/gmxm (h/find-model
                                 meta-cc ::EmpDepts))
@@ -488,9 +490,9 @@
   (ensure?? "db-clr-o2m"
             (h/transact!
               (cn/composite DB)
-              #(let [c (h/find-one %
-                                   ::Company
-                                   {:cname "acme"})
+              #(let [c (first (h/find-some %
+                                           ::Company
+                                           {:cname "acme"}))
                      _ (r/clr-o2m
                          (h/find-assoc (h/gmodel c) :depts) % c)
                      _ (r/clr-o2m

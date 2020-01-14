@@ -15,33 +15,15 @@
             [czlab.basal.core :as c]
             [czlab.hoard.core :as h])
 
-  (:import [clojure.lang Keyword APersistentMap APersistentVector]))
+  (:import [czlab.hoard.core
+            DbioO2ORel
+            DbioM2MRel
+            DbioO2MRel]
+           [clojure.lang Keyword
+            APersistentMap APersistentVector]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;(set! *warn-on-reflection* true)
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(defprotocol O2ORelAPI
-  "Functions for one to one relations."
-  (clr-o2o [_ ctx lhsObj] "")
-  (get-o2o [_ ctx lhsObj] "")
-  (set-o2o [_ ctx lhsObj rhsObj] ""))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(defprotocol O2MRelAPI
-  "Functions for one to many relations."
-  (set-o2m [_ ctx lhsObj rhsObj] "")
-  (clr-o2m [_ ctx lhsObj] "")
-  (get-o2m [_ ctx lhsObj] "")
-  (set-o2m* [_ ctx lhsObj rhsObjs] ""))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(defprotocol M2MRelAPI
-  "Functions for many to many relations."
-  (set-m2m [_ ctx objA objB] "")
-  (get-m2m [_ ctx pojo] "")
-  (clr-m2m [_ ctx obj]
-           [_ ctx objA objB] ""))
-
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defn- select-side
 
@@ -103,122 +85,182 @@
     lhsObj))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(extend-protocol O2ORelAPI
-  czlab.hoard.core.DbioO2ORel
+(defn set-o2o
 
-  (set-o2o [_ ctx lhsObj rhsObj]
-    (dbio-set-o2x _ ctx lhsObj rhsObj))
+  "Set the rhs of a one-one relation."
+  {:arglists '([r ctx lhsObj rhsObj])}
+  [r ctx lhsObj rhsObj]
+  {:pre [(c/is? DbioO2ORel r)]}
 
-  (clr-o2o [_ ctx lhsObj]
-    (dbio-clr-o2x _ ctx lhsObj))
-
-  (get-o2o [rel ctx lhsObj]
-    (let [{:keys [cast]} ctx
-          {:keys [other fkey]} rel]
-      (h/find-one ctx
-                  (or cast other)
-                  {fkey (h/goid lhsObj)}))))
+  (dbio-set-o2x r ctx lhsObj rhsObj))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(extend-protocol O2MRelAPI
-  czlab.hoard.core.DbioO2MRel
+(defn clr-o2o
 
-  (set-o2m* [rel ctx lhsObj rhsObjs]
-    (loop [a lhsObj
-           out (c/tvec*)
-           [b & xs] rhsObjs]
-      (if (nil? b)
-        (c/cc+1 a (c/persist! out))
-        (let [[x y]
-              (dbio-set-o2x rel ctx a b)]
-          (recur x (conj! out y) xs)))))
+  "Clear the rhs of a one-one relation."
+  {:arglists '([r ctx lhsObj])}
+  [r ctx lhsObj]
+  {:pre [(c/is? DbioO2ORel r)]}
 
-  (set-o2m [_ ctx lhsObj rhsObj]
-    (dbio-set-o2x _ ctx lhsObj rhsObj))
-
-  (clr-o2m [_ ctx lhsObj]
-    (dbio-clr-o2x _ ctx lhsObj))
-
-  (get-o2m [rel ctx lhsObj]
-    (let [{:keys [cast]} ctx
-          {:keys [other fkey]} rel]
-      (h/find-some ctx
-                   (or cast other)
-                   {fkey (h/goid lhsObj)}))))
+  (dbio-clr-o2x r ctx lhsObj))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(extend-protocol M2MRelAPI
-  czlab.hoard.core.DbioM2MRel
+(defn get-o2o
 
-  (set-m2m [rel ctx objA objB]
-    (let [{:keys [cast schema]} ctx
-          {:keys [owner]} rel]
-      (if-some [mm (h/find-model schema owner)]
-        (let [ka (c/_1 (select-side rel objA))
-              kb (c/_1 (select-side rel objB))]
-          (h/add-obj ctx
-                     (-> (h/dbpojo<> mm)
-                         (h/set-fld ka (h/goid objA))
-                         (h/set-fld kb (h/goid objB)))))
-        (h/dberr! "Unknown relation: %s." rel))))
+  "Get the rhs of a one-one relation."
+  {:arglists '([r ctx lhsObj])}
+  [r ctx lhsObj]
+  {:pre [(c/is? DbioO2ORel r)]}
 
-  (get-m2m [rel ctx pojo]
-    (let [{:keys [cast schema]} ctx
-          {:keys [owner]} rel
-          MM (h/fmt-id ctx "MM")
-          RS (h/fmt-id ctx "RES")]
-      (if-some
-        [{:keys [fields] :as mm}
-         (h/find-model schema owner)]
-        (let [{{:keys [col-rowid]} :____meta} @schema
-              [ka kb t] (select-side rel pojo)
-              t2 (or cast t)
-              tm (h/find-model schema t2)]
-          (if (nil? tm)
-            (h/dberr! "Unknown model: %s." t2))
-          (h/select-sql ctx
-                        t2
-                        (c/fmt
-                          (str "select distinct %s.* from %s %s "
-                               "join %s %s on "
-                               "%s.%s=? and %s.%s=%s.%s")
-                          RS
-                          (h/fmt-id ctx (h/find-table tm))
-                          RS
-                          (h/fmt-id ctx (h/find-table mm))
-                          MM
-                          MM (h/fmt-id ctx (h/find-col (ka fields)))
-                          MM (h/fmt-id ctx (h/find-col (kb fields)))
-                          RS (h/fmt-id ctx col-rowid))
-                        [(h/goid pojo)]))
-        (h/dberr! "Unknown joined model: %s." rel))))
+  (let [{:keys [cast]} ctx
+        {:keys [other fkey]} r]
+    (first (h/find-some ctx
+                        (or cast other)
+                        {fkey (h/goid lhsObj)}))))
 
-  (clr-m2m
-    ([rel ctx obj]
-     (clr-m2m rel ctx obj nil))
-    ([rel ctx objA objB]
-     (let [{:keys [schema]} ctx
-           {:keys [owner]} rel]
-       (if-some
-         [{:keys [fields] :as mm}
-          (h/find-model schema owner)]
-         (let [ka (c/_1 (select-side rel objA))
-               kb (c/_1 (select-side rel objB))]
-           (if (nil? objB)
-             (h/exec-sql ctx
-                         (c/fmt
-                           "delete from %s where %s=?"
-                           (h/fmt-id ctx (h/find-table mm))
-                           (h/fmt-id ctx (h/find-col (fields ka))))
-                         [(h/goid objA)])
-             (h/exec-sql ctx
-                         (c/fmt
-                           "delete from %s where %s=? and %s=?"
-                           (h/fmt-id ctx (h/find-table mm))
-                           (h/fmt-id ctx (h/find-col (fields ka)))
-                           (h/fmt-id ctx (h/find-col (fields kb))))
-                         [(h/goid objA) (h/goid objB)])))
-         (h/dberr! "Unkown relation: %s." rel))))))
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(defn set-o2m*
+
+  "Set the rhs of a one-many relation."
+  {:arglists '([rel ctx lhsObj rhsObjs])}
+  [rel ctx lhsObj rhsObjs]
+  {:pre [(c/is? DbioO2MRel rel)
+         (sequential? rhsObjs)]}
+
+  (loop [a lhsObj
+         out (c/tvec*)
+         [b & xs] rhsObjs]
+    (if (nil? b)
+      (c/cc+1 a (c/persist! out))
+      (let [[x y]
+            (dbio-set-o2x rel ctx a b)]
+        (recur x (conj! out y) xs)))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(defn set-o2m
+
+  "Set the rhs of a one-many relation."
+  {:arglists '([rel ctx lhsObj rhsObj])}
+  [rel ctx lhsObj rhsObj]
+  {:pre [(c/is? DbioO2MRel rel)]}
+
+  (dbio-set-o2x rel ctx lhsObj rhsObj))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(defn clr-o2m
+
+  "Clear the rhs of a one-many relation."
+  {:arglists '([r ctx lhsObj])}
+  [r ctx lhsObj]
+  {:pre [(c/is? DbioO2MRel r)]}
+
+  (dbio-clr-o2x r ctx lhsObj))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(defn get-o2m
+
+  "Get the rhs of a one-many relation."
+  {:arglists '([r ctx lhsObj])}
+  [r ctx lhsObj]
+  {:pre [(c/is? DbioO2MRel r)]}
+
+  (let [{:keys [cast]} ctx
+        {:keys [other fkey]} r]
+    (h/find-some ctx
+                 (or cast other)
+                 {fkey (h/goid lhsObj)})))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(defn set-m2m
+
+  "Set both lhs and rhs of a many-many relation."
+  {:arglists '([rel ctx objA objB])}
+  [rel ctx objA objB]
+  {:pre [(c/is? DbioM2MRel rel)]}
+
+  (let [{:keys [cast schema]} ctx
+        {:keys [owner]} rel]
+    (if-some [mm (h/find-model schema owner)]
+      (let [ka (c/_1 (select-side rel objA))
+            kb (c/_1 (select-side rel objB))]
+        (h/add-obj ctx
+                   (-> (h/dbpojo<> mm)
+                       (h/set-fld ka (h/goid objA))
+                       (h/set-fld kb (h/goid objB)))))
+      (h/dberr! "Unknown relation: %s." rel))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(defn get-m2m
+
+  "Get the other side a many-many relation."
+  {:arglists '([rel ctx pojo])}
+  [rel ctx pojo]
+  {:pre [(c/is? DbioM2MRel rel)]}
+
+  (let [{:keys [cast schema]} ctx
+        {:keys [owner]} rel
+        MM (h/fmt-id ctx "MM")
+        RS (h/fmt-id ctx "RES")]
+    (if-some
+      [{:keys [fields] :as mm}
+       (h/find-model schema owner)]
+      (let [{{:keys [col-rowid]} :____meta} @schema
+            [ka kb t] (select-side rel pojo)
+            t2 (or cast t)
+            tm (h/find-model schema t2)]
+        (if (nil? tm)
+          (h/dberr! "Unknown model: %s." t2))
+        (h/select-sql ctx
+                      t2
+                      (c/fmt
+                        (str "select distinct %s.* from %s %s "
+                             "join %s %s on "
+                             "%s.%s=? and %s.%s=%s.%s")
+                        RS
+                        (h/fmt-id ctx (h/find-table tm))
+                        RS
+                        (h/fmt-id ctx (h/find-table mm))
+                        MM
+                        MM (h/fmt-id ctx (h/find-col (ka fields)))
+                        MM (h/fmt-id ctx (h/find-col (kb fields)))
+                        RS (h/fmt-id ctx col-rowid))
+                      [(h/goid pojo)]))
+      (h/dberr! "Unknown joined model: %s." rel))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(defn clr-m2m
+
+  "Clear a many-many relation."
+  {:arglists '([rel ctx pojo]
+               [rel ctx objA objB])}
+
+  ([rel ctx obj]
+   (clr-m2m rel ctx obj nil))
+
+  ([rel ctx objA objB]
+   {:pre [(c/is? DbioM2MRel rel)]}
+   (let [{:keys [schema]} ctx
+         {:keys [owner]} rel]
+     (if-some
+       [{:keys [fields] :as mm}
+        (h/find-model schema owner)]
+       (let [ka (c/_1 (select-side rel objA))
+             kb (c/_1 (select-side rel objB))]
+         (if (nil? objB)
+           (h/exec-sql ctx
+                       (c/fmt
+                         "delete from %s where %s=?"
+                         (h/fmt-id ctx (h/find-table mm))
+                         (h/fmt-id ctx (h/find-col (fields ka))))
+                       [(h/goid objA)])
+           (h/exec-sql ctx
+                       (c/fmt
+                         "delete from %s where %s=? and %s=?"
+                         (h/fmt-id ctx (h/find-table mm))
+                         (h/fmt-id ctx (h/find-col (fields ka)))
+                         (h/fmt-id ctx (h/find-col (fields kb))))
+                       [(h/goid objA) (h/goid objB)])))
+       (h/dberr! "Unkown relation: %s." rel)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;EOF

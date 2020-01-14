@@ -46,7 +46,7 @@
 
   (str (->> (:pkey model)
             (h/find-field model)
-            (h/find-col)
+            h/find-col
             (h/fmt-sqlid vendor)) "=?"))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -60,7 +60,7 @@
     [(c/sreduce<>
        #(let [[k v] %2
               c (-> (fields k)
-                    (h/find-col)
+                    h/find-col
                     (c/stror (c/sname k)))]
           (->> (str (h/fmt-sqlid vendor c)
                     (if (nil? v) " is null " " =? "))
@@ -175,8 +175,7 @@
             rc (if (number? pos)
                  (c/fmt "%s with (%s) %s"
                         (subs sql 0 pos)
-                        cmd
-                        (subs sql pos)))]
+                        cmd (subs sql pos)))]
         (if (nil? rc)
           (recur target 0 true sql)
           (recur target
@@ -459,10 +458,6 @@
 
   (find-all [_ typeid]
     (h/find-all _ typeid {}))
-
-  (find-one [_ typeid filters]
-    (c/if-some+
-      [rs (h/find-some _ typeid filters)] (first rs)))
 
   (find-some [me typeid filters extraSQL]
     (let [{:keys [runc models vendor]} me]
