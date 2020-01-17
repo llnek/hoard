@@ -486,7 +486,7 @@
 
   (if-not (or (.equals "12c+" (h/*ddl-cfg* :db-version))
               (.equals "12c" (h/*ddl-cfg* :db-version)))
-    (c/let#true [m (deref h/*ddl-bvs*)
+    (c/let->true [m (deref h/*ddl-bvs*)
                  t (:id model)
                  r (or (m t) {})]
       (swap! h/*ddl-bvs*

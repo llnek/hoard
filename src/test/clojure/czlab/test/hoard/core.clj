@@ -117,7 +117,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (defn- finz-test
   []
-  (c/do#true (c/finz DB)
+  (c/do->true (c/finz DB)
              (d/close-h2db (u/sys-tmp-dir)
                            DBID "sa" "hello")))
 
@@ -216,7 +216,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (c/deftest test-core
 
-  (ensure?? "iniz" (c/do#true (init-test (u/jid<>) nil)))
+  (ensure?? "iniz" (c/do->true (init-test (u/jid<>) nil)))
 
   (ensure?? "tstamp<>" (some? (h/tstamp<>)))
 

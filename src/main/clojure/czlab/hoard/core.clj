@@ -428,7 +428,7 @@
   [s]
   {:pre [(c/is? JdbcSpec s)]}
 
-  (try (c/do#true
+  (try (c/do->true
          (.close (conn<> s)))
        (catch SQLException _ false)))
 
