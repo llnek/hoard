@@ -8,7 +8,7 @@
 
 Add the following dependency to your `project.clj` file:
 
-    [io.czlab/hoard "1.1.0"]
+    [io.czlab/hoard "2.0.0"]
 
 ## Documentation
 
