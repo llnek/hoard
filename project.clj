@@ -1,6 +1,6 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defproject io.czlab/hoard "2.0.0"
+(defproject io.czlab/hoard "2.0.1"
 
   :license {:name "Eclipse Public License"
             :url "http://www.eclipse.org/legal/epl-v10.html"}
@@ -11,7 +11,7 @@
   :dependencies [[org.postgresql/postgresql "42.2.9"]
                  [com.zaxxer/HikariCP "3.4.2"]
                  [com.h2database/h2 "1.4.200"]
-                 [io.czlab/basal "2.0.0"]]
+                 [io.czlab/basal "2.0.1"]]
 
   :plugins [[cider/cider-nrepl "0.22.4"]
             [lein-codox "0.10.7"]]
@@ -64,7 +64,8 @@
   :test-paths ["src/test/clojure"]
 
   :jvm-opts ["-Dlog4j.configurationFile=file:attic/log4j2.xml"]
-  :javac-options [;"-source" "8"
+  :javac-options ["-source" "11"
+                  "-target" "11"
                   "-Xlint:unchecked" "-Xlint:-options" "-Xlint:deprecation"])
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
