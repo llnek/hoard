@@ -1,23 +1,24 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
-(defproject io.czlab/hoard "2.0.1"
+(defproject io.czlab/hoard "2.1.0"
 
-  :license {:name "Eclipse Public License"
-            :url "http://www.eclipse.org/legal/epl-v10.html"}
+  :license {:url "https://www.apache.org/licenses/LICENSE-2.0.txt"
+            :name "Apache License"}
 
   :description "SQL orm"
   :url "https://github.com/llnek/hoard"
 
-  :dependencies [[org.postgresql/postgresql "42.2.9"]
-                 [com.zaxxer/HikariCP "3.4.2"]
-                 [com.h2database/h2 "1.4.200"]
-                 [io.czlab/basal "2.0.1"]]
+  :dependencies [[org.postgresql/postgresql "42.3.4"]
+                 [com.zaxxer/HikariCP "5.0.1"]
+                 [com.h2database/h2 "2.1.212"]
+                 [io.czlab/basal "2.1.0"]]
 
-  :plugins [[cider/cider-nrepl "0.22.4"]
-            [lein-codox "0.10.7"]]
+  :plugins [[cider/cider-nrepl "0.28.3"]
+            [lein-codox "0.10.8"]
+            [lein-cljsbuild "1.1.8"]]
 
   :profiles {:provided {:dependencies
-                        [[org.clojure/clojure "1.10.1" :scope "provided"]]}
+                        [[org.clojure/clojure "1.11.1" :scope "provided"]]}
              :uberjar {:aot :all}}
 
   :aliases {"tcp-stop" ["trampoline" "run" "-m" "czlab.hoard.h2db.server"
@@ -49,7 +50,6 @@
                       "-tcpPort" "9092"
                       "-baseDir" "/tmp"]}
 
-
   :test-selectors {:core :test-core}
 
   :global-vars {*warn-on-reflection* true}
@@ -64,8 +64,8 @@
   :test-paths ["src/test/clojure"]
 
   :jvm-opts ["-Dlog4j.configurationFile=file:attic/log4j2.xml"]
-  :javac-options ["-source" "11"
-                  "-target" "11"
+  :javac-options ["-source" "16"
+                  "-target" "16"
                   "-Xlint:unchecked" "-Xlint:-options" "-Xlint:deprecation"])
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

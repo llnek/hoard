@@ -8,7 +8,7 @@
 
 Add the following dependency to your `project.clj` file:
 
-    [io.czlab/hoard "2.0.1"]
+    [io.czlab/hoard "2.1.0"]
 
 ## Documentation
 
@@ -269,9 +269,9 @@ Please use the project's [GitHub issues page] for all questions, ideas, etc. **P
 
 ## License
 
-Copyright © 2013-2020 Kenneth Leung
+Copyright © 2013-2022 Kenneth Leung
 
-Distributed under the Eclipse Public License either version 1.0 or (at
+Distributed under the Apache License either version 2.0 or (at
 your option) any later version.
 
 <!--- links (repos) -->
